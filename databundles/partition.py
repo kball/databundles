@@ -73,6 +73,11 @@ class Partition(object):
           
         return self._database
 
+    def query(self,*args, **kwargs):
+        """Convience function for self.database.connection.execute()"""
+        return self.database.connection.execute(*args, **kwargs)
+        
+
     def tempfile(self, table=None, suffix=None,ignore_first=False):
         '''Return a tempfile object for this partition'''
         
