@@ -206,7 +206,6 @@ class Rest(object):
         except IntegrityError as e:
             raise e
         except Exception as e:
-            print "!!!!",e
             # an already open file
             r =  self._put(id_,source)
             
