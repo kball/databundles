@@ -165,11 +165,11 @@ class Rest(object):
                 f.writelines(source)
                 f.close()
              
-                with open(cf) as source:
+                with open(cf) as sf_:
                     if isinstance(on,DatasetNumber ):
-                        response =  self.api.datasets(id_).put(source)
+                        response =  self.api.datasets(id_).put(sf_)
                     else:
-                        response =  self.api.datasets(str(on.dataset)).partitions(str(on)).put(source)
+                        response =  self.api.datasets(str(on.dataset)).partitions(str(on)).put(sf_)
 
             finally:
                 if os.path.exists(cf):
@@ -202,7 +202,8 @@ class Rest(object):
             # a Filename
             with open(source) as flo:
                 r =  self._put(id_,flo)
-        except:
+        except Exception as e:
+            print e
             # an already open file
             r =  self._put(id_,source)
             

@@ -109,7 +109,6 @@ def config_command(b, args):
 
 def run(argv, bundle_class):
 
-    
     b = bundle_class()
     args =  b.parse_args(argv)
 
