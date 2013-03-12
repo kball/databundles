@@ -197,13 +197,16 @@ class Rest(object):
         Args:
             source. Either the name of the bundle file, or a file-like opbject
         '''
+        from sqlalchemy.exc import IntegrityError
         
         try:
             # a Filename
             with open(source) as flo:
                 r =  self._put(id_,flo)
+        except IntegrityError as e:
+            raise e
         except Exception as e:
-            print e
+            print "!!!!",e
             # an already open file
             r =  self._put(id_,source)
             
