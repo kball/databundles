@@ -151,7 +151,7 @@ class Us2010CensusBundle(UsCensusBundle):
                            }
      
  
-    def generate_seg_rows(self, seg_number, source):
+    def build_generate_seg_rows(self, seg_number, source):
         '''Generate rows for a segment file. Call this generator with send(), 
         passing in the lexpected logrecno. If the next row does not have that 
         value, return a blank row until the logrecno values match. '''
@@ -266,7 +266,7 @@ class Us2010CensusBundle(UsCensusBundle):
                     if g1:
                         segment = int(g1.group(2))
                         segment_files[segment] = f 
-                        gens.append( (segment, self.generate_seg_rows(segment,f)) )
+                        gens.append( (segment, self.build_generate_seg_rows(segment,f)) )
                     elif g2:
                         geo_file_path = f
                 

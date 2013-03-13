@@ -244,7 +244,7 @@ class Us2000CensusFactBundle(UsCensusFactBundle):
                            'decimal':int(row['DECIMAL'])
                            }
                 
-    def generate_seg_rows(self, seg_number, source):
+    def build_generate_seg_rows(self, seg_number, source):
         '''Generate rows for a segment file. Call this generator with send(), 
         passing in the lexpected logrecno. If the next row does not have that 
         value, return a blank row until the logrecno values match. '''
@@ -290,7 +290,7 @@ class Us2000CensusFactBundle(UsCensusFactBundle):
          
         geo_source = self.urls['geos'][state]
       
-        gens = [self.generate_seg_rows(n,source) for n,source in self.urls['tables'][state].items() ]
+        gens = [self.build_generate_seg_rows(n,source) for n,source in self.urls['tables'][state].items() ]
 
         geodim_gen = self.build_generate_geodim_rows(state) if geodim else None
      

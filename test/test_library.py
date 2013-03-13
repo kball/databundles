@@ -134,6 +134,7 @@ class Test(TestBase):
         # a few different ways. 
         for partition in self.bundle.partitions:
             l.put(partition)
+            l.put(partition)
             
             r = l.get(partition.identity)
             self.assertIsNotNone(r)

@@ -107,6 +107,10 @@ class Bundle(object):
         directory of a BuildBundle, use the Filesystem object. """
         return  os.path.join(self.path,*args)
     
+    def query(self,*args, **kwargs):
+        """Convience function for self.database.connection.execute()"""
+        return self.database.connection.execute(*args, **kwargs)
+    
     
 class DbBundle(Bundle):
 
