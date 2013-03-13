@@ -387,7 +387,6 @@ def get_dataset_partitions(did, pid):
     try:
         r = get_library().get(partition.identity.id_)
     except NotFoundError:
-        raise
         raise NotFound("Found partition record, but not partition in library for {}".format(partition.identity.id_))
         
     return static_file(r.partition.database.path, root='/', mimetype="application/octet-stream")    

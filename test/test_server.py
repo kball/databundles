@@ -126,17 +126,12 @@ class Test(TestBase):
    
         l2 = self.get_library('clean')
         r = l2.get(self.bundle.identity.name)
-        self.assertTrue(r is not False)
-
-        
-        print l2.path(self.bundle.identity.cache_key)
-        print l2.path(r.bundle.partitions.all[0].identity.cache_key)
-
-        return
+        self.assertTrue(bool(r))
 
         r = l2.get(r.bundle.partitions.all[0].identity.id_)
 
-        print "!!!", r
+        self.assertTrue(bool(r))
+        self.assertTrue(os.path.exists(r.partition.database.path))
    
     def test_remote_library_partitions(self):
         
