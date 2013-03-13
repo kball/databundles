@@ -182,12 +182,27 @@ def library_command(args, rc):
             os.execlp('sqlite3','sqlite3',abs_path )
             
     elif args.subcommand == 'listremote':
-        print 'List Remote'
         
-        datasets = l.api.list()
+        if args.datasets:
+            for ds in args.datasets:
+                dsi = l.api.dataset(ds)
+
+                print "dataset {0:11s} {1}".format(dsi['dataset']['id'],dsi['dataset']['name'])
+
+                for id_, p in dsi['partitions'].items():
+                    vs = ''
+                    for v in ['time','space','table','grain']:
+                        val = p.get(v,False)
+                        if val:
+                            vs += "{}={}".format(v, val)
+                    print ("        {0:11s} {1:50s} {2} ".format(id_,  p['name'], vs))
+                
+        else:
         
-        for id_, data in datasets.items():
-            print "{0:11s} {1:4s} {2}".format(id_,'remote',data['name'])
+            datasets = l.api.list()
+            
+            for id_, data in datasets.items():
+                print "{0:11s} {1:4s} {2}".format(id_,'remote',data['name'])
         
     else:
         print "Unknown subcommand"
@@ -328,6 +343,7 @@ def main():
 
     sp = asp.add_parser('listremote', help='List the datasets stored on the remote')
     sp.set_defaults(subcommand='listremote')   
+    sp.add_argument('datasets', nargs=argparse.REMAINDER)
    
  
     #

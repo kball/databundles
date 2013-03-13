@@ -138,9 +138,7 @@ def get_datasets_find(term):
      
     return {
              'dataset' : dataset.identity.to_dict(),
-             'dataset_local': os.path.exists(dataset.identity.cache_key),
              'partition' : partition.identity.to_dict() if partition else None,
-             'partition_local' :os.path.exists(partition.identity.cache_key) if partition else None,
              }
 
     
@@ -338,6 +336,22 @@ def get_dataset_bundle(did):
 def get_dataset_info(did):
     '''Return the complete record for a dataset, including
     the schema and all partitions. '''
+
+    gr =  get_library().get(did)
+     
+    if not gr:
+        raise exc.NotFound("Failed to find dataset for {}".format(did))
+    
+    
+    d = {'dataset' : gr.bundle.identity.to_dict(), 'partitions' : {}}
+         
+    
+    for partition in  gr.bundle.partitions:
+        d['partitions'][partition.identity.id_] = partition.identity.to_dict()
+    
+
+    return d
+
 
 @get('/datasets/<did>/partitions')
 @CaptureException

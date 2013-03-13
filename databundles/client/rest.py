@@ -44,7 +44,7 @@ class Rest(object):
         '''Return a tuple of (rel_path, dataset_identity, partition_identity)
         for an id or name'''
 
-        response  = self.api.datasets.find(id_or_name)
+        response  = self.api.datasets.find(id_or_name).get()
   
         if response.status == 404:
             raise NotFound("Didn't find a file for {}".format(id_or_name))
@@ -268,6 +268,20 @@ class Rest(object):
         response =   self.api.datasets.get()
         raise_for_status(response)
         return response.object
+            
+    def dataset(self, name_or_id):
+        
+        ref = self.get_ref(name_or_id)
+        
+        if not ref:
+            return False
+        
+        id =  ref['dataset']['id']
+        
+        response =   self.api.datasets(id).info().get()
+        raise_for_status(response)
+        return response.object
+        
             
     def close(self):
         '''Close the server. Only used in testing. '''
