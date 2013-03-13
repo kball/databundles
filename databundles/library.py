@@ -1006,14 +1006,14 @@ class Library(object):
             raise NotFoundError(" Partition '{}' not in bundle  '{}' "
                                 .format(partition, r.bundle.identity.name ))
         
-        abs_path = self.cache.get(p.identity.cache_key)
+        r = self.cache.get(p.identity.cache_key)
     
         if not os.path.exists(p.database.path):
             if self.api:
                 self._get_remote_partition(r.bundle,partition)
             else:
-                raise NotFoundError("Didn't get partition in {} for id {}. "+
-                                    " Partition found, but path {} ({}?) not in local library and api not set. "
+                raise NotFoundError("""Didn't get partition in {} for id {}. 
+                                    Partition found, but path {} ({}?) not in local library and api not set. """
                                .format(r.bundle.identity.name, partition, p.database.path, abs_path))
         p.library = self   
 
