@@ -194,7 +194,7 @@ def library_command(args, rc):
                     for v in ['time','space','table','grain']:
                         val = p.get(v,False)
                         if val:
-                            vs += "{}={}".format(v, val)
+                            vs += "{}={} ".format(v, val)
                     print ("        {0:11s} {1:50s} {2} ".format(id_,  p['name'], vs))
                 
         else:
