@@ -373,10 +373,24 @@ def get_dataset_partitions_info(did):
 @CaptureException
 def get_dataset_partitions(did, pid):
     '''Return a partition for a dataset'''
+    from databundles.client.exceptions import NotFound
+    from databundles.dbexceptions import NotFoundError
     
     dataset, partition = _get_dataset_partition_record(did, pid)
 
-    return static_file(partition.database.path, root='/', mimetype="application/octet-stream")    
+    if not dataset:
+        raise NotFound("Didn't find dataset associated with id {}".format(did))
+        
+    if not partition:
+        raise NotFound("Didn't find partition associated with id {}".format(pid))
+    
+    try:
+        r = get_library().get(partition.identity.id_)
+    except NotFoundError:
+        raise
+        raise NotFound("Found partition record, but not partition in library for {}".format(partition.identity.id_))
+        
+    return static_file(r.partition.database.path, root='/', mimetype="application/octet-stream")    
 
 @put('/datasets/<did>/partitions/<pid>')
 @CaptureException

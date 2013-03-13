@@ -615,6 +615,17 @@ class FsCache(object):
 
         return self.upstream.get_stream(rel_path)
         
+    def path(self, rel_path):
+        abs_path = os.path.join(self.cache_dir, rel_path)
+        
+        if os.path.exists(abs_path):
+            return abs_path
+        
+        if self.upstream:
+            return self.upstream.path(rel_path)        
+        
+        return False
+        
     def exists(self, rel_path):
         
         abs_path = os.path.join(self.cache_dir, rel_path)
@@ -742,6 +753,7 @@ class FsCache(object):
             self.upstream.remove(rel_path)    
             
     def clean(self):
+        logger.info("Purging: {} ".format(self.cache_dir))
         Filesystem.rm_rf(self.cache_dir)
         
         if self.upstream:

@@ -87,10 +87,9 @@ class Test(TestBase):
         # First store the files in the local library
         #
         
-        self.get_library('clean').purge()
         self.get_library('server').purge()
+        self.get_library('clean').purge()
 
-        
         l = self.get_library()
      
         r = l.put(self.bundle)
@@ -103,13 +102,13 @@ class Test(TestBase):
 
             # Get the partition with a name
             r = l.get(partition.identity.name)
-            self.assertTrue(r is not False)
+            self.assertTrue(bool(r))
             self.assertEquals(partition.identity.name, r.partition.identity.name)
             self.assertEquals(self.bundle.identity.name, r.bundle.identity.name)
             
             # Get the partition with an id
             r = l.get(partition.identity.id_)
-            self.assertTrue(r is not False)
+            self.assertTrue(bool(r))
             self.assertEquals(partition.identity.name, r.partition.identity.name)
             self.assertEquals(self.bundle.identity.name, r.bundle.identity.name)            
 
@@ -119,8 +118,9 @@ class Test(TestBase):
 
         # haven't pushed yet, so should fail. 
         l2 = self.get_library('clean')
-        self.assertRaises(Exception, l2.get, self.bundle.identity.name)     
-     
+        b = l2.get(self.bundle.identity.name)
+        self.assertTrue(not b)
+        
         # Copy all of the newly added files to the server. 
         l.push()
    
@@ -128,6 +128,15 @@ class Test(TestBase):
         r = l2.get(self.bundle.identity.name)
         self.assertTrue(r is not False)
 
+        
+        print l2.path(self.bundle.identity.cache_key)
+        print l2.path(r.bundle.partitions.all[0].identity.cache_key)
+
+        return
+
+        r = l2.get(r.bundle.partitions.all[0].identity.id_)
+
+        print "!!!", r
    
     def test_remote_library_partitions(self):
         

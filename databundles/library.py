@@ -267,7 +267,7 @@ class LibraryDb(object):
         #conn.close()
         
         if self.driver == 'postgres':
-            import psycopg2
+            import psycopg2 #@UnresolvedImport
             
             dsn = ("host={} dbname={} user={} password={} "
                     .format(self.server, self.dbname, self.username, self.password))
@@ -1006,6 +1006,8 @@ class Library(object):
             raise NotFoundError(" Partition '{}' not in bundle  '{}' "
                                 .format(partition, r.bundle.identity.name ))
         
+        abs_path = self.cache.get(p.identity.cache_key)
+    
         if not os.path.exists(p.database.path):
             if self.api:
                 self._get_remote_partition(r.bundle,partition)
@@ -1020,6 +1022,12 @@ class Library(object):
         
     def find(self, query_command):
         return self.database.find(query_command)
+        
+    def path(self, rel_path):
+        """Return the cache path for a cache key"""
+        
+        return self.cache.path(rel_path)
+        
         
     def dep(self,name):
         """"Bundle version of get(), which uses a key in the 
@@ -1159,6 +1167,8 @@ class Library(object):
         for nf in new_files:
             yield nf
         
+  
+    
   
     def push(self, file_=None):
         """Push any files marked 'new' to the remote

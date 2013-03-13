@@ -193,8 +193,7 @@ class PartitionIdentity(Identity):
         self.space = d.get('space',None)
         self.table = d.get('table',None)
         self.grain = d.get('grain',None)
-        
-        from identity import ObjectNumber
+    
         if self.id_ is not None and self.id_[0] != ObjectNumber.TYPE.PARTITION:
             self.id_ = None
 
