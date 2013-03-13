@@ -41,7 +41,7 @@ class Partition(object):
         p = self.identity
         # HACK HACK HACK!
         # The table,space,time,grain order must match up with PartitionIdentity._path_str
-        partition_path = [ str(i) for i in [p.time,p.space,p.table,p.grain] if i is not None]
+        partition_path = [ str(i) for i in [p.table,p.space,p.time,p.grain] if i is not None]
        
         return source,  name_parts, partition_path 
     
