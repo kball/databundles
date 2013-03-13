@@ -331,6 +331,57 @@ class Test(TestBase):
         self.assertTrue(os.path.exists(f1))  
         
 
+    def test_partitions(self):
+        from databundles.identity import PartitionIdentity
+
+      
+        l = self.get_library()
+        
+        l.purge()
+         
+        #
+        # Create all possible combinations of partition names
+        # 
+        s = set()
+        table = self.bundle.schema.tables[0]
+        
+        p = (('time',1),('space',2),('table',table.name),('grain',4))
+        p += p
+        pids = []
+        for i in range(4):
+            for j in range(4):
+                s.add(p[i:i+j+1])
+            
+        for v in s:
+            pid = PartitionIdentity(self.bundle.identity,**dict(v))
+            pids.append(pid)
+        
+        for pid in pids:
+            part = self.bundle.partitions.new_partition(pid)
+            part.create()
+            
+            parts = self.bundle.partitions.find_orm(pid).all()
+            self.assertIn(pid.name, [p.name for p in parts])
+    
+    
+        l.put(self.bundle) # Install the partition references in the library. 
+    
+        for partition in self.bundle.partitions:
+            
+            if partition.identity.name != 'source-dataset-subset-variation-ca0d-1.tone.4':
+                continue;
+            
+            print "Install {}".format(partition.identity.name)
+            l.put(partition)
+            l.put(partition)
+            
+            r = l.get(partition.identity)
+            self.assertIsNotNone(r)
+            self.assertEquals( partition.identity.id_, r.partition.identity.id_)
+            
+            r = l.get(partition.identity.id_)
+            self.assertIsNotNone(r)
+            self.assertEquals(partition.identity.id_, r.partition.identity.id_)
         
     def test_s3(self):
 

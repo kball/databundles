@@ -1081,8 +1081,8 @@ class FsLimitedCache(FsCache):
             
         if self.upstream and propagate :
             self.upstream.remove(rel_path)    
-            
-        
+
+
     def list(self, path=None):
         '''get a list of all of the files in the repository'''
         

@@ -324,11 +324,11 @@ class Test(TestBase):
 
         ## TODO THis does does not test the 'table' parameter of the ParitionId
           
-        pid1 = PartitionIdentity(self.bundle.identity, time=1, space=1)
+        pid1 = PartitionIdentity(self.bundle.identity, time=10, space=10)
 
         
-        pid2 = PartitionIdentity(self.bundle.identity, time=2, space=2)
-        pid3 = PartitionIdentity(self.bundle.identity, space=3,)
+        pid2 = PartitionIdentity(self.bundle.identity, time=20, space=20)
+        pid3 = PartitionIdentity(self.bundle.identity, space=30,)
         
         
         self.bundle.partitions.new_partition(pid1, data={'pid':'pid1'})
@@ -363,7 +363,7 @@ class Test(TestBase):
         p = self.bundle.partitions.find(pid3)   
         self.assertEquals('pid3',p.data['pid'] ) 
          
-        p = self.bundle.partitions.find_orm(pid3)   
+        p = self.bundle.partitions.find_orm(pid3).first()  
         s = self.bundle.database.session
         p.data['foo'] = 'bar'
         s.commit()
@@ -374,10 +374,34 @@ class Test(TestBase):
         s.commit()
         p.database.create()
         
-        p = self.bundle.partitions.find('source-dataset-subset-variation-ca0d-3')
+        p = self.bundle.partitions.find('source-dataset-subset-variation-ca0d-30')
         self.assertTrue(p is not None)
         self.assertEquals(pid3.name, p.identity.name)
+ 
+        #
+        # Create all possible combinations of partition names
+        # 
+        s = set()
+        table = self.bundle.schema.tables[0]
         
+        p = (('time',1),('space',2),('table',table.name),('grain',4))
+        p += p
+        pids = []
+        for i in range(4):
+            for j in range(4):
+                s.add(p[i:i+j+1])
+            
+        for v in s:
+            pid = PartitionIdentity(self.bundle.identity,**dict(v))
+            pids.append(pid)
+        
+        for pid in pids:
+            part = self.bundle.partitions.new_partition(pid)
+            part.create()
+            
+            parts = self.bundle.partitions.find_orm(pid).all()
+            self.assertIn(pid.name, [p.name for p in parts])
+
         
     def x_test_tempfile(self):
   

@@ -39,7 +39,9 @@ class Partition(object):
        
         source =  name_parts.pop(0)
         p = self.identity
-        partition_path = [ str(i) for i in [p.table,p.time,p.space,p.grain] if i is not None]
+        # HACK HACK HACK!
+        # The time,space,table,grain order must match up with PartitionIdentity._path_str
+        partition_path = [ str(i) for i in [p.time,p.space,p.table,p.grain] if i is not None]
        
         return source,  name_parts, partition_path 
     
@@ -147,10 +149,11 @@ class Partition(object):
             self.database.copy_table_from(self.bundle.database,self.table.name)
             tables = [self.table.name]
      
-        for t in tables:
-            if not t in self.database.inspector.get_table_names():
-                t_meta, table = self.bundle.schema.get_table_meta(t) #@UnusedVariable
-                t_meta.create_all(bind=self.database.engine)
+        if tables:
+            for t in tables:
+                if not t in self.database.inspector.get_table_names():
+                    t_meta, table = self.bundle.schema.get_table_meta(t) #@UnusedVariable
+                    t_meta.create_all(bind=self.database.engine)
     
 
     def create(self):
@@ -397,12 +400,21 @@ class Partitions(object):
     def find(self, pid=None, **kwargs):
         '''Return a Partition object from the database based on a PartitionId.
         The object returned is immutable; changes are not persisted'''
-        op = self.find_orm(pid, **kwargs)
-        
-        if op is not None:
+        import sqlalchemy.orm.exc
+        try:
+            op = self.find_orm(pid, **kwargs).one()
             return self.partition(op)
-        else:
+        except sqlalchemy.orm.exc.NoResultFound: 
             return None
+   
+    
+    def find_all(self, pid=None, **kwargs):
+        '''Return a Partition object from the database based on a PartitionId.
+        The object returned is immutable; changes are not persisted'''
+        ops = self.find_orm(pid, **kwargs).all()
+        
+        return [ self.partition(op) for op in ops]
+
     
     def find_orm(self, pid=None, **kwargs):
         '''Return a Partition object from the database based on a PartitionId.
@@ -433,32 +445,29 @@ class Partitions(object):
         from databundles.orm import Partition as OrmPartition
         q = self.query
         
-        if time is not None:
-            q = q.filter(OrmPartition.time==time)
-
-        if space is not None:
-            q = q.filter(OrmPartition.space==space)
-    
-        if grain is not None:
-            q = q.filter(OrmPartition.grain==grain)
-    
-        if table is not None:
-        
-            tr = self.bundle.schema.table(table)
-            
-            if not tr:
-                return None
-                #raise ValueError("Didn't find table named {} ".format(table))
-            
-            q = q.filter(OrmPartition.t_id==tr.id_)
-
         if name is not None:
             q = q.filter(OrmPartition.name==name)
+        else:       
+            if time is not None:
+                q = q.filter(OrmPartition.time==time)
+    
+            if space is not None:
+                q = q.filter(OrmPartition.space==space)
+        
+            if grain is not None:
+                q = q.filter(OrmPartition.grain==grain)
+        
+            if table is not None:
+            
+                tr = self.bundle.schema.table(table)
+                
+                if not tr:
+                    return None
+                    #raise ValueError("Didn't find table named {} ".format(table))
+                
+                q = q.filter(OrmPartition.t_id==tr.id_)
 
-        try:
-            return q.one()   
-        except sqlalchemy.orm.exc.NoResultFound: 
-            return None
+        return q
     
    
     def new_orm_partition(self, pid, **kwargs):
@@ -494,10 +503,11 @@ class Partitions(object):
         
     def new_partition(self, pid, **kwargs):
      
-        p = self.find(pid)
+        extant = self.find_orm(pid).all()
         
-        if p is not None:
-            return p
+        for p in extant:
+            if p.name == pid.name:
+                return self.partition(p, is_geo=kwargs.get('is_geo',None))
        
         op = self.new_orm_partition(pid, **kwargs)
         s = self.bundle.database.session

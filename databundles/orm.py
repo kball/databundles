@@ -595,7 +595,7 @@ class Partition(Base):
     state = SAColumn('p_state',Text)
     data = SAColumn('p_data',MutationDict.as_mutable(JSONEncodedDict))
     
-    grain = deferred(SAColumn('p_grain',Text))
+    grain = SAColumn('p_grain',Text)
    
     table = relationship('Table', backref='partitions')
     

@@ -218,6 +218,8 @@ class PartitionIdentity(Identity):
         
         id_path = Identity.path_str(o)
 
+        # HACK HACK HACK!
+        # The time,space,table,grain order must match up with Partition._path_parts
         partition_parts = [re.sub('[^\w\.]','_',str(s))
                          for s in filter(None, [o.time, o.space, o.table, o.grain])]
     
