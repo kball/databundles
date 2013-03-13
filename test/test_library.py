@@ -368,9 +368,6 @@ class Test(TestBase):
     
         for partition in self.bundle.partitions:
             
-            if partition.identity.name != 'source-dataset-subset-variation-ca0d-1.tone.4':
-                continue;
-            
             print "Install {}".format(partition.identity.name)
             l.put(partition)
             l.put(partition)

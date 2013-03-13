@@ -239,9 +239,10 @@ class PartitionIdentity(Identity):
         parts = Identity.name_parts(o)
     
         rev = parts.pop()
-        
+        # HACK HACK HACK!
+        # The table,space,time,grain order must match up with Partition._path_parts and self._path_pats
         partition_component = '.'.join([re.sub('[^\w\.]','_',str(s))
-                         for s in filter(None, [o.time, o.space, o.table, o.grain])])
+                         for s in filter(None, [o.table, o.space, o.time, o.grain])])
         
         parts.append(partition_component)
         
