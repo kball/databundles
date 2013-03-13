@@ -325,7 +325,6 @@ def main():
     sp = asp.add_parser('purge', help='Remove all entries from the library database and delete all files')
     sp.set_defaults(subcommand='purge')
     
-    
     sp = asp.add_parser('rebuild', help='Rebuild the library database from the files in the library')
     sp.set_defaults(subcommand='rebuild')
  

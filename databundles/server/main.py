@@ -385,9 +385,10 @@ def get_dataset_partitions(did, pid):
         raise NotFound("Didn't find partition associated with id {}".format(pid))
     
     try:
+        # Realize the partition file in the top level cache. 
         r = get_library().get(partition.identity.id_)
     except NotFoundError:
-        raise NotFound("Found partition record, but not partition in library for {}".format(partition.identity.id_))
+        raise NotFound("Found partition record, but not partition in library for {}".format(partition.identity.name    ))
         
     return static_file(r.partition.database.path, root='/', mimetype="application/octet-stream")    
 

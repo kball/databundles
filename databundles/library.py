@@ -1013,8 +1013,8 @@ class Library(object):
                 self._get_remote_partition(r.bundle,partition)
             else:
                 raise NotFoundError("Didn't get partition in {} for id {}. "+
-                                    " Partition found, but not in local library and api not set. "
-                               .format(r.bundle.identity.name, partition))
+                                    " Partition found, but path {} ({}?) not in local library and api not set. "
+                               .format(r.bundle.identity.name, partition, p.database.path, abs_path))
         p.library = self   
 
         return self.Return(r.bundle, p)

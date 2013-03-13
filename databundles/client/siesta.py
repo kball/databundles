@@ -112,9 +112,7 @@ class Response(object):
         # Add the pre-message, if the real exception type is not known. 
         if isinstance(args, list) and len(args) > 0:
             args[0] = pre_message + str(args[0])
-     
-        import pdb; pdb.set_trace()
-     
+
         # Add the trace
         args[0] = args[0] + "\n---- Server Trace --- \n" + self.object['exception']['trace']
     
