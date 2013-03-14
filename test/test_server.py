@@ -228,8 +228,8 @@ class Test(TestBase):
     
         o = r.find(QueryCommand().table(name='tone').partition(any=True))
       
-        self.assertTrue( 'b1DxuZ001' in [i.Partition.id for i in o])
-        self.assertTrue( 'a1DxuZ' in [i.Dataset.id for i in o])
+        self.assertTrue( 'b1DxuZ001' in [i.Partition.id_ for i in o])
+        self.assertTrue( 'a1DxuZ' in [i.Dataset.id_ for i in o])
       
     def test_put_errors(self):
         pass

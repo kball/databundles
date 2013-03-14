@@ -281,7 +281,7 @@ class Partitions(object):
         '''
 
         from databundles.orm import Partition as OrmPartition
-        from databundles.identity import PartitionNumber
+        from databundles.identity import PartitionNumber, PartitionIdentity
         
         if isinstance(arg,OrmPartition):
             orm_partition = arg
@@ -291,6 +291,9 @@ class Partitions(object):
         elif isinstance(arg, PartitionNumber):
             s = self.bundle.database.session        
             orm_partition = s.query(OrmPartition).filter(OrmPartition.id_==str(arg) ).one()
+        elif isinstance(arg, PartitionIdentity):  
+            s = self.bundle.database.session        
+            orm_partition = s.query(OrmPartition).filter(OrmPartition.id_==str(arg.id_) ).one()     
         else:
             raise ValueError("Arg must be a Partition or PartitionNumber")
 

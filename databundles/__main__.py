@@ -140,16 +140,16 @@ def library_command(args, rc):
     elif args.subcommand == 'find':
      
         dataset, partition = l.get_ref(args.term)
-     
+
         if not dataset:
             print "{}: Not found".format(args.term)
         else:
-            print "Rel Path  : ",dataset.identity.cache_key
-            print "Abs Path  : ",l.cache.exists(dataset.identity.cache_key)
-            print "Dataset   : ",dataset.id, dataset.name
-            print "Partition : ",(partition.id, partition.name )if partition else ''
-            print "D Is Local: ",l.cache.exists(dataset.identity.cache_key) is not False
-            print "P Is Local: ",(l.cache.exists(partition.identity.cache_key) is not False) if partition else ''
+            print "Rel Path  : ",dataset.cache_key
+            print "Abs Path  : ",l.cache.exists(dataset.cache_key)
+            print "Dataset   : ",dataset.id_, dataset.name
+            print "Partition : ",(partition.id_, partition.name )if partition else ''
+            print "D Is Local: ",l.cache.exists(dataset.cache_key) is not False
+            print "P Is Local: ",(l.cache.exists(partition.cache_key) is not False) if partition else ''
                 
     elif args.subcommand == 'get':
      

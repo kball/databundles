@@ -832,7 +832,7 @@ class Library(object):
         return dataset, partition
             
     def get_ref(self,bp_id):
-        from databundles.identity import ObjectNumber, DatasetNumber, PartitionNumber, Identity
+        from databundles.identity import ObjectNumber, DatasetNumber, PartitionNumber, Identity, PartitionIdentity
                 
         if isinstance(bp_id, Identity):
             if bp_id.id_:
@@ -873,8 +873,7 @@ class Library(object):
         if not dataset and self.api:
             from databundles.identity import Identity, PartitionIdentity
             import socket
-            from databundles.orm import  Dataset, Partition
-            
+         
             try:
                 r = self.api.find(bp_id)
 
@@ -882,22 +881,23 @@ class Library(object):
                     r = r[0]
     
                     if hasattr(r, 'Partition') and r.Partition is not None:
-                        identity = PartitionIdentity(**(r.Partition._asdict()))
-                        dataset = Dataset(**r.Dataset._asdict())
-               
-                        partition = ObjectNumber.parse(r.Partition.id)
+                        dataset = r.Dataset
+                        partition = r.Partition
                     
                     else:
-                        identity = Identity(**(r.Dataset._asdict()))
-                        dataset = Dataset(**r.Dataset._asdict())
+                        dataset = r.Dataset
                         partition = None
                
             except socket.error:
                 self.logger.error("Connection to remote {} failed".format(self.remote))
+        elif dataset:
+            dataset = Identity(**dataset.to_dict())
+            partition = PartitionIdentity(**partition.to_dict()) if partition else None
+            
  
         if not dataset:
             return False, False
-     
+   
         return  dataset, partition
 
     def _get_remote_dataset(self, dataset):
@@ -975,7 +975,7 @@ class Library(object):
     def _get_dataset(self, dataset):
 
         # Try to get the file from the cache. 
-        abs_path = self.cache.get(dataset.identity.cache_key)
+        abs_path = self.cache.get(dataset.cache_key)
 
         # Not in the cache, try to get it from the remote library, 
         # if a remote was set. 

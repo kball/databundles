@@ -136,9 +136,9 @@ def get_datasets_find(term):
     if dataset is False:
         return False
      
-    return {
-             'dataset' : dataset.identity.to_dict(),
-             'partition' : partition.identity.to_dict() if partition else None,
+    return   {
+             'dataset' : dataset.to_dict(),
+             'partition' : partition.to_dict() if partition else None,
              }
 
     
