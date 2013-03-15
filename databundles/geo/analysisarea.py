@@ -4,9 +4,9 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-import ogr
+import ogr #@UnresolvedImport
 from numpy import * 
-from osgeo.gdalconst import GDT_Float32, GDT_Byte, GDT_Int16
+from osgeo.gdalconst import GDT_Float32, GDT_Byte, GDT_Int16 #@UnresolvedImport
 from databundles.geo import Point
 
 #ogr.UseExceptions()
@@ -208,8 +208,10 @@ class AnalysisArea(object):
         trans = self.get_coord_transform(source_srs)
         def _transformer(x,y):
             xp,yp,z =  trans.TransformPoint(x,y)
-            return Point(int(round((xp-self.eastmin)/self.scale)),
-                    (int(round(yp-self.northmin)/self.scale)))
+            return Point(
+                         int(round((xp-self.eastmin)/self.scale)),
+                         int(round((yp-self.northmin)/self.scale))
+                    )
         
         return _transformer
         
@@ -265,7 +267,7 @@ class AnalysisArea(object):
         >>>> aa.write_poly('/tmp/area',layer='area', poly=aa.area_bb_poly)
         
         """
-        import ogr
+        import ogr #@UnresolvedImport
 
         if not file_.endswith('.kml'):
             file_ = file_+'.shp'
@@ -306,7 +308,7 @@ class AnalysisArea(object):
             aa: Analysis Area object
             a: numpy array
         """
-        from osgeo import gdal, gdal_array, osr
+        from osgeo import gdal, gdal_array, osr #@UnresolvedImport
     
         driver = gdal.GetDriverByName('GTiff') 
             

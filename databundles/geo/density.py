@@ -3,17 +3,17 @@ Created on Feb 12, 2013
 
 @author: eric
 '''
-        
+
 from databundles.identity import PartitionIdentity
 from osgeo import gdal, gdal_array, osr
 from osgeo.gdalconst import GDT_Float32, GDT_Byte, GDT_Int16
 from numpy  import *
   
+
 class DensityImage(object):
     '''
     classdocs
     '''
-
 
     def info(self):
         from numpy import histogram

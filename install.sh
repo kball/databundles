@@ -25,35 +25,6 @@ if [ -z "$install_dir" ]; then
     exit 1
 fi
 
-echo "--- Installing base packages. May need to ask for root password"
-command -v apt-get >/dev/null 2>&1; has_aptget=$?
-command -v brew >/dev/null 2>&1; has_brew=$?
-
-if [ $has_aptget -eq 0 ]; then
-    echo "--- Installing base packages with apt-get"
-    sudo apt-get install -y gdal-bin sqlite3 spatialite-bin curl git 
-    sudo apt-get install -y python-gdal python-h5py python-numpy python-scipy
-    sudo apt-get install -y libpq-dev libhdf5-dev hdf5-tools h5utils 
-elif [ `uname` = 'Darwin' ]; then
-    if [ $has_brew -eq 0 ]; then
-        echo "--- Installing with Homebrew"
-        # Install homebrew with:
-        #ruby -e "$(curl -fsSL https://raw.github.com/mxcl/homebrew/go)"
-        brew install git
-        brew install gdal
-        brew install hdf5
-        brew install spatialite-tools
-
-    else
-        echo "ERROR: For Macs, but could not find a package manager. "
-        exit 1
-    fi        
-        
-else
-    echo "ERROR: Could not determine how to install base packages"
-    exit 1
-fi
-
 if [ ! -d $install_dir ]; then
   mkdir -p $install_dir  
 fi
@@ -83,14 +54,18 @@ fi
 # These packages don't install propertly in the virtualenv in  Ubunty, so we
 # install them at the start via apt-get, but they install OK on Mac OS X.
 if [ `uname` = 'Darwin' ]; then
-    pip install gdal
-    pip install numpy
     pip install h5py
 fi 
 
-# The actual bundles don't need to be installed
-git clone https://github.com/clarinova/civicdata $install_dir/src/civicdata
+# The actual bundles don't need to be insta
+git clone https://github.com/clarinova/civicdata.git $install_dir/src/civicdata
+git clone https://github.com/clarinova/us-census-data.git $install_dir/src/us-census-data
+git clone https://github.com/sdrdl/data-projects.git $install_dir/src/data-projects
+
  
 # Install the /etc/databundles.yaml file
-dbmanage install config -p -f --root $DATA_DIR > databundles.yaml
-sudo mv databundles.yaml /etc/databundles.yaml
+if [ ! -e /etc/databundles ]; then
+	dbmanage install config -p -f --root $DATA_DIR > databundles.yaml
+	sudo mv databundles.yaml /etc/databundles.yaml
+fi
+

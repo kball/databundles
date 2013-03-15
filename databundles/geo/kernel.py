@@ -9,7 +9,6 @@ from osgeo import gdal, gdal_array, osr
 from osgeo.gdalconst import GDT_Float32, GDT_Byte, GDT_Int16
 from numpy  import *
   
-
 class Kernel(object):
 
     def round(self):

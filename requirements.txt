@@ -7,4 +7,5 @@ nose
 beautifulsoup4
 ckanclient
 requests
+boto
 
