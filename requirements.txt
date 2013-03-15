@@ -4,23 +4,7 @@ petl
 decorator
 simplejson
 nose
-
-#
-# Remote services
-#
 beautifulsoup4
 ckanclient
 requests
-
-#
-# Numerical
-#
-#numpy # Must be installed externally
-#h5py # Must be installed externally on ubuntu
-
-#
-# Geographic
-#
-pyshp
-# gdal Must be installed externally
 
