@@ -213,6 +213,14 @@ class AnalysisArea(object):
         
         return _transformer
         
+    def is_in_ll(self, lon, lat):
+        """Return true if the (lat, lon) is inside the area"""
+        return (lat < self.latmax and
+                lat > self.latmin and
+                lon < self.lonmax and
+                lon > self.lonmin )     
+        
+        
     
     def get_affine_transform(self):
         """Return the affine transform array for writting the image. """

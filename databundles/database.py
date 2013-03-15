@@ -64,21 +64,24 @@ class ValueInserter(object):
         return self
         
     def close(self):
-        
-        if len(self.cache) > 0 and self.transaction:       
+
+        if len(self.cache) > 0 :       
             try:
                 self.connection.execute(self.ins, self.cache)
-                self.transaction.commit()
-                self.transaction = None
+                if self.transaction:
+                    self.transaction.commit()
+                    self.transaction = None
                 self.cache = []
             except (KeyboardInterrupt, SystemExit):
-                self.transaction.rollback()
-                self.transaction = None
+                if self.transaction:
+                    self.transaction.rollback()
+                    self.transaction = None
                 raise
             except Exception as e:
                 self.bundle.error("Exception during ValueInserter.insert: "+str(e))
-                self.transaction.rollback()
-                self.transaction = None
+                if self.transaction:
+                    self.transaction.rollback()
+                    self.transaction = None
                 raise
         else:
             if self.transaction:
@@ -790,6 +793,13 @@ class PartitionDb(Database):
     def name(self):
         return self.partition.name
 
+    def inserter(self, table_or_name=None,**kwargs):
+        
+        if table_or_name is None and self.table:
+            table_or_name = self.partition.identity.table
+
+        return super(PartitionDb, self).inserter(table_or_name, **kwargs)
+        
     
     def create(self, copy_tables = True):
         from databundles.orm import Dataset

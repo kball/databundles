@@ -274,6 +274,7 @@ class Schema(object):
               'INTEGER':Column.DATATYPE_INTEGER,
               'INTEGER64':Column.DATATYPE_INTEGER,
               'REAL':Column.DATATYPE_REAL,
+              'FLOAT':Column.DATATYPE_REAL
               }
         
         new_table = True

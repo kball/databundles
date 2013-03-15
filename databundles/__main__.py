@@ -159,7 +159,7 @@ def library_command(args, rc):
       
         if not r:
             print "{}: Not found".format(args.term)
-        else:
+        elif not args.schema:
             print "Rel Path  : ",r.bundle.identity.cache_key
             print "Abs Path  : ",l.cache.exists(r.bundle.identity.cache_key)
             print "Dataset   : ",r.bundle.identity.id_, r.bundle.identity.name
@@ -180,6 +180,34 @@ def library_command(args, rc):
             print "\nOpening: {}\n".format(abs_path)
 
             os.execlp('sqlite3','sqlite3',abs_path )
+            
+        elif r and args.schema:
+            from databundles.bundle import DbBundle
+            import csv, sys, itertools
+            from collections import OrderedDict
+            
+            abs_path = os.path.join(l.cache.cache_dir, r.bundle.identity.cache_key)
+            b = DbBundle(abs_path)
+            
+            w = None
+            
+            for table in b.schema.tables:
+                for col in table.columns:
+                    row = OrderedDict()
+                    row['table'] = table.name
+                    row['column'] = col.name
+                    row['is_pk'] = 1 if col.is_primary_key else ''
+                    row['is_fk'] = 1 if col.is_foreign_key else ''
+                    row['type'] = col.datatype.upper()
+                    row['default'] = col.default
+                    row['description'] = col.description
+                    
+                    if not w:
+                        w = csv.DictWriter(sys.stdout,row.keys())
+                        w.writeheader()
+                    
+                    w.writerow(row)
+            
             
     elif args.subcommand == 'listremote':
         
@@ -335,6 +363,8 @@ def main():
     sp.set_defaults(subcommand='get')   
     sp.add_argument('term', type=str,help='Query term')
     sp.add_argument('-o','--open',  default=False, action="store_true",  help='Open the database with sqlites')
+    sp.add_argument('-s','--schema',  default=False, action="store_true",  help='Dump the schema as a CSV file.')
+
 
     sp = asp.add_parser('find', help='Search for the argument as a bundle or partition name or id')
     sp.set_defaults(subcommand='find')   
@@ -423,9 +453,9 @@ def main():
        
 def daemonize(f, args,  rc):
         '''Run a process as a daemon'''
-        import daemon
-        import lockfile 
-        import setproctitle
+        import daemon #@UnresolvedImport
+        import lockfile  #@UnresolvedImport
+        import setproctitle #@UnresolvedImport
         import os, sys
         import grp, pwd
         

@@ -37,17 +37,11 @@ class Kernel(object):
         self.inverted = ~self.inverted
        
     def quantize(self, bins=255):
-        from scipy.cluster.vq import kmeans, vq
         from util import jenks_breaks
         hist, edges = histogram(self.matrix.compressed(),bins=bins)
       
         print "Hist", hist
         print "Edges",edges
-      
-        centroids, distortions = kmeans(self.matrix, bins)
-        code, dist = vq(self.matrix, centroids)
-        print "Cent", code
-        print "Dist", dist
         
         breaks = jenks_breaks(self.matrix.compressed().tolist(), bins)
         print "Breaks",breaks
@@ -105,7 +99,10 @@ class Kernel(object):
         return index_errors
 
         
-    def apply_add(self,a,point):
+    def apply_add(self,a,point,y=None):
+        from ..geo import Point
+        if y is not None:
+            point = Point(point, y)
         return self.apply(a,point, lambda x,y: x+y)
     
     def apply_min(self,a,point):

@@ -496,6 +496,7 @@ class LibraryDb(object):
         from databundles.identity import Identity
         from databundles.orm import Table
         s = self.session
+        has_partition = False
         
         if isinstance(query_command, Identity):
             raise NotImplementedError()
@@ -521,18 +522,21 @@ class LibraryDb(object):
         
         if len(query_command.partition) > 0:     
             query = query.join(Partition)
+            has_partition = True
             for k,v in query_command.partition.items():
+                from sqlalchemy.sql import or_
                 
-                if k == 'any': continue # Just join the partition
-                
-                if k == 'table':
+                if k == 'any': 
+                    continue # Just join the partition
+                elif k == 'table':
                     # The 'table" value could be the table id
                     # or a table name
-                    from sqlalchemy.sql import or_
-                    
                     query = query.join(Table)
                     query = query.filter( or_(Partition.t_id  == v,
                                               Table.name == v))
+                elif k == 'space':
+                    query = query.filter( or_(Partition.space  == v))
+                    
                 else:
                     query = query.filter(  getattr(Partition, k) == v )
         
@@ -541,8 +545,16 @@ class LibraryDb(object):
             for k,v in query_command.table.items():
                 query = query.filter(  getattr(Table, k) == v )
 
-        return query
-
+        out = []
+        for r in query.all():
+            if has_partition:
+                partition = r.Partition.identity
+            else:
+                partition = None
+                
+            out.append(Library.ReturnDs(r.Dataset.identity, partition))
+            
+        return out
         
     def queryByIdentity(self, identity):
         from databundles.orm import Dataset, Partition
@@ -778,7 +790,10 @@ class Library(object):
 
     # Return value for get()
     Return = collections.namedtuple('Return',['bundle','partition'])
-
+    
+    # Return value for earches
+    ReturnDs = collections.namedtuple('ReturnDs',['dataset','partition'])
+    
     def __init__(self, cache,database, remote=None, sync=False):
         '''
         Libraries are constructed on the root cache name for the library. 
@@ -855,7 +870,12 @@ class Library(object):
         
         # Try it as a dataset name
         if not dataset:
-            r = self.find(QueryCommand().identity(name = bp_id) ).first()
+            r = self.find(QueryCommand().identity(name = bp_id) )
+            
+            if len(r) > 1:
+                raise Exception("Got more than one result")
+            else:
+                r = r.pop()
             
             if r:
                 dataset, partition  = self._get_bundle_path_from_id(r[0].id_) 

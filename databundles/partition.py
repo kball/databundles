@@ -465,8 +465,7 @@ class Partitions(object):
                 tr = self.bundle.schema.table(table)
                 
                 if not tr:
-                    return None
-                    #raise ValueError("Didn't find table named {} ".format(table))
+                    raise ValueError("Didn't find table named {} ".format(table))
                 
                 q = q.filter(OrmPartition.t_id==tr.id_)
 
@@ -571,9 +570,11 @@ class Partitions(object):
     def find_or_new(self, pid, **kwargs):
 
         partition =  self.find(pid)
-        
+    
         if not partition:
             partition = self.new_partition(pid, **kwargs)
+            if pid.table:     
+                partition.create_with_tables(pid.table)    
         
         return partition;
     
