@@ -60,7 +60,7 @@ class Kernel(object):
         
         print s
       
-    def apply(self,a, point, v=None, f=None):
+    def apply(self,a, point,  f=None, v=None):
         """Apply the values in the kernel onto an array, centered at a point. 
         
         :param a: The array to apply to 
@@ -79,18 +79,24 @@ class Kernel(object):
             from functools import partial
             f = partial(f,v)
         
-        x_max, y_max = a.shape
+        y_max, x_max = a.shape
         m = None
         use_m=False
         
         
         if point.x < self.offset:
+            if point.x < 0:
+                return
+            
             x_start = max(point.x - self.offset,0)
             x_end = point.x + self.offset +1  
             m = self.matrix[:,(self.offset-point.x):self.matrix.shape[1]]
             use_m=True
             
-        elif point.x >  x_max - self.offset:
+        elif point.x+self.offset+1 >  x_max :
+            if point.x > x_max:
+                return
+            
             x_start = point.x - self.offset
             x_end = min(point.x + self.offset+1, x_max)
             m = self.matrix[:,0:self.matrix.shape[1]+ (x_max-point.x-self.offset)-1]
@@ -102,13 +108,17 @@ class Kernel(object):
         sm = (m if use_m else self.matrix)
         
         if point.y < self.offset:
-            print "A"
+            if point.y < 0:
+                return
+            
             y_start = max(point.y - self.offset,0)
             y_end = point.y + self.offset+1
             m = sm[(self.offset-point.y):sm.shape[0],:]
             use_m=True
-        elif point.y >  y_max - self.offset:
-            print "B"
+        elif point.y+self.offset+1 >  y_max:
+            if point.y > y_max:
+                return
+            
             y_start = point.y - self.offset
             y_end = point.y + self.offset+1
             m = sm[0:sm.shape[0]+ (y_max-point.y-self.offset)-1,:]
@@ -117,16 +127,16 @@ class Kernel(object):
             y_start = point.y - self.offset
             y_end = point.y + self.offset+1      
 
-        print y_start,y_end, x_start,x_end
-        print (m if use_m else self.matrix).shape
-        a[y_start:y_end, x_start:x_end] += (m if use_m else self.matrix)
+        #print a.shape, point, x_start, x_end, y_start, y_end, (m if use_m else self.matrix).shape
+        a[y_start:y_end, x_start:x_end] = f( a[y_start:y_end, x_start:x_end], 
+                                             (m if use_m else self.matrix) )
                         
         
     def apply_add(self,a,point,y=None):
         from ..geo import Point
         if y is not None:
             point = Point(point, y)
-        return self.apply(a,point, lambda x,y: x+y)
+        return self.apply(a,point, f=lambda x,y: x+y)
     
     def apply_min(self,a,point):
         return self.apply(a,point, min)        

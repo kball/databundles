@@ -145,6 +145,22 @@ def run(argv, bundle_class):
         
         for partition in b.partitions:
             b.log("Partition: "+partition.name)
+            
+        return
+    
+    if 'run' in phases:
+        #
+        # Run a method on the bundle. Can be used for testing and development. 
+        try:
+            f = getattr(b,str(args.method))
+        except AttributeError as e:
+            b.error("Could not find method named '{}': {} ".format(args.method, e))
+            b.error("Available methods : {} ".format(dir(b)))
+      
+            return
+            
+        return f()
+
     
 
     if 'clean' in phases:
@@ -248,19 +264,6 @@ def run(argv, bundle_class):
     else:
         b.log("---- Skipping Submit ---- ")            
       
-    if 'run' in phases:
-        #
-        # Run a method on the bundle. Can be used for testing and development. 
-        try:
-            f = getattr(b,str(args.method))
-        except AttributeError as e:
-            b.error("Could not find method named '{}': {} ".format(args.method, e))
-            b.error("Available methods : {} ".format(dir(b)))
-      
-            return
-            
-        f()
-
 
     if 'test' in phases:
         ''' Run the unit tests'''

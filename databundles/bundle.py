@@ -331,8 +331,13 @@ class BuildBundle(Bundle):
         command_p.set_defaults(command='run')               
         command_p.add_argument('method', metavar='Method', type=str, 
                        help='Name of the mathod to run')    
-               
-               
+        
+        #
+        # info command
+        #
+        command_p = cmd.add_parser('info', help='Print information about the bundle')
+        command_p.set_defaults(command='info')               
+           
         return parser
 
     @property

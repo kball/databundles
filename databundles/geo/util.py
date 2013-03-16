@@ -200,3 +200,36 @@ def rasterize(pixel_size=25):
         raise Exception("error rasterizing layer: %s" % err)
 
 
+def create_poly( points, srs):
+    """Create a polygon from a list of points"""
+
+    #create polygon object:
+    ring = ogr.Geometry(type=ogr.wkbLinearRing)
+    for x,y in points:
+        ring.AddPoint(x, y)#LowerLeft
+        
+    # Close
+    ring.AddPoint(points[0][0], points[0][1])
+
+    poly = ogr.Geometry(type=ogr.wkbPolygon)
+    poly.AssignSpatialReference(srs)
+    poly.AddGeometry(ring)
+
+    return poly
+
+def create_bb( corners, srs):
+    """Create a boundingbox from a list or tuple of the four corners
+    Corners has four values:  x_min, x_max, y_min, y_max
+    
+    The input can be taken directory from Feature.GetEnvelope()
+    
+    """
+    
+    c = corners
+    
+    return create_poly(((c[0], c[2]),
+                            (c[0], c[3]),
+                            (c[1], c[3]),
+                            (c[1], c[2]),
+                              ), srs)
+

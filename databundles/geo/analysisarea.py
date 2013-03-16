@@ -8,6 +8,7 @@ import ogr #@UnresolvedImport
 from numpy import * 
 from osgeo.gdalconst import GDT_Float32, GDT_Byte, GDT_Int16 #@UnresolvedImport
 from databundles.geo import Point
+from util import create_poly
 
 #ogr.UseExceptions()
 
@@ -54,36 +55,7 @@ def get_analysis_area(library, **kwargs):
                       row.srid,                       
                       row.srswkt)
 
-def create_poly( points, srs):
-    """Create a polygon from a list of points"""
 
-    #create polygon object:
-    ring = ogr.Geometry(type=ogr.wkbLinearRing)
-    for x,y in points:
-        ring.AddPoint(x, y)#LowerLeft
-        
-    # Close
-    ring.AddPoint(points[0][0], points[0][1])
-
-    poly = ogr.Geometry(type=ogr.wkbPolygon)
-    poly.AssignSpatialReference(srs)
-    poly.AddGeometry(ring)
-
-    return poly
-
-def create_bb( corners, srs):
-    """Create a boundingbox from a list or tuple of the four corners
-    Corners has four values:  x_min, x_max, y_min, y_max
-    
-    """
-    
-    c = corners
-    
-    return create_poly(((c[0], c[2]),
-                            (c[0], c[3]),
-                            (c[1], c[3]),
-                            (c[1], c[2]),
-                              ), srs)
 
 def draw_edges(a):
         for i in range(0,a.shape[0]): # Iterate over Y
@@ -94,7 +66,7 @@ def draw_edges(a):
             a[i,a.shape[1]-2] = 2
             a[i,a.shape[1]-1] = 1
                                     
-        for i in range(0,a.shape[1]): # Iterate over Y
+        for i in range(0,a.shape[1]): # Iterate over x
             a[0,i] = 1
             a[1,i] = 2
             a[2,i] = 3
@@ -162,7 +134,11 @@ class AnalysisArea(object):
     @property
     def lower_left(self):
         return (self.eastmin, self.northmin)
-
+    
+    @property
+    def upper_left(self):
+        return (self.eastmin, self.northmax)
+    
     @property
     def pixel_size(self):
         return self.SCALE
@@ -223,17 +199,6 @@ class AnalysisArea(object):
                 lon > self.lonmin )     
         
         
-    
-    def get_affine_transform(self):
-        """Return the affine transform array for writting the image. """
-        
-        transform = [ self.x_offset_d ,  # Upper Left X postion
-             self.i_bin_scale ,  # Pixel Width 
-             0 ,     # rotation, 0 if image is "north up" 
-             self.y_offset_d ,  # Upper Left Y Position
-             0 ,     # rotation, 0 if image is "north up"
-             self.i_bin_scale # Pixel Height
-             ]
 
     @property
     def place_bb_poly(self):
@@ -300,15 +265,8 @@ class AnalysisArea(object):
         feature.Destroy()
         datasource.Destroy()
 
-    
-    def write_geotiff(self, file_,  a, type_=GDT_Int16, nodata=0):
-        """
-        Args:
-            file_: Name of file to write to
-            aa: Analysis Area object
-            a: numpy array
-        """
-        from osgeo import gdal, gdal_array, osr #@UnresolvedImport
+    def get_geotiff(self, file_,  a, type_=GDT_Int16):
+        from osgeo import gdal
     
         driver = gdal.GetDriverByName('GTiff') 
             
@@ -317,8 +275,8 @@ class AnalysisArea(object):
                             type_, 
                             options = [ 'COMPRESS=LZW' ])  
         
-        # The comments for in the docs say "Upper Left" but that doesn't seem to 
-        # work
+        # Note that Y pixel height is negative to account for increasing
+        # Y going down the image, rather than up. 
         transform = [ self.lower_left[0] ,  # Upper Left X postion
                      self.pixel_size ,  # Pixel Width 
                      0 ,     # rotation, 0 if image is "north up" 
@@ -330,6 +288,19 @@ class AnalysisArea(object):
         out.SetGeoTransform(transform)  
         
         out.SetProjection( self.srs.ExportToWkt() )
+        
+        return out
+        
+    
+    def write_geotiff(self, file_,  a, type_=GDT_Int16, nodata=0):
+        """
+        Args:
+            file_: Name of file to write to
+            aa: Analysis Area object
+            a: numpy array
+        """
+
+        out = self.get_geotiff(self, file_,  a, type_)
      
         out.GetRasterBand(1).SetNoDataValue(nodata)
         out.GetRasterBand(1).WriteArray(a)
@@ -337,9 +308,10 @@ class AnalysisArea(object):
         return file_
 
     def __str__(self):
-        return ("AnalysisArea   : {name} \n"+
-                "Place Extents  : ({lonmin},{latmin}) ({lonmax},{latmax})\n"+
-                "Array Extents  : ({eastmin},{northmin}) ({eastmax},{northmax})\n"+
+        return ("AnalysisArea    : {name} \n"+
+                "WGS84  Extents  : ({lonmin},{latmin}) ({lonmax},{latmax})\n"+
+                "SPZone Extents  : ({eastmin},{northmin}) ({eastmax},{northmax})\n"+
+                "Size            : ({size_x}, {size_y})\n"
                 "EPGS SRID:     : {srid}\n"+
                 "Pro4txt: {proj4txt}"
         ).format(proj4txt=self.srs.ExportToProj4(),**self.__dict__)

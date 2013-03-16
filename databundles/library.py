@@ -874,6 +874,8 @@ class Library(object):
             
             if len(r) > 1:
                 raise Exception("Got more than one result")
+            elif len(r) == 0:
+                return False, False
             else:
                 r = r.pop()
             
