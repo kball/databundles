@@ -233,3 +233,200 @@ def create_bb( corners, srs):
                             (c[1], c[2]),
                               ), srs)
 
+      
+def combine_envelopes( geos, use_bb=True, use_distance=False):
+    """Find geometries that intersect"""
+    loops = 0   
+    while True: 
+        i, new_geos = _combine_envelopes(geos, use_bb, use_distance)
+        old = len(geos)
+        geos = None
+        geos = [g.Clone() for g in new_geos]
+        loops += 1
+        print "{}) {} reductions. {} old, {} new".format(loops, i, old, len(geos))
+        if old == len(geos):
+            break
+      
+    return geos
+      
+def _combine_envelopes(geometries, use_bb = True, use_distance=False):
+    """Inner support function for combine_envelopes"""
+    import databundles.geo as dg
+    reductions = 0
+    new_geometries = []
+    
+    accum = None
+    reduced = set()
+
+    for i1 in range(len(geometries)):
+        if i1 in reduced:
+            continue
+        g1 = geometries[i1]
+        for i2 in range(i1+1, len(geometries)):
+            if i2 in reduced:
+                continue
+
+            g2 = geometries[i2]
+
+
+            intersects = False
+            
+            if (g1.Intersects(g2) or  g1.Contains(g2) or g2.Contains(g1) or g1.Touches(g2)):
+                intersects = True
+      
+            # If the final output is to onvert the reduced geometries to bounding boxes, it
+            # can have BBs that intersect that were not reduced, because the underlying geometries
+            # didn't intersect
+            if use_bb and not intersects:
+                bb1 =  dg.create_bb(g1.GetEnvelope(), g1.GetSpatialReference())
+                bb2 =  dg.create_bb(g2.GetEnvelope(), g2.GetSpatialReference())
+                if bb1.Intersects(bb2):  
+                    intersects = True
+                    
+            if use_distance and not intersects:
+                if use_bb:
+                    if bb1.Distance(bb2) < use_distance:
+                        intersects = True                        
+                else:
+                    if g1.Distance(g2) < use_distance:
+                        intersects = True         
+
+            if intersects:
+                reductions += 1
+                reduced.add(i2)
+                if not accum:
+                    accum = g1.Union(g2)
+                else:
+                    accum = accum.Union(g2)
+        
+        if accum is not None:
+            new_geometries.append(accum.Clone())
+            accum = None
+        else:
+            new_geometries.append(g1.Clone())
+
+    return reductions, new_geometries
+            
+def bound_clusters_in_raster( a, aa, shape_file_dir, 
+                                 contour_interval,contour_value, use_bb=True, use_distance=False):
+        """Create a shapefile that contains contours and bounding boxes for clusters
+        of contours.
+        
+        :param a: A numpy array that contains the data inwhich to find clusters
+        :type a: Numpy array
+        
+        :param aa: The analysis object that sets the coordinate system for the area that contains the array
+        :type aa: databundles.geo.AnalysisArea
+        
+        :param shape_file_dir: The path to a directory where generated files will be stored. 
+        :type shape_file_dir: string
+        
+        :param contour_interval: The difference between successive contour intervals. 
+        :type contour_interval: float
+
+        :param contour_value: 
+        :type contour_value: float
+  
+        :param use_bb: If True, compute nearness and intersection using the contours bounding boxes, not the geometry
+        :type use_bb: bool
+        
+        :param use_distance: If not False, consider contours that are closer than this value to be overlapping. 
+        :type : number
+        
+        This method will store, in the `shape_file_dir` directory:
+        
+        * a GeoTIFF representation of the array `a`
+        * An ERSI shapefile layer  named `countours`, holding all of the countours. 
+        * A layer named `contour_bounds` with the bounding boxes for all of the contours with value `contour_value`
+        * A layer named `combined_bounds` with bounding boxes of intersecting and nearby boxes rom `contour_bounds`
+        
+        The routine will iteratively combine contours that overlap. 
+        
+        If `use_distance` is set to a number, and contours that are closer than this value will be joined. 
+        
+        If `use_bb` is set, the intersection and distance computations use the bounding boxes of the contours, 
+        not the contours themselves. 
+        
+     
+        """
+        
+        import databundles.geo as dg
+        from osgeo.gdalconst import GDT_Float32
+        import databundles.util as util
+        
+        from osgeo import gdal
+        import ogr, os
+       
+        if os.path.exists(shape_file_dir):
+            util.rm_rf(shape_file_dir)
+            os.makedirs(shape_file_dir)
+        
+        rasterf = os.path.join(shape_file_dir,'contour.tiff')
+
+        ogr_ds = ogr.GetDriverByName('ESRI Shapefile').CreateDataSource(shape_file_dir)
+        
+        # Setup the countour layer. 
+        ogr_lyr = ogr_ds.CreateLayer('contours', aa.srs)
+        ogr_lyr.CreateField(ogr.FieldDefn('id', ogr.OFTInteger))
+        ogr_lyr.CreateField(ogr.FieldDefn('value', ogr.OFTReal))
+        
+        # Create the contours from the GeoTIFF file. 
+        ds = aa.get_geotiff(rasterf,  a, type_=GDT_Float32)
+        ds.GetRasterBand(1).SetNoDataValue(0)
+        ds.GetRasterBand(1).WriteArray(a)
+        
+        gdal.ContourGenerate(ds.GetRasterBand(1), 
+                             contour_interval,  # contourInterval
+                             0,   # contourBase
+                             [],  # fixedLevelCount
+                             0, # useNoData
+                             0, # noDataValue
+                             ogr_lyr, #destination layer
+                             0,  #idField
+                             1 # elevation field
+                             )
+
+ 
+        # Get buffered bounding boxes around each of the hotspots, 
+        # and put them into a new layer. 
+ 
+        bound_lyr = ogr_ds.CreateLayer('contour_bounds', aa.srs)
+        for i in range(ogr_lyr.GetFeatureCount()):
+            f1 = ogr_lyr.GetFeature(i)
+            if f1.GetFieldAsDouble('value') != contour_value:
+                continue
+            g1 = f1.GetGeometryRef()
+            bb = dg.create_bb(g1.GetEnvelope(), g1.GetSpatialReference())
+            f = ogr.Feature(bound_lyr.GetLayerDefn())
+            f.SetGeometry(bb)
+            bound_lyr.CreateFeature(f)
+            
+    
+        # Doing a full loop instead of a list comprehension b/c the way that comprehensions
+        # compose arrays results in segfaults, probably because a copied geometry
+        # object is being released before being used. 
+        geos = []
+        for i in range(bound_lyr.GetFeatureCount()):
+            f = bound_lyr.GetFeature(i)
+            g = f.geometry()
+            geos.append(g.Clone())
+    
+        # Combine hot spots that have intersecting bounding boxes, to get larger
+        # areas that cover all of the adjacent intersecting smaller areas. 
+        geos = dg.combine_envelopes(geos, use_bb=use_bb, use_distance = use_distance) 
+
+        # Write out the combined bounds areas. 
+        lyr = ogr_ds.CreateLayer('combined_bounds', aa.srs)
+        lyr.CreateField(ogr.FieldDefn('area', ogr.OFTReal))
+        for env in geos:
+            f = ogr.Feature(lyr.GetLayerDefn())
+            bb = dg.create_bb(env.GetEnvelope(), env.GetSpatialReference())
+            f.SetGeometry(bb)
+            f.SetField(0, bb.Area())
+            lyr.CreateFeature(f)
+            
+
+            
+        
+
+
