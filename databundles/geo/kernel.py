@@ -52,7 +52,6 @@ class Kernel(object):
         print self.matrix.compressed()
         digits = digitize(self.matrix.ravel(), breaks)
         
-       
         print self.matrix.size
         print digits.size
         print self.matrix.shape[0]
@@ -61,7 +60,7 @@ class Kernel(object):
         
         print s
       
-    def apply(self,a, point, f, v=None):
+    def apply(self,a, point, v=None, f=None):
         """Apply the values in the kernel onto an array, centered at a point. 
         
         :param a: The array to apply to 
@@ -74,29 +73,54 @@ class Kernel(object):
         :param v: External value to be passed into the function
         :type v: any
         """
-        
-        # This operation can probably be done more efficiently
-        # with an array slice assigment, but the
-        index_errors = 0
+        import numpy as np
         
         if v:
             from functools import partial
             f = partial(f,v)
         
-        for (y_m,x_m), value in ndenumerate(self.matrix):
+        x_max, y_max = a.shape
+        m = None
+        use_m=False
+        
+        
+        if point.x < self.offset:
+            x_start = max(point.x - self.offset,0)
+            x_end = point.x + self.offset +1  
+            m = self.matrix[:,(self.offset-point.x):self.matrix.shape[1]]
+            use_m=True
             
-            yp = point.y+y_m-self.center
-            xp = point.x+x_m-self.center
+        elif point.x >  x_max - self.offset:
+            x_start = point.x - self.offset
+            x_end = min(point.x + self.offset+1, x_max)
+            m = self.matrix[:,0:self.matrix.shape[1]+ (x_max-point.x-self.offset)-1]
+            use_m=True
+        else:
+            x_start = point.x - self.offset
+            x_end = point.x + self.offset+1
+        
+        sm = (m if use_m else self.matrix)
+        
+        if point.y < self.offset:
+            print "A"
+            y_start = max(point.y - self.offset,0)
+            y_end = point.y + self.offset+1
+            m = sm[(self.offset-point.y):sm.shape[0],:]
+            use_m=True
+        elif point.y >  y_max - self.offset:
+            print "B"
+            y_start = point.y - self.offset
+            y_end = point.y + self.offset+1
+            m = sm[0:sm.shape[0]+ (y_max-point.y-self.offset)-1,:]
+            use_m=True
+        else:
+            y_start = point.y - self.offset
+            y_end = point.y + self.offset+1      
 
-            try:
-                av =  a[yp][xp]
-                a[yp,xp] = f(av, value)
-            except IndexError:
-                index_errors += 1
-                
-     
-        return index_errors
-
+        print y_start,y_end, x_start,x_end
+        print (m if use_m else self.matrix).shape
+        a[y_start:y_end, x_start:x_end] += (m if use_m else self.matrix)
+                        
         
     def apply_add(self,a,point,y=None):
         from ..geo import Point
@@ -122,21 +146,7 @@ class ConstantKernel(Kernel):
             self.center =  int(size/2) 
         else:
             self.center = 1
-          
-        if size == 1:
-            # Faster version for case of size  =1
-            def _apply(a, point, f):  
-                index_errors = 0
-                try:
-                    v = a[point.y][point.x]
-                    a[point.y][point.x] = f(v,self.value )
-                except IndexError:
-                    index_errors += 1
-                    
-                return index_errors
-                
-            self.apply  = _apply
-            
+                  
          
 class GaussianKernel(Kernel):
     
