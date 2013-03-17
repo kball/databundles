@@ -4,6 +4,7 @@ dataset, partitions, configuration, tables and columns.
 Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
+import sqlalchemy
 from sqlalchemy import orm
 from sqlalchemy import event
 from sqlalchemy import Column as SAColumn, Integer, Boolean
@@ -193,8 +194,38 @@ class Column(Base):
                 DATATYPE_DATE,
                 DATATYPE_TIME,
                 DATATYPE_TIMESTAMP,
+                DATATYPE_VARCHAR,
                 DATATYPE_POINT
              ]
+
+    sqlalchemy_type_map = { 
+        None: sqlalchemy.types.Text,
+        DATATYPE_TEXT: sqlalchemy.types.Text,
+        DATATYPE_INTEGER:sqlalchemy.types.Integer,
+        DATATYPE_INTEGER64:sqlalchemy.types.Integer,
+        DATATYPE_NUMERIC:sqlalchemy.types.Float,
+        DATATYPE_REAL:sqlalchemy.types.Float,     
+        DATATYPE_DATE: sqlalchemy.types.Date,
+        DATATYPE_TIME:sqlalchemy.types.Time,
+        DATATYPE_TIMESTAMP:sqlalchemy.types.DateTime,
+        DATATYPE_POINT:sqlalchemy.types.Text,
+        'varchar':sqlalchemy.types.Text,
+        }
+
+    python_type_map = { 
+        None: str,
+        DATATYPE_TEXT: str,
+        DATATYPE_INTEGER: int,
+        DATATYPE_INTEGER64: int,
+        DATATYPE_REAL: float,
+        DATATYPE_NUMERIC: float,        
+        DATATYPE_DATE: str,
+        DATATYPE_TIME: str,
+        DATATYPE_TIMESTAMP: str,
+        DATATYPE_POINT: str,
+        'varchar': str
+        }
+    
 
     def __init__(self,**kwargs):
      
@@ -224,6 +255,10 @@ class Column(Base):
         if not self.name:
             raise ValueError('Column must have a name')
 
+
+    @property
+    def python_type(self):
+        return self.python_type_map[self.datatype]
 
     @staticmethod
     def mangle_name(name):

@@ -7,6 +7,7 @@ from collections import namedtuple
 import random
 from osgeo import gdal, ogr    
 
+
 BoundingBox = namedtuple('BoundingBox', ['min_x', 'min_y','max_x', 'max_y'])
 
 def extents(database, table_name, where=None, lat_col='_db_lat', lon_col='_db_lon'):
@@ -35,13 +36,11 @@ def extents(database, table_name, where=None, lat_col='_db_lat', lon_col='_db_lo
 
 #From http://danieljlewis.org/files/2010/06/Jenks.pdf
 #
-# !!!! Use psal instead!
+# !!!! Use pysal instead!
 # !!!! http://pysal.geodacenter.org/1.2/library/esda/mapclassify.html#pysal.esda.mapclassify.Natural_Breaks
 #
 def jenks_breaks(dataList, numClass): 
  
-    dataList.sort() 
-    
     print "A"
     mat1 = [] 
     for i in range(0, len(dataList) + 1): 
@@ -440,7 +439,6 @@ def bound_clusters_in_raster( a, aa, shape_file_dir,
             
 
         return envelopes 
-            
-        
 
+    
 

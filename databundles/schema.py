@@ -119,9 +119,6 @@ class Schema(object):
      
         return row
         
-    def copy_table(self, source, dest_name):
-        #nt = self.add_table(dest_name)
-        pass
     
     def add_column(self, table, name,**kwargs):
         '''Add a column to the schema'''
@@ -149,18 +146,7 @@ class Schema(object):
         from sqlalchemy import Column as SAColumn
         from sqlalchemy import Table as SATable
         
-        type_map = { 
-        None: sqlalchemy.types.Text,
-        Column.DATATYPE_TEXT: sqlalchemy.types.Text,
-        Column.DATATYPE_INTEGER:sqlalchemy.types.Integer,
-        Column.DATATYPE_INTEGER64:sqlalchemy.types.Integer,
-        Column.DATATYPE_REAL:sqlalchemy.types.Float,     
-        Column.DATATYPE_DATE: sqlalchemy.types.Date,
-        Column.DATATYPE_TIME:sqlalchemy.types.Time,
-        Column.DATATYPE_TIMESTAMP:sqlalchemy.types.DateTime,
-        Column.DATATYPE_POINT:sqlalchemy.types.Text,
-        'varchar':sqlalchemy.types.Text,
-        }
+        type_map = Column.sqlalchemy_type_map
     
         def translate_type(column):
             # Creates a lot of unnecessary objects, but spped is not important here.  
@@ -269,13 +255,8 @@ class Schema(object):
        
         t = None
 
-        tm = {
-              'TEXT':Column.DATATYPE_TEXT,
-              'INTEGER':Column.DATATYPE_INTEGER,
-              'INTEGER64':Column.DATATYPE_INTEGER,
-              'REAL':Column.DATATYPE_REAL,
-              'FLOAT':Column.DATATYPE_REAL
-              }
+        #tm = { name.lower():Column.sqlalchemy_type_map[name.lower()] for name in Column.types }
+
         
         new_table = True
         last_table = None
@@ -332,8 +313,8 @@ class Schema(object):
             indexes = [ row['table']+'_'+c for c in row.keys() if (re.match('i\d+', c) and _clean_flag(row[c]))]  
             uindexes = [ row['table']+'_'+c for c in row.keys() if (re.match('ui\d+', c) and _clean_flag(row[c]))]  
             uniques = [ row['table']+'_'+c for c in row.keys() if (re.match('u\d+', c) and  _clean_flag(row[c]))]  
-  
-            datatype = tm[row['type'].strip()]
+        
+            datatype = row['type'].strip().lower()
          
             width = _clean_int(row.get('width', None))
             size = _clean_int(row.get('size',None))
@@ -342,7 +323,6 @@ class Schema(object):
                 illegal_value = '9' * width
             else:
                 illegal_value = None
-            
             
             data = { k.replace('d_','',1): v for k,v in row.items() if k.startswith('d_') }
             

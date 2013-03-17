@@ -388,6 +388,10 @@ class BuildBundle(Bundle):
             if os.path.exists(mf):
                 os.remove(mf)
         
+        ed = self.filesystem.path('extracts')
+        if os.path.exists(ed):
+            self.rm_rf(ed)
+        
         # Should check for a shared download file -- specified
         # as part of the library; Don't delete that. 
         #if not self.cache_downloads :
