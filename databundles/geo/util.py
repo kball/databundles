@@ -333,6 +333,8 @@ def bound_clusters_in_raster( a, aa, shape_file_dir,
         :param use_distance: If not False, consider contours that are closer than this value to be overlapping. 
         :type : number
         
+        :rtype: Returns a list of dictionaries, one for each of the combined bounding boxes
+        
         This method will store, in the `shape_file_dir` directory:
         
         * a GeoTIFF representation of the array `a`
@@ -417,15 +419,27 @@ def bound_clusters_in_raster( a, aa, shape_file_dir,
 
         # Write out the combined bounds areas. 
         lyr = ogr_ds.CreateLayer('combined_bounds', aa.srs)
+        lyr.CreateField(ogr.FieldDefn('id', ogr.OFTInteger))
         lyr.CreateField(ogr.FieldDefn('area', ogr.OFTReal))
+        lyr.CreateField(ogr.FieldDefn('name', ogr.OFTString))
+        lyr.CreateField(ogr.FieldDefn('code', ogr.OFTString))
+        
+        envelopes = []
+        id = 1
         for env in geos:
             f = ogr.Feature(lyr.GetLayerDefn())
             bb = dg.create_bb(env.GetEnvelope(), env.GetSpatialReference())
             f.SetGeometry(bb)
-            f.SetField(0, bb.Area())
+            f.SetField(0, id)
+            f.SetField(1, bb.Area())
+            f.SetField(2, None)
+            f.SetField(3, None)   
+            id += 1         
             lyr.CreateFeature(f)
+            envelopes.append({'id':id, 'env':bb.GetEnvelope(), 'area':bb.Area()})
             
 
+        return envelopes 
             
         
 

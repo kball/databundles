@@ -56,7 +56,6 @@ def get_analysis_area(library, **kwargs):
                       row.srswkt)
 
 
-
 def draw_edges(a):
         for i in range(0,a.shape[0]): # Iterate over Y
             a[i,0] = 1
@@ -175,13 +174,14 @@ class AnalysisArea(object):
         d_srs = self.srs
     
         return ogr.osr.CoordinateTransformation(s_srs, d_srs)
-        
+                
     def get_translator(self, source_srs=None):
         """Get a function that transforms coordinates from a source srs
         to the coordinates of this array """
         import math
         
         trans = self.get_coord_transform(source_srs)
+
         def _transformer(x,y):
             xp,yp,z =  trans.TransformPoint(x,y)
             return Point(
@@ -190,6 +190,8 @@ class AnalysisArea(object):
                     )
         
         return _transformer
+  
+        
         
     def is_in_ll(self, lon, lat):
         """Return true if the (lat, lon) is inside the area"""
@@ -198,6 +200,13 @@ class AnalysisArea(object):
                 lon < self.lonmax and
                 lon > self.lonmin )     
         
+        
+    def is_in_ll_query(self, lat_name='lat',lon_name='lon'):
+        """Return SQL text for querying for a lat/long point that is in this analysis area"""
+        
+        return (""" {lat_name} >= {latmin} AND {lat_name} <= {latmax} AND
+        {lon_name} >= {lonmin} AND {lon_name} <= {lonmax}"""
+        .format( lat_name=lat_name, lon_name=lon_name,**self.__dict__))
         
 
     @property
@@ -292,7 +301,7 @@ class AnalysisArea(object):
         return out
         
     
-    def write_geotiff(self, file_,  a, type_=GDT_Int16, nodata=0):
+    def write_geotiff(self, file_,  a, type_=GDT_Float32, nodata=0):
         """
         Args:
             file_: Name of file to write to
@@ -300,12 +309,58 @@ class AnalysisArea(object):
             a: numpy array
         """
 
-        out = self.get_geotiff(self, file_,  a, type_)
+        out = self.get_geotiff( file_,  a, type_)
      
         out.GetRasterBand(1).SetNoDataValue(nodata)
         out.GetRasterBand(1).WriteArray(a)
       
         return file_
+
+    @staticmethod
+    def rd(v):
+        """Round down, to the nearest even 100"""
+        import math
+        return math.floor(v/100.0) * 100
+    
+    @staticmethod
+    def ru(v):
+        """Round up, to the nearest even 100"""
+        import math
+        return math.ceil(v/100.0) * 100
+        
+
+    def get_aa_from_envelope(self, envelope, name=None, geoid=None):
+        """Create a new AA given the envelope from a GDAL geometry."""
+        import util
+        d_srs =  ogr.osr.SpatialReference()
+        d_srs.ImportFromEPSG(4326) # Lat/Long in WGS84
+    
+        trans = ogr.osr.CoordinateTransformation(self.srs, d_srs)
+
+        env1_bb = util.create_bb(envelope, self.srs)
+        env1_bb.TransformTo(d_srs)       
+        env2_bb = util.create_bb(env1_bb.GetEnvelope(), env1_bb.GetSpatialReference()).GetEnvelope()
+
+        d = {
+             'lonmin': env2_bb[0],
+             'lonmax': env2_bb[1],
+             'latmin': env2_bb[2],
+             'latmax': env2_bb[3],
+            
+             'eastmin': self.rd(envelope[0]),
+             'eastmax': self.ru(envelope[1]),
+             'northmin': self.rd(envelope[2]),
+             'northmax': self.ru(envelope[3])
+             }      
+
+
+        return AnalysisArea( 
+                  name,
+                  geoid , # 'name' is used twice, pick the first. 
+                  srid=self.srid,                       
+                  srswkt=self.srswkt,
+                  **d)
+
 
     def __str__(self):
         return ("AnalysisArea    : {name} \n"+
