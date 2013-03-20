@@ -4,8 +4,6 @@ Created on Mar 17, 2013
 @author: eric
 '''
 
-    
-
 def _load_maps():
     import os.path
     import databundles.support
@@ -92,25 +90,27 @@ def geometric_breaks(n, min, max):
     breaks.append(max)
     return breaks
 
-def write_colormap(file_name, a, map, break_scheme='even', min=None):
+def write_colormap(file_name, a, map, break_scheme='even', min_val=None):
     """Write a QGIS colormap file"""
     import numpy as np
+    import math
 
     header ="# QGIS Generated Color Map Export File\nINTERPOLATION:DISCRETE\n"
     
     
-    min = np.min(a) if not min else min
-    max = np.max(a)
-    range = min-max
+    min_ = np.min(a) if not min_val else min_val
+    max_ = np.max(a)
+    max_ = max_ * 1.01 # Be sure to get all values
+    range = min_-max_
     delta = range*.001
     
     if break_scheme == 'even':
-        r = np.linspace(min-delta, max+delta, num=map['n_colors']+1)
+        r = np.linspace(min_-delta, max_+delta, num=map['n_colors']+1)
     elif break_scheme == 'jenks':
         from databundles.geo import jenks_breaks
         r = jenks_breaks(a, map['n_colors'])
     elif break_scheme == 'geometric':
-        r = geometric_breaks(map['n_colors'], min, max)
+        r = geometric_breaks(map['n_colors'], min_, max_)
     elif break_scheme == 'stddev':
         sd = np.std(a)
     else:
@@ -120,11 +120,17 @@ def write_colormap(file_name, a, map, break_scheme='even', min=None):
     
     colors.append(None) # Causes the last item to be skipped
 
+    alphas, alpha_step = np.linspace(64,255,len(colors),retstep=True)
+    alpha = alpha_step+64
+
     with open(file_name, 'w') as f:
         f.write(header)
         for v,me in zip(r,colors):
             if me:
-                f.write(','.join([str(v),str(me['R']), str(me['G']), str(me['B']), str(255), me['letter'] ]))
+              
+                f.write(','.join([str(v),str(me['R']), str(me['G']), str(me['B']), str(int(alpha)), me['letter'] ]))
+                alpha += alpha_step
+                alpha = min(alpha, 255)
                 f.write('\n')
     
     

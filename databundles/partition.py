@@ -173,10 +173,11 @@ class Partition(object):
     def __repr__(self):
         return "<partition: {}>".format(self.name)
 
+
+
 class GeoPartition(Partition):
     '''A Partition that hosts a Spatialite for geographic data'''
     
-
     def __init__(self, bundle, record):
         super(GeoPartition, self).__init__(bundle, record)
 
@@ -527,7 +528,7 @@ class Partitions(object):
         shapefile
         """
         import subprocess, sys
-        import shapefile, tempfile, uuid
+        import  tempfile, uuid
         from databundles.database import Database
         from databundles.dbexceptions import ConfigurationError
         

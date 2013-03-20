@@ -505,7 +505,7 @@ class LibraryDb(object):
                 id_ = d.identity
                 d.path = os.path.join(self.cache,id_.cache_key)
                 out.append(d)
-        
+
         if len(query_command.partition) == 0:
             query = s.query(Dataset, Dataset.id_) # Dataset.id_ is included to ensure result is always a tuple
         else:
@@ -849,6 +849,8 @@ class Library(object):
     def get_ref(self,bp_id):
         from databundles.identity import ObjectNumber, DatasetNumber, PartitionNumber, Identity, PartitionIdentity
                 
+        #import pdb; pdb.set_trace()
+                
         if isinstance(bp_id, Identity):
             if bp_id.id_:
                 bp_id = bp_id.id_
@@ -875,18 +877,20 @@ class Library(object):
             if len(r) > 1:
                 raise Exception("Got more than one result")
             elif len(r) == 0:
-                return False, False
+                r = None
             else:
                 r = r.pop()
             
             if r:
                 dataset, partition  = self._get_bundle_path_from_id(r[0].id_) 
+                
+
 
         # Try the name as a partition name
         if not dataset:
             q = self.find(QueryCommand().partition(name = bp_id) )
        
-            r = q.first()
+            r = q.pop()
             if r:
                 dataset, partition  = self._get_bundle_path_from_id(r[1].id_)         
 

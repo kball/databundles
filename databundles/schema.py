@@ -343,5 +343,27 @@ class Schema(object):
                                    data=data
                                    )
 
+    def as_csv(self):
+        from databundles.bundle import DbBundle
+        import csv, sys, os
+        from collections import OrderedDict
 
+        w = None
+        
+        for table in self.tables:
+            for col in table.columns:
+                row = OrderedDict()
+                row['table'] = table.name
+                row['column'] = col.name
+                row['is_pk'] = 1 if col.is_primary_key else ''
+                row['is_fk'] = 1 if col.is_foreign_key else ''
+                row['type'] = col.datatype.upper()
+                row['default'] = col.default
+                row['description'] = col.description
+                
+                if not w:
+                    w = csv.DictWriter(sys.stdout,row.keys())
+                    w.writeheader()
+                
+                w.writerow(row)
         

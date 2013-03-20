@@ -140,11 +140,14 @@ def run(argv, bundle_class):
         time.sleep(1)
 
     if 'info' in phases:
-        b.log("----Info ---")
-        b.log("Name: "+b.identity.name)
-        
-        for partition in b.partitions:
-            b.log("Partition: "+partition.name)
+        if args.schema:
+            b.schema.as_csv()
+        else:
+            b.log("----Info ---")
+            b.log("Name: "+b.identity.name)
+            
+            for partition in b.partitions:
+                b.log("Partition: "+partition.name)
             
         return
     

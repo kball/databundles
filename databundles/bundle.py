@@ -337,7 +337,9 @@ class BuildBundle(Bundle):
         #
         command_p = cmd.add_parser('info', help='Print information about the bundle')
         command_p.set_defaults(command='info')               
-           
+        command_p.add_argument('-s','--schema',  default=False,action="store_true",
+                               help='Dump the schema as a CSV. The bundle must have been prepared')
+                   
         return parser
 
     @property

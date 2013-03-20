@@ -451,3 +451,17 @@ def chunks(l, n):
     """
     for i in xrange(0, len(l), n):
         yield l[i:i+n]
+        
+        
+def zip_dir(dir, file_):
+    
+    import zipfile, glob
+    with zipfile.ZipFile(file_, 'w') as zf:
+        g = os.path.join(dir,'*')
+        print g
+        for f in glob.glob(g):
+            zf.write(f)
+    return dir
+    
+    
+        

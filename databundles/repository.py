@@ -121,6 +121,8 @@ class Repository(object):
         import tempfile
         import uuid
         import os
+        import sqlite3
+        import csv
 
         p = extract_data['_partition'] # Set in _make_partition_dict
      
@@ -132,9 +134,24 @@ class Repository(object):
             file_ =  os.path.join(tempfile.gettempdir(), str(uuid.uuid4()) )
 
     
-        self.bundle.log("Extracting {} to {}".format(extract_data['title'],file_))
+        self.bundle.log("Extracting {} to {}".format(extract_data['name'],file_))
+        self.bundle.log("Extract query: {} ".format(extract_data['query']))
 
-        petlf.fromsqlite3(p.database.path, extract_data['query'] ).tocsv(file_) #@UndefinedVariable
+        conn = sqlite3.connect(p.database.path)
+
+        with open(file_, 'w') as f:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(extract_data['query'])
+            
+            first = rows.fetchone()
+            writer = csv.writer(f)
+
+            writer.writerow(first.keys())
+            writer.writerow(tuple(first))
+            
+            for row in rows:
+                writer.writerow(tuple(row))
+
   
         return file_       
     
@@ -232,8 +249,15 @@ class Repository(object):
             partitions = [self.bundle] + partitions
         else:
             partition = self.partitions.get(partition_name)
-            partitions = [partition]
-
+            if partition:
+                partitions = [partition]
+            else:
+                l = self.bundle.library
+                r = l.get(partition_name)
+                if r.partition:
+                    partitions = [r.partition]
+                else:
+                    partitions = [r.bundle]
         out = []
          
         if not for_:
@@ -307,6 +331,7 @@ class Repository(object):
          """
         import collections
         from databundles.util import toposort
+
         
         ext_config = self.extracts
 
@@ -351,6 +376,8 @@ class Repository(object):
                     for data in eaches:     
                         yield self._sub(dict(p_dict.items()+extract.items() + 
                                              data.items() ))
+            else:
+                self.bundle.error("Extract group {} should have either a function or a partition".format(key))
               
     def store_document(self, package, config):
         import re, string
@@ -370,8 +397,7 @@ class Repository(object):
         for extract_data in self.generate_extracts(root=root):
             file_ = self._do_extract(extract_data, force=force)
             if file_ is True:
-                #self.bundle.log("Extract {} marked as done".format(extract_data['_name']))
-                pass
+                self.bundle.log("Extract {} marked as done".format(extract_data['_name']))
             elif file_ and os.path.exists(file_):
                 self.bundle.log("Extracted: {}".format(file_))
             else:

@@ -144,8 +144,12 @@ def library_command(args, rc):
         if not dataset:
             print "{}: Not found".format(args.term)
         else:
-            print "Rel Path  : ",dataset.cache_key
-            print "Abs Path  : ",l.cache.exists(dataset.cache_key)
+            if partition:
+                print "Rel Path  : ",partition.cache_key
+                print "Abs Path  : ",l.cache.exists(partition.cache_key)
+            else:
+                print "Rel Path  : ",dataset.cache_key
+                print "Abs Path  : ",l.cache.exists(dataset.cache_key)                
             print "Dataset   : ",dataset.id_, dataset.name
             print "Partition : ",(partition.id_, partition.name )if partition else ''
             print "D Is Local: ",l.cache.exists(dataset.cache_key) is not False
