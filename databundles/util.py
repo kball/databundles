@@ -464,4 +464,14 @@ def zip_dir(dir, file_):
     return dir
     
     
-        
+def md5_for_file(file_name, block_size=2**20):
+    """Generate an MD5 has for a possibly large file by breaking it into chunks"""
+    import hashlib
+    with open(file_name) as f:
+        md5 = hashlib.md5()
+        while True:
+            data = f.read(block_size)
+            if not data:
+                break
+            md5.update(data)
+    return md5.hexdigest()    

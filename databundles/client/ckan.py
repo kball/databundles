@@ -231,11 +231,12 @@ class Ckan(object):
         payload['title'] = title
         payload['groups'] = [group['id'] for group in groups]
         payload['license_id'] = bundle.config.about.get('license','other')
-   
-     
+  
+    
         r = requests.post(self.url+'/rest/package/{name}'.format(name=name),
                           headers =  self.auth_headers,
                           data=json.dumps(payload))
+
         try:
             r.raise_for_status()
             return r.json()
@@ -330,18 +331,16 @@ class Ckan(object):
                 md5.update(data)
         return md5.hexdigest()
 
-    def add_file_resource(self, pe, file_path, name, 
+    def add_file_resource(self, 
+                          pe, # Parent package, as a dict
+                          file_path, 
+                          name, 
                           resource_type = 'data',
                           content_type=None,
                           **kwargs):
 
         import os
         import mimetypes
-        
-        server_url = self.upload_file(file_path, name=name) #@UnusedVariable
-        
-        md5 = self.md5_for_file(file_path)
-        st = os.stat(file_path)
 
         package_url = self.url+'/rest/package/{id}'.format(id=pe['id'])
 
@@ -351,8 +350,23 @@ class Ckan(object):
 
         pe2 = r.json()
 
+        md5 = self.md5_for_file(file_path)
+      
+
         if content_type is None:
             content_type = mimetypes.guess_type(file_path)[0] or 'application/octet-stream'
+
+        st = os.stat(file_path)
+        
+        extant = None
+        for r in pe2['resources']:
+            if r['hash'] == md5:
+                extant = r
+        
+        if extant:
+            server_url = extant['url']
+        else:
+            server_url = self.upload_file(file_path, name=name) 
 
         resource = dict(name=name,
                 mimetype=content_type,
@@ -364,7 +378,10 @@ class Ckan(object):
             if v is not None:
                 resource[k] = v
 
-        pe2['resources'].append(resource)
+        # Don't duplicate records with the same hash 
+        pe2['resources'] = ( [ r for r in pe2['resources'] if r['hash'] != md5  and r['name'] != name] 
+                             + [resource] )
+
 
         r = requests.put(package_url,
                   headers =  self.auth_headers,
@@ -397,7 +414,8 @@ class Ckan(object):
             if v is not None:
                 resource[k] = v
 
-        pe2['resources'].append(resource)
+        pe2['resources'] =  ([ r for r in pe2['resources'] if r['url'] != url ] 
+                             + [resource])
 
         r = requests.put(package_url,
                   headers =  self.auth_headers,

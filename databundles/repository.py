@@ -170,7 +170,6 @@ class Repository(object):
         
         name = extract_data.get('name', os.path.basename(file_))
         
-        
         r = self.api.add_file_resource(package, file_, 
                             name=name,
                             description=extract_data['description'],
@@ -408,6 +407,7 @@ class Repository(object):
     def submit(self,  root=None, force=False, repo=None): 
         """Create a dataset for the bundle, then add a resource for each of the
         extracts listed in the bundle.yaml file"""
+        import databundles.util as du
         
         if repo:
             self.repo_name = repo
@@ -419,9 +419,7 @@ class Repository(object):
         ckb = self.api.update_or_new_bundle_extract(self.bundle)
         
         sent = set()
-        
-        # Clear out existing resources. 
-        ckb['resources'] = []      
+    
         self.api.put_package(ckb)
         
         for doc in self.bundle.config.group('about').get('documents',[]):
@@ -431,6 +429,7 @@ class Repository(object):
 
             file_ = self._do_extract(extract_data, force=force)
             if file_ not in sent:
+
                 r = self._send(ckb, extract_data,file_)
                 sent.add(file_)
                 url = r['ckan_url']
