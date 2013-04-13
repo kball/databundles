@@ -406,8 +406,20 @@ class Partitions(object):
         The object returned is immutable; changes are not persisted'''
         import sqlalchemy.orm.exc
         try:
-            op = self.find_orm(pid, **kwargs).one()
-            return self.partition(op)
+            
+            partitions = [ self.partition(op) for op in self.find_orm(pid, **kwargs).all()];
+            
+            if len(partitions) == 1:
+                return partitions.pop()
+            elif len(partitions) > 1 :
+                from databundles.dbexceptions import ResultCountError
+                
+                rl = "; ".join([p.identity.name for p in partitions])
+                
+                raise ResultCountError("Got too many results: {}".format(rl)) 
+            else:
+                return None
+            
         except sqlalchemy.orm.exc.NoResultFound: 
             return None
    
@@ -504,9 +516,18 @@ class Partitions(object):
         s = self.bundle.database.session
         s.query(OrmPartition).delete()
         
-    def new_partition(self, pid, **kwargs):
+    def new_partition(self, pid=None, **kwargs):
      
-        extant = self.find_orm(pid).all()
+        if not pid: 
+            time = kwargs.get('time',None)
+            space = kwargs.get('space', None)
+            table = kwargs.get('table', None)
+            grain = kwargs.get('grain', None)
+            name = kwargs.get('name', None)
+            pid = PartitionIdentity(self.bundle.identity, time=time, space=space, table=table, grain=grain, name=name)
+            
+     
+        extant = self.find_orm(pid, **kwargs).all()
         
         for p in extant:
             if p.name == pid.name:
@@ -568,14 +589,14 @@ class Partitions(object):
         return partition
 
 
-    def find_or_new(self, pid, **kwargs):
+    def find_or_new(self, pid=None, **kwargs):
 
-        partition =  self.find(pid)
+        partition =  self.find(pid, **kwargs)
     
         if not partition:
             partition = self.new_partition(pid, **kwargs)
-            if pid.table:     
-                partition.create_with_tables(pid.table)    
+            if partition.identity.table:     
+                partition.create_with_tables(partition.identity.table)    
         
         return partition;
     

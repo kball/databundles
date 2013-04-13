@@ -161,9 +161,12 @@ def run(argv, bundle_class):
             b.error("Available methods : {} ".format(dir(b)))
       
             return
-            
+        
+        if not callable(f):
+            raise TypeError("Got object for name '{}', but it isn't a function".format(args.method))
+      
         return f()
-
+       
     
 
     if 'clean' in phases:

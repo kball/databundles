@@ -455,7 +455,10 @@ class Database(object):
             pass
         
 
-    def inserter(self, table_or_name,**kwargs):
+    def inserter(self, table_or_name=None,**kwargs):
+      
+        if table_or_name is None and self.partition.table is not None:
+            table_or_name = self.partition.table
       
         if isinstance(table_or_name, basestring):
             table_name = table_or_name
@@ -701,8 +704,7 @@ class Database(object):
             name =  ''.join(random.choice(string.letters) for i in xrange(10)) #@UnusedVariable
         
         q = """ATTACH DATABASE '{}' AS '{}' """.format(path, name)
-    
-        print q
+
     
         self.connection.execute(q)
            

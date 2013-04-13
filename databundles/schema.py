@@ -105,7 +105,9 @@ class Schema(object):
      
         self.bundle.database.session.add(row)
 
-        for key, value in kwargs.items():    
+        for key, value in kwargs.items():
+            if not key:
+                continue
             if key[0] != '_' and key not in ['id','id_', 'd_id','name','sequence_id','table','column']:       
                 setattr(row, key, value)
      
@@ -147,7 +149,7 @@ class Schema(object):
         from sqlalchemy import Table as SATable
         
         type_map = Column.sqlalchemy_type_map
-    
+
         def translate_type(column):
             # Creates a lot of unnecessary objects, but spped is not important here.  
             type_map[Column.DATATYPE_NUMERIC] = sqlalchemy.types.Numeric(column.precision, column.scale),  
@@ -289,7 +291,7 @@ class Schema(object):
                     self.bundle.error(str(row))
                     self.bundle.error(str(e))
                     self.bundle.database.session.rollback()
-                    raise e
+                    raise
                     return 
                 new_table = False
               
@@ -330,7 +332,7 @@ class Schema(object):
 
             self.add_column(t,row['column'],
                                    is_primary_key= True if row.get('is_pk', False) else False,
-                                   is_foreign_key= True if row.get('is_fk', False) else False,
+                                   foreign_key= row['is_fk'] if row.get('is_fk', False) else False,
                                    description=description,
                                    datatype=datatype,
                                    unique_constraints = ','.join(uniques),
@@ -344,8 +346,8 @@ class Schema(object):
                                    )
 
     def as_csv(self):
-        from databundles.bundle import DbBundle
-        import csv, sys, os
+        """Return the current schema as a CSV file"""
+        import csv, sys
         from collections import OrderedDict
 
         w = None
@@ -356,7 +358,7 @@ class Schema(object):
                 row['table'] = table.name
                 row['column'] = col.name
                 row['is_pk'] = 1 if col.is_primary_key else ''
-                row['is_fk'] = 1 if col.is_foreign_key else ''
+                row['is_fk'] = col.foreign_key if col.foreign_key else ''
                 row['type'] = col.datatype.upper()
                 row['default'] = col.default
                 row['description'] = col.description
@@ -366,4 +368,77 @@ class Schema(object):
                     w.writeheader()
                 
                 w.writerow(row)
+                
+    def as_orm(self):
+        """Return a string that holds the schema represented as Sqlalchemy
+        classess"""
+
+
+        def write_file():
+            return """
+import sqlalchemy
+from sqlalchemy import orm
+from sqlalchemy import event
+from sqlalchemy import Column as SAColumn, Integer, Boolean
+from sqlalchemy import Float as Real,  Text, ForeignKey
+from sqlalchemy.orm import relationship, deferred
+from sqlalchemy.types import TypeDecorator, TEXT, PickleType
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.ext.mutable import Mutable
+
+Base = declarative_base()
+
+"""
+
+        def write_class(table):
+            return "class {name}(Base):\n".format(name=table.name.capitalize())
+        
+        def write_fields(table):
+            o = ""
+            for col in table.columns:
+                opts = []
+                optstr = '';
+                if col.is_primary_key: opts.append("primary_key=True") 
+                if col.foreign_key: opts.append("ForeignKey('{table}.{table}_id'))".format(table=col.foreign_key)) 
+                
+                if  len(opts):
+                    optstr = ',' + ','.join(opts)
+                  
+                o += "    {column} = SAColumn('{column}',sqlalchemy.types.{type}{options})\n".format(column=col.name, type=col.sqlalchemy_type.__name__,options=optstr)
+            
+            return o
+        
+        def write_init(table):
+            o = "    def __init__(self,**kwargs):\n"
+            for col in table.columns:
+                o += "        self.{column} = kwargs.get(\"{column}\",None)\n".format(column=col.name)
+            
+            return o
+
+        out = write_file()
+        for table in self.tables:
+            out += write_class(table)
+            out += "\n"
+            out += write_fields(table)
+            out += "\n"
+            out += write_init(table)
+            out += "\n\n"
+
+        return out
+    
+    def write_orm(self):
+        """Writes the ORM file to the lib directory, which is automatically added to the
+        import path by the Bundle"""
+        import os
+        
+        lib_dir = self.bundle.filesystem.path('lib')
+        if not os.path.exists(lib_dir):
+            os.makedirs(lib_dir)
+            
+        with open(os.path.join(lib_dir,'orm.py'),'w') as f:
+            f.write(self.as_orm())
+            
+        
+        
+    
         

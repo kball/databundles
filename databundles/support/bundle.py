@@ -15,28 +15,30 @@ class Bundle(BuildBundle):
 
     ### Meta is run before prepare, to load or configure meta information
 
-    def meta(self):
-        return True
- 
+
 
     ### Prepare is run before building, part of the devel process.  
 
     def prepare(self):
+        '''Create the datbase and load the schema from a file, if the file exists. '''
+        from databundles.partition import PartitionIdentity
+      
+        if not self.database.exists():
+            self.database.create()
+
+        if self.config.build.get('schema_file', False):
+            with open(self.filesystem.path(self.config.build.schema_file), 'rbU') as f:
+                self.schema.schema_from_file(f)      
+                self.schema.create_tables()     
+
         return True
- 
     
     ### Build the final package
 
-    def pre_build(self):
-        return True
         
     def build(self):
         return True
-    
-    def post_build(self):
-        return True
-    
-        
+
     
 import sys
 

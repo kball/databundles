@@ -372,7 +372,7 @@ def bound_clusters_in_raster( a, aa, shape_file_dir,
         ogr_lyr.CreateField(ogr.FieldDefn('value', ogr.OFTReal))
         
         # Create the contours from the GeoTIFF file. 
-        ds = aa.get_geotiff(rasterf,  a, type_=GDT_Float32)
+        ds = aa.get_geotiff(rasterf,  a, data_type=GDT_Float32)
         ds.GetRasterBand(1).SetNoDataValue(0)
         ds.GetRasterBand(1).WriteArray(a)
         

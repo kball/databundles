@@ -164,7 +164,7 @@ class Column(Base):
     data = SAColumn('c_data',MutationDict.as_mutable(JSONEncodedDict))
 
     is_primary_key = SAColumn('c_is_primary_key',Boolean, default = False)
-    is_foreign_key = SAColumn('c_is_foreign_key',Boolean, default = False)
+    foreign_key = SAColumn('c_is_foreign_key',Text, default = False)
     unique_constraints = SAColumn('c_unique_constraints',Text)
     indexes = SAColumn('c_indexes',Text)
     uindexes = SAColumn('c_uindexes',Text)
@@ -175,7 +175,7 @@ class Column(Base):
     DATATYPE_INTEGER ='integer' 
     DATATYPE_INTEGER64 ='integer64' 
     DATATYPE_REAL = 'real'
-    DATATYPE_REAL = 'float'
+    DATATYPE_FLOAT = 'float'
     DATATYPE_NUMERIC = 'numeric'
     DATATYPE_DATE = 'date'
     DATATYPE_TIME = 'time'
@@ -183,19 +183,22 @@ class Column(Base):
     DATATYPE_POINT = 'point' # Spatalite, sqlite extensions for geo
     DATATYPE_CHAR = 'text'
     DATATYPE_VARCHAR = 'text'
-    DATATYPE_POINT = 'point'
+    DATATYPE_BLOB = 'blob'
+
     
     types = [
                 DATATYPE_TEXT,
                 DATATYPE_INTEGER,
                 DATATYPE_INTEGER64,
                 DATATYPE_REAL,
+                DATATYPE_FLOAT,
                 DATATYPE_NUMERIC,
                 DATATYPE_DATE,
                 DATATYPE_TIME,
                 DATATYPE_TIMESTAMP,
                 DATATYPE_VARCHAR,
-                DATATYPE_POINT
+                DATATYPE_POINT,
+                DATATYPE_BLOB
              ]
 
     sqlalchemy_type_map = { 
@@ -204,11 +207,13 @@ class Column(Base):
         DATATYPE_INTEGER:sqlalchemy.types.Integer,
         DATATYPE_INTEGER64:sqlalchemy.types.Integer,
         DATATYPE_NUMERIC:sqlalchemy.types.Float,
-        DATATYPE_REAL:sqlalchemy.types.Float,     
+        DATATYPE_REAL:sqlalchemy.types.Float, 
+        DATATYPE_FLOAT:sqlalchemy.types.Float,        
         DATATYPE_DATE: sqlalchemy.types.Date,
         DATATYPE_TIME:sqlalchemy.types.Time,
         DATATYPE_TIMESTAMP:sqlalchemy.types.DateTime,
         DATATYPE_POINT:sqlalchemy.types.Text,
+        DATATYPE_BLOB: sqlalchemy.types.LargeBinary,
         'varchar':sqlalchemy.types.Text,
         }
 
@@ -218,15 +223,25 @@ class Column(Base):
         DATATYPE_INTEGER: int,
         DATATYPE_INTEGER64: int,
         DATATYPE_REAL: float,
+        DATATYPE_FLOAT: float,
         DATATYPE_NUMERIC: float,        
         DATATYPE_DATE: str,
         DATATYPE_TIME: str,
         DATATYPE_TIMESTAMP: str,
         DATATYPE_POINT: str,
+        DATATYPE_BLOB: buffer,
         'varchar': str
         }
     
 
+    @property
+    def sqlalchemy_type(self):
+        return self.sqlalchemy_type_map[self.datatype]
+    
+    @property
+    def python_type(self):
+        return self.python_type_map[self.datatype]
+        
     def __init__(self,**kwargs):
      
         self.id_ = kwargs.get("oid",None) 
@@ -256,9 +271,6 @@ class Column(Base):
             raise ValueError('Column must have a name')
 
 
-    @property
-    def python_type(self):
-        return self.python_type_map[self.datatype]
 
     @staticmethod
     def mangle_name(name):

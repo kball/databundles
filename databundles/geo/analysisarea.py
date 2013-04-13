@@ -9,23 +9,41 @@ from numpy import *
 from osgeo.gdalconst import GDT_Float32, GDT_Byte, GDT_Int16 #@UnresolvedImport
 from databundles.geo import Point
 from util import create_poly
+from databundles.dbexceptions import ConfigurationError
 
 #ogr.UseExceptions()
 
 
 def get_analysis_area(library, **kwargs):
-    """Return an analysis area by name or GEOID"""
+    """Return an analysis area by name or GEOID
+    
+    Requires a build dependency for 'extents' such as build.dependencies.extents
+    
+    Keyword Arguments:
+    
+        geoid: The geoid of the analysis area
+        extents_ds: The name of the dependency for the extents dataset. Defaults to 'extents'
+     
+    :rtype: An `AnalysisArea` object.
+    
+    """
     geoid = kwargs.get('geoid')
 
-    extents_name = "clarinova.com-extents-2012-7ba4"
+    extentsds = kwargs.get('extents_ds', 'extents')
 
-    row = library.get(extents_name)
+    try:
+        bundle,_ = library.dep(extentsds)
+    except ConfigurationError:
+        raise
+        raise ConfigurationError(("MISSING DEPENDENCY: To get extents, the configuration  "+
+            "must specify a dependency with a set named '{0}', in build.dependencies.{0}"+
+            "See https://github.com/clarinova/databundles/wiki/Error-Messages#geoanalysisareasget_analysis_area ")
+            .format(extentsds))
+
+    if not bundle:
+        raise ConfigurationError("Didn't find the dataset declared for the '{}' dependency".format(extentsds))
     
-    if not row:
-        from databundles.dbexceptions import ConfigurationError
-        raise ConfigurationError("Didn't find extents package in library: {}".format(extents_name))
-    
-    db = row.bundle.database
+    db = bundle.database
     
     places_t = db.table('places')
     spcs_t = db.table('spcs')
@@ -37,7 +55,6 @@ def get_analysis_area(library, **kwargs):
              .filter(places_t.columns.geoid == geoid)
             )
             
-          
     row =  query.first()
     
     if not row:
@@ -130,6 +147,16 @@ class AnalysisArea(object):
         
         return ma.masked_array(self.new_array(dtype=dtype),nodata)  
         
+    @property 
+    def state(self):
+        '''Extract the state from the geoid.'''
+        import re 
+        r = re.match('CG(\d\d).*', self.geoid)
+        if r:
+            return int(r.group(1))
+        else:
+            raise NotImplementedError("state can only handle AAs with census geoids. ")
+
     @property
     def lower_left(self):
         return (self.eastmin, self.northmin)
@@ -274,34 +301,38 @@ class AnalysisArea(object):
         feature.Destroy()
         datasource.Destroy()
 
-    def get_geotiff(self, file_,  a, type_=GDT_Int16):
+    def get_geotiff(self, file_,  bands=1, over_sample=1, data_type=GDT_Int16, nodata=0):
         from osgeo import gdal
     
         driver = gdal.GetDriverByName('GTiff') 
             
         out = driver.Create(file_, 
-                            a.shape[1], a.shape[0], 1, 
-                            type_, 
+                            self.size_x*over_sample, self.size_y*over_sample,
+                            bands, 
+                            data_type, 
                             options = [ 'COMPRESS=LZW' ])  
         
         # Note that Y pixel height is negative to account for increasing
         # Y going down the image, rather than up. 
-        transform = [ self.lower_left[0] ,  # Upper Left X postion
-                     self.pixel_size ,  # Pixel Width 
+        transform = [self.eastmin, # self.lower_left[0] ,  # Upper Left X postion
+                     self.pixel_size/over_sample ,  # Pixel Width 
                      0 ,     # rotation, 0 if image is "north up" 
-                     self.lower_left[1] ,  # Upper Left Y Position
+                     self.northmax, #self.lower_left[1] ,  # Upper Left Y Position
                      0 ,     # rotation, 0 if image is "north up"
-                     self.pixel_size # Pixel Height
+                     -self.pixel_size/over_sample # Pixel Height
                      ]
     
         out.SetGeoTransform(transform)  
-        
+        for i in range(bands):
+            out.GetRasterBand(i+1).SetNoDataValue(nodata)
+            
         out.SetProjection( self.srs.ExportToWkt() )
         
         return out
-        
+
     
-    def write_geotiff(self, file_,  a, type_=GDT_Float32, nodata=0):
+    
+    def write_geotiff(self, file_,  a, data_type=GDT_Float32, nodata=0):
         """
         Args:
             file_: Name of file to write to
@@ -309,7 +340,7 @@ class AnalysisArea(object):
             a: numpy array
         """
 
-        out = self.get_geotiff( file_,  a, type_)
+        out = self.get_geotiff( file_,  a, data_type)
      
         out.GetRasterBand(1).SetNoDataValue(nodata)
         out.GetRasterBand(1).WriteArray(a)

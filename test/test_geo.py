@@ -25,7 +25,7 @@ class Test(TestBase):
         pass
 
     def test_basic(self):
-        from databundles.geo.analysisarea import get_analysis_area, create_bb,  draw_edges
+        from databundles.geo.analysisarea import get_analysis_area,  draw_edges
         from databundles.geo import Point
         from databundles.geo.kernel import GaussianKernel
              
@@ -45,7 +45,7 @@ class Test(TestBase):
             gaussian.apply_add(a,p)
          
         
-        aa.write_geotiff('/tmp/box.tiff',  a,  type_=GDT_Float32)
+        aa.write_geotiff('/tmp/box.tiff',  a,  data_type=GDT_Float32)
 
 
     def demo2(self):

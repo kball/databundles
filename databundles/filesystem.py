@@ -439,8 +439,12 @@ class BundleFilesystem(Filesystem):
                     if resp.code != 200:
                         raise DownloadFailedError("Failed to download {}: code: "+format(url, resp.code))
                     
-             
-                    out_file = cache.put(resp, file_path)
+                    try:
+                        out_file = cache.put(resp, file_path)
+                    except:
+                        self.bundle.error("Caught exception, deleting download file")
+                        cache.remove(file_path)
+                        raise
               
                     if test_f and not test_f(out_file):
                         cache.remove(file_path)

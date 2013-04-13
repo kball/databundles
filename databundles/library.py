@@ -83,9 +83,7 @@ def _get_library(config=None, name='default'):
     
     remote = sc.get('remote',None)
     
-    l =  Library(cache = cache,  
-                               database = database,
-                               remote = remote)
+    l =  Library(cache = cache, database = database, remote = remote)
     
     return l
     
@@ -890,6 +888,9 @@ class Library(object):
         if not dataset:
             q = self.find(QueryCommand().partition(name = bp_id) )
        
+            if not q:
+                return False, False
+       
             r = q.pop()
             if r:
                 dataset, partition  = self._get_bundle_path_from_id(r[1].id_)         
@@ -1059,8 +1060,16 @@ class Library(object):
         """"Bundle version of get(), which uses a key in the 
         bundles configuration group 'dependencies' to resolve to a name"""
         
-        deps = self.bundle.config.group('build').get('dependencies')
+        if not self.bundle:
+            raise ConfigurationError("Can't use the dep() method for a library that is not attached to a bundle");
+
+        group = self.bundle.config.group('build')
         
+        try:
+            deps = group.get('dependencies')
+        except AttributeError:
+            deps = None
+            
         if not deps:
             raise ConfigurationError("Configuration has no 'dependencies' group")
         

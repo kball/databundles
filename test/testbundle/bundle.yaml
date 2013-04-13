@@ -1,5 +1,7 @@
 build:
     geoheaderFile: meta/geoschema.csv
+    dependencies:
+      usgeo: census.gov-geography-dim-orig-a7d9
 identity:
     creator: creator
     dataset: dataset
