@@ -425,6 +425,35 @@ class BuildBundle(Bundle):
             sys.stdout.write("\n")
             self.ptick_count = 0
 
+    def init_log_rate(self, N=5000):
+        """Initialze the log_rate function. Returnas a partial function to call for
+        each event"""
+      
+        import functools 
+        d =  [0,  # number of items processed
+                None, # start time
+                N] #frequency to log a message
+
+        return functools.partial(self._log_rate, d)
+
+    
+    def _log_rate(self,d, message=''):
+        """Log a message for the Nth time the method is called.
+        
+        d is the object returned from init_log_rate
+        """
+        
+        import time 
+    
+        if not d[1]:
+            d[1] = time.time()
+    
+        d[0] += 1
+        if d[0] % d[2] == 0:
+            # Prints the processing rate in 1,000 records per sec.
+            self.log(message+str(int( d[0]/(time.time()-d[1])))+'/s '+str(d[0]/1000)+"K ") 
+        
+            
 
     ###
     ### Process Methods

@@ -381,7 +381,7 @@ from sqlalchemy import orm
 from sqlalchemy import event
 from sqlalchemy import Column as SAColumn, Integer, Boolean
 from sqlalchemy import Float as Real,  Text, ForeignKey
-from sqlalchemy.orm import relationship, deferred
+from sqlalchemy.orm import relationship, backref, deferred
 from sqlalchemy.types import TypeDecorator, TEXT, PickleType
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.ext.mutable import Mutable
@@ -391,20 +391,49 @@ Base = declarative_base()
 """
 
         def write_class(table):
-            return "class {name}(Base):\n".format(name=table.name.capitalize())
+            return """
+class {name}(Base):
+    __tablename__ = '{name}'
+""".format(name=table.name.capitalize())
         
         def write_fields(table):
+            import re
+            
             o = ""
             for col in table.columns:
                 opts = []
                 optstr = '';
                 if col.is_primary_key: opts.append("primary_key=True") 
-                if col.foreign_key: opts.append("ForeignKey('{table}.{table}_id'))".format(table=col.foreign_key)) 
+                if col.foreign_key: opts.append("ForeignKey('{tableuc}.{tablelc}_id')".format(
+                                                    tableuc=col.foreign_key.capitalize(), tablelc=col.foreign_key)) 
                 
                 if  len(opts):
                     optstr = ',' + ','.join(opts)
                   
-                o += "    {column} = SAColumn('{column}',sqlalchemy.types.{type}{options})\n".format(column=col.name, type=col.sqlalchemy_type.__name__,options=optstr)
+                o += "    {column} = SAColumn('{column}',sqlalchemy.types.{type}{options})\n".format(
+                                            column=col.name, type=col.sqlalchemy_type.__name__,options=optstr)
+            
+            for col in table.columns:
+                if col.foreign_key:
+                    rel_name = re.sub('_id$', '', col.name)
+                    
+                    t = """
+    {rel_name}=relationship(\"{that_table_uc}\",
+       foreign_keys=[{column}],
+       backref=backref('{this_table}_{rel_name}', 
+                       order_by='{that_table_uc}.{that_table_lc}_id'))
+"""
+                    #t = "    {rel_name}=relationship(\"{that_table_uc}\")\n"
+                    
+                    o += t.format(
+                           column=col.name, 
+                           that_table_uc=col.foreign_key.capitalize(), 
+                           that_table_lc=col.foreign_key,
+                           this_table = table.name,
+                           rel_name = rel_name
+                        
+                     )
+            
             
             return o
         

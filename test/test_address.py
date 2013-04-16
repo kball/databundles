@@ -52,48 +52,142 @@ count = '123456789_' *8
 class TestBase(unittest.TestCase):
  
     def setUp(self):
-        pass
+        from collections import OrderedDict
+        
+        self.streets = OrderedDict([
+            ('  BLOCK I AVENUE', (None, 'I','ave')),
+            ('  BLOCK ACACIA AVENUE', (None, 'Acacia','ave')),
+            ('wilbur', (None, 'Wilbur',None)),
+            ('wil bur', (None, 'Wil Bur',None)),
+            ('wilbur st.', (None, 'Wilbur','st')),
+            ('wil bur place', (None, 'Wil Bur','pl')),
+            ('wilbur pl.', (None, 'Wilbur','pl')),
+            ('wil bur st', (None, 'Wil Bur','st')),
+            ('E wilbur pl.', ('E', 'Wilbur','pl')),
+            ('West wil bur st', ('W', 'Wil Bur','st')),
+            ('Shir - Mar Place', (None, 'Shir - Mar','pl')),
+            ('E Street', (None, 'E','st')),
+            ('E 24 Th Street ', (None, '24th','st')),
+            ('Emerald street', (None, 'Emerald','st')),
+            ('8 Th Avenue', (None, '8th','ave')),          
+            ('Grand Avenue', (None, 'Grand','ave')),
+            ('Old Highway 80', (None, 'Old Highway 80','highway')),
+            ('Highway 80', (None, 'Highway 80','highway')),
+            ('Sr - 67', (None, 'Highway 67','highway')),
+            ('I - 8', (None, 'Interstate 8','highway')),
+            ('I - 8 Business', (None, 'Interstate 8 Business','highway')),
+            ('Via Blanca', (None, 'Via Blanca',None)),
+            ('Camto De La Cruz', (None, 'Camto De La Cruz',None)),
+            ('West wilbur', (None, 'Wilbur',None)),
+            ('wilbur street', (None, 'wilbur','st')),
+            ('wil bur street', (None, 'Wil Bur','st')),
+            ('E wilbur', ('E', 'Wilbur',None)),
+            ('W wil bur', ('W', 'Wil Bur',None)),
+            ('SE wilbur street', ('SE', 'Wilbur','st')),
+            ('East wilbur', ('E', 'Wilbur',None)),
+            ('West wil bur', ('W', 'Wil Bur',None)),
+            ('wilbur street', (None, 'Wilbur','st')),
+            ('10th street', (None, '10th','st')),
+            ('3rd street', (None, '3rd','st')),
+            ('5th st', (None, '5th','st')),
+            ('10th st.', (None, '10th','st')),
+            ('14th st.', (None, '14th','st')),
+            ('E 5th st', ('E', '5th','st')),
+            ('W 10th st.', ('W', '10th','st')),
+            ('SE 14th st.', ('SE', '14th','st')),
+            ])
 
 
+        self.addresses = OrderedDict([
+             ('400 F Street , CHULA VISTA, CA 91910',(400,'F','st','CHULA VISTA')),
+             ('1900 Camto De La Cruz, CHULA VISTA, CA 91913',(1900,'Camto De La Cruz',None,'CHULA VISTA')),
+             ('13400 I - 8 Business, LAKESIDE, CA 92040',(13400,'Interstate 8','highway','LAKESIDE')),
+             ('1900 Grand Avenue, CHULA VISTA, CA 91913',(1900,'Grand','ave','CHULA VISTA')),  
+             ('1900 E Emerald , CHULA-VISTA, CA 91913',(1900,'E Emerald',None,'CHULA-VISTA')),    
+             ('1900 Emerald , CHULA-VISTA, CA 91913',(1900,'Emerald',None,'CHULA-VISTA')),       
+             ('1900 0 Emerald , CHULA-VISTA, CA 91913',(1900,'Emerald',None,'CHULA-VISTA')),   
+             ('1900 0 8 th st , CHULA-VISTA, CA 91913',(1900,'8th','st','CHULA-VISTA')),       
+             ('6700 I - 5 Nb , CHULA VISTA, CA 91913',(6700,'Interstate 5','highway','CHULA-VISTA')),      
+             ('6700 I - 5 Nb , CHULA VISTA, CA 91913',(6700,'Interstate 5','highway','CHULA-VISTA')),  
+             ('10700 Jamacha , SPRING VALLEY, CA 91978',(10700,'Jamacha',None,'SPRING VALLEY')),  
+             ('10700 Jamacha Boulevard , SPRING VALLEY, CA 91977',(10700,'Jamacha','blvd','SPRING VALLEYA')),  
+             ('10700 Jamacha Boulevard , SPRING VALLEY, CA 91978',(10700,'Jamacha','blvd','SPRING VALLEY')),  
+             ('10700 Jamacha Boulevard , COUNTY UNINCORPORATED, CA 91978',(10700,'Jamacha','blvd','COUNTY UNINCORPORATED')),  
+             ('10700 Jamacha , SAN DIEGO, CA',(10700,'Jamacha',None,'SAN DIEGO')),  
+             ('10700 block Jamacha , SAN DIEGO, CA',(10700,'Jamacha',None,'SAN DIEGO')),    
+        ])
 
 
     def tearDown(self):
         pass
 
 
-    def test_streets(self):
-        from databundles.geo.address import simple_named_street, numbered_street, streetName
+    def test_altparser(self):
+        from databundles.geo.address import ParserState, Scanner, init_street_types
+     
+        for street, check in self.streets.items():
         
-        d = [
-             'wilbur',
-             'wil but'
-             'wilbur street',
-             'wil bur street',
-             'wilbur st',
-             'wil bur st',   
-             'wilbur st.',
-             'wil bur st.',             
-             '10th street',
-             '3rd street',
-             '5th st',   
-             '10th st.',
-             '14th st.',  
-             'W 10th street, phoenix, AZ',    
-             "N 38 1/2 st"       
-             ]
+            ps = ParserState("100 "+street)
+         
+            ps.parse()
+            
+            #print street, ps.as_dict()
 
-        for a in d:
-            p = streetName.parseString(a) #@UndefinedVariable
-            print p.dump()
-            self.assertEquals('ST',p.get('street_type','ST'))
+            if check[0]: self.assertEquals(check[0],ps.street_direction) 
+            self.assertEquals(check[1],ps.street_name)
+            self.assertEquals(check[2],ps.street_type)
+            
+        
+
+    def x_test_streets(self):
+        from databundles.geo.address import  init_rdp
+        _, streetName = init_rdp()
+
+        for a,out in self.streets.items():
+            try:
+                p = streetName.parseString(a) #@UndefinedVariable
+            except:
+                print a
+                print '123456789_'*8
+                raise
+            
+            try:
+                self.assertEquals(out[0],str(p['street_name']))
+                self.assertEquals(out[1],p.get('street_type'))
+            except:
+                print p.dump()
+                raise
+
+
+    def x_test_addresses(self):
+        from databundles.geo.address import Parser
+        from collections import OrderedDict
+
+        ap = Parser()
+
+        for a,out in self.addresses.items():
+            try:
+                p = ap.parse(a) #@UndefinedVariable
+            except:
+                print a
+                print '123456789_'*8
+                raise
+        
+            try:
+                self.assertEquals(out[0],int(p['number']))
+                self.assertEquals(out[1],str(p['street_name']))
+                self.assertEquals(out[2],p.get('street_type'))
+            except:
+                print p.dump()
+                raise
 
 
     def x_test_basic(self):
         
-        from databundles.geo.address import Address, type_suffix, streetReference, streetAddress, streetnumber
+        from databundles.geo.address import Parser
        
         
-        ap = Address()
+        ap = Parser()
   
         
         p = ap.parse('100 10th street')
