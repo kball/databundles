@@ -56,7 +56,8 @@ class TestBase(unittest.TestCase):
         
         self.streets = OrderedDict([
             ('  BLOCK I AVENUE', (None, 'I','ave')),
-            ('  BLOCK ACACIA AVENUE', (None, 'Acacia','ave')),
+            ('  BLOCK BLOCK BLOCK ACACIA AVENUE', (None, 'Acacia','ave')),
+            ('block of wilbur', (None, 'Wilbur',None)),            
             ('wilbur', (None, 'Wilbur',None)),
             ('wil bur', (None, 'Wil Bur',None)),
             ('wilbur st.', (None, 'Wilbur','st')),

@@ -144,7 +144,7 @@ class Schema(object):
         from databundles.orm import Table, Column
         
         import sqlalchemy
-        from sqlalchemy import MetaData, UniqueConstraint, Index, text
+        from sqlalchemy import MetaData, UniqueConstraint, ForeignKeyConstraint,  Index, text
         from sqlalchemy import Column as SAColumn
         from sqlalchemy import Table as SATable
         
@@ -177,6 +177,7 @@ class Schema(object):
         indexes = {}
         uindexes = {}
         constraints = {}
+        foreign_keys = {}
        
         for column in table.columns:
             
@@ -199,6 +200,11 @@ class Schema(object):
 
             at.append_column(ac);
             
+            if column.foreign_key:
+                fk = column.foreign_key
+                fks = "{}.{}_id".format(fk.capitalize(), fk)
+                foreign_keys[column.name] = fks
+           
             # assemble non unique indexes
             if column.indexes and column.indexes.strip():
                 for cons in column.indexes.strip().split(','):
@@ -235,6 +241,9 @@ class Schema(object):
         # Add unique indexes   
         for index, columns in uindexes.items():
             Index(table.name+'_'+index, unique = True ,*columns)
+        
+        #for from_col, to_col in foreign_keys.items():
+        #    at.append_constraint(ForeignKeyConstraint(from_col, to_col))
         
         return metadata, at
  

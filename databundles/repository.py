@@ -144,7 +144,7 @@ class Repository(object):
             rows = conn.execute(extract_data['query'])
             
             first = rows.fetchone()
-            writer = csv.writer(f)
+            writer = csv.writer(f, quoting=csv.QUOTE_NONNUMERIC)
 
             writer.writerow(first.keys())
             writer.writerow(tuple(first))
@@ -243,7 +243,9 @@ class Repository(object):
     def _expand_partitions(self, partition_name='any', for_=None):
         '''Generate a list of partitions to apply the extract process to. '''
 
-        if partition_name == 'any':
+        if partition_name == 'bundle':
+            partitions = [self.bundle]
+        elif partition_name == 'any':
             partitions = [p for p in self.partitions]
             partitions = [self.bundle] + partitions
         else:

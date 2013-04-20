@@ -346,7 +346,7 @@ class ParserState(object):
         @property
         def street(self):
             """Return all components of the street name as a string, excluding the number"""
-            return " ".join([ str(i).title() for i in [self.street_direction, self.street_name, self.street_type ] if i ])
+            return " ".join([ str(i).title() for i in [self.street_direction, self.street_name, self.street_type ] if i ]).strip()
 
         def fail(self, m=None, expected=None):
             
@@ -484,11 +484,16 @@ class ParserState(object):
                 self.number = int(self.next()[1])
   
             #
-            # Remove "block" if it exists
+            # Remove "block" if it exists. In the SANDAG crime dataset, 
+            # There are many entries with "BLOCK" twice. 
             #
-            t = self.pluck('block')
-            if t:
-                self.is_block = True
+            while True:
+                t = self.pluck('block')
+                if t:
+                    self.is_block = True
+                    t = self.pluck('of')
+                else: 
+                    break
                 
 
             self.parse_direction() # N, S, E, W

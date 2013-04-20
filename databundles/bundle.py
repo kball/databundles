@@ -14,7 +14,7 @@ import os.path
 from databundles.dbexceptions import  ConfigurationError, ProcessError
 from databundles.run import get_runconfig
 import databundles.util
-
+import yaml
 
 class Bundle(object):
     '''Represents a bundle, including all configuration 
@@ -638,8 +638,11 @@ class BundleFileConfig(BundleConfig):
 
     def rewrite(self, **kwargs):
         '''Re-writes the file from its own data. Reformats it, and updates
-        the modification time'''
+        the modification time. Will also look for a config directory and copy the
+        contents of files there into the bundle.yaml file, ad a key derived from the name
+        of the file. '''
         import yaml
+        from databundles.dbexceptions import ConfigurationError
         
         temp = self.local_file+".temp"
         old = self.local_file+".old"
@@ -650,6 +653,7 @@ class BundleFileConfig(BundleConfig):
         
         for k,v in kwargs.items():
             config[k] = v
+
    
         with open(temp, 'w') as f:
             config.dump(f)

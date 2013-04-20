@@ -268,6 +268,15 @@ def patch_file_open():
 
 #patch_file_open()
 
+# From http://stackoverflow.com/questions/528281/how-can-i-include-an-yaml-file-inside-another
+class YamlIncludeLoader(yaml.Loader):
+
+    def __init__(self, stream):
+
+        self._root = os.path.split(stream.name)[0]
+
+        super(YamlIncludeLoader, self).__init__(stream)
+
 
 # From http://pypi.python.org/pypi/layered-yaml-attrdict-config/12.07.1
 class OrderedDictYAMLLoader(yaml.Loader):
@@ -275,8 +284,17 @@ class OrderedDictYAMLLoader(yaml.Loader):
 
     def __init__(self, *args, **kwargs):
         yaml.Loader.__init__(self, *args, **kwargs)
+        
+        self.dir = None
+        for a in args:
+            try:
+                self.dir = os.path.dirname(a.name)
+            except: pass
+
+        
         self.add_constructor(u'tag:yaml.org,2002:map', type(self).construct_yaml_map)
         self.add_constructor(u'tag:yaml.org,2002:omap', type(self).construct_yaml_map)
+        self.add_constructor('!include', OrderedDictYAMLLoader.include)
 
     def construct_yaml_map(self, node):
         data = OrderedDict()
@@ -302,6 +320,44 @@ class OrderedDictYAMLLoader(yaml.Loader):
             value = self.construct_object(value_node, deep=deep)
             mapping[key] = value
         return mapping
+
+
+    def include(self, node):
+        from databundles.dbexceptions import ConfigurationError
+        
+        if not self.dir:   
+            raise ConfigurationError("Can't include file: wasn't able to set base directory")
+
+        filename = os.path.join(self.dir, self.construct_scalar(node))
+
+        if not os.path.exists(filename):
+            raise ConfigurationError("Can't include file '{}': Does not exist".format(filename))
+
+        with open(filename, 'r') as f:
+            
+            parts = filename.split('.')
+            ext = parts.pop()
+            
+            if ext == 'yaml':
+                return yaml.load(f, OrderedDictYAMLLoader)
+            else:
+                return IncludeFile(filename, f.read())
+
+# IncludeFile and include_representer ensures that when config files are re-written, they are
+# represented as an include, not the contents of the include
+class IncludeFile(str):
+    
+    def __new__(cls, filename, data):
+        s =  str.__new__(cls,  data)
+        s.filename = filename
+        return s
+        
+    def __str__(self):
+        return self.data
+ 
+def include_representer(dumper, data):
+    return dumper.represent_scalar(u'!include', data.filename)
+    
 
 # http://pypi.python.org/pypi/layered-yaml-attrdict-config/12.07.1
 class AttrDict(OrderedDict):
@@ -389,6 +445,10 @@ class AttrDict(OrderedDict):
             defaultdict, yaml.representer.SafeRepresenter.represent_dict )
         yaml.representer.SafeRepresenter.add_representer(
             set, yaml.representer.SafeRepresenter.represent_list )
+        
+        yaml.representer.SafeRepresenter.add_representer(
+            IncludeFile, include_representer)
+        
         yaml.safe_dump( self, stream,
             default_flow_style=False, indent=4, encoding='utf-8' )
 

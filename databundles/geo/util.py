@@ -357,6 +357,7 @@ def bound_clusters_in_raster( a, aa, shape_file_dir,
         
         from osgeo import gdal
         import ogr, os
+        import numpy as np
        
         if os.path.exists(shape_file_dir):
             util.rm_rf(shape_file_dir)
@@ -372,9 +373,9 @@ def bound_clusters_in_raster( a, aa, shape_file_dir,
         ogr_lyr.CreateField(ogr.FieldDefn('value', ogr.OFTReal))
         
         # Create the contours from the GeoTIFF file. 
-        ds = aa.get_geotiff(rasterf,  a, data_type=GDT_Float32)
+        ds = aa.get_geotiff(rasterf, data_type=GDT_Float32)
         ds.GetRasterBand(1).SetNoDataValue(0)
-        ds.GetRasterBand(1).WriteArray(a)
+        ds.GetRasterBand(1).WriteArray(np.flipud(a))
         
         gdal.ContourGenerate(ds.GetRasterBand(1), 
                              contour_interval,  # contourInterval

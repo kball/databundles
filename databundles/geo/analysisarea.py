@@ -322,6 +322,7 @@ class AnalysisArea(object):
                      -self.pixel_size/over_sample # Pixel Height
                      ]
     
+    
         out.SetGeoTransform(transform)  
         for i in range(bands):
             out.GetRasterBand(i+1).SetNoDataValue(nodata)
@@ -339,11 +340,12 @@ class AnalysisArea(object):
             aa: Analysis Area object
             a: numpy array
         """
+        
 
-        out = self.get_geotiff( file_,  a, data_type)
+        out = self.get_geotiff( file_,  data_type=data_type)
      
         out.GetRasterBand(1).SetNoDataValue(nodata)
-        out.GetRasterBand(1).WriteArray(a)
+        out.GetRasterBand(1).WriteArray(flipud(a))
       
         return file_
 
