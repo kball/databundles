@@ -307,7 +307,11 @@ class Database(object):
         self._dbapi_cursor = None
         self._dbapi_connection = None
         
-        self._post_create = None
+        self._post_create = []
+        
+        if post_create:
+            self.add_post_create.append(post_create)
+        
         
        
         # For database bundles, where we have to pass in the whole file path
@@ -366,6 +370,9 @@ class Database(object):
             self._connection = self.engine.connect()
             
         return self._connection
+    
+    def add_post_create(self, f):
+        self._post_create.append(f)
     
     @property
     def dbapi_connection(self):
@@ -590,8 +597,8 @@ class Database(object):
  
             
             # call the post create function
-            if self._post_create:
-                self._post_create(self)
+            for f in self._post_create:
+                f(self)
             
         return self
       
@@ -779,7 +786,10 @@ class Database(object):
     def characterize(self, table, column):
         '''Return information about a column in a table'''
         raise NotImplemented
-        q = '''select count(type) as count, type from incidents group by type order by count desc'''
+
+
+        
+
 
 class PartitionDb(Database):
     '''a database for a partition file. Partition databases don't have a full schema
@@ -843,14 +853,23 @@ class PartitionDb(Database):
                   
             # Create a config key to mark this as a partition
      
+class GeoDb(PartitionDb):
+    
+    def __init__(self, bundle, partition, base_path, **kwargs):
+        ''''''    
+        super(GeoDb, self).__init__(bundle, partition, base_path, **kwargs)  
+
+        def load_spatialite(this):
+            print 'HERE, in GeoDB Loading Spatialite. ', this.path
+
+        self.add_post_create(load_spatialite)
+   
       
 class BundleDb(Database):
     '''Represents the database version of a bundle that is installed in a library'''
     def __init__(self, path):
       
         super(BundleDb, self).__init__(None, path)  
-
-
 
 
 def _pragma_on_connect(dbapi_con, con_record):

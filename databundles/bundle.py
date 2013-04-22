@@ -351,7 +351,7 @@ class BuildBundle(Bundle):
             def add_type(database):
                 self.db_config.set_value('info','type','bundle')
                 
-            self._database._post_create = add_type 
+            self._database.add_post_create(add_type)
             
          
         return self._database

@@ -15,9 +15,12 @@ class Partition(object):
     time, space, or by table. '''
     
     def __init__(self, bundle, record):
+        from databundles.database import PartitionDb
+        
         self.bundle = bundle
         self.record = record
         
+        self._db_class = PartitionDb
         self._database =  None
         self._hd5file = None
         self._tempfile_cache = {}
@@ -60,18 +63,18 @@ class Partition(object):
     @property
     def database(self):
         if self._database is None:
-            from databundles.database import PartitionDb
+            
             
             source,  name_parts, partition_path = self._path_parts() #@UnusedVariable
 
-            self._database = PartitionDb(self.bundle, self, base_path=self.path)
+            self._database = self._db_class(self.bundle, self, base_path=self.path)
             
             def add_type(database):
                 from databundles.bundle import BundleDbConfig
                 config = BundleDbConfig(self.database)
                 config.set_value('info','type','partition')
                 
-            self._database._post_create = add_type 
+            self._database.add_post_create(add_type) 
           
         return self._database
 
@@ -180,6 +183,10 @@ class GeoPartition(Partition):
     
     def __init__(self, bundle, record):
         super(GeoPartition, self).__init__(bundle, record)
+        from .database import GeoDb
+        
+        self._db_class = GeoDb
+        
 
     def convert(self, table_name, progress_f=None):
         """Convert a spatialite geopartition to a regular arg
@@ -195,33 +202,19 @@ class GeoPartition(Partition):
         import subprocess, csv
         from databundles.orm import Column
         from databundles.dbexceptions import ConfigurationError
-        
-        command_template = """spatialite -csv -header {file} "select *,   
-        X(Transform(geometry, 4326)) as _db_lon, Y(Transform(geometry, 4326)) 
-        as _db_lat from {table}" """  
-        
-        
+
         #
         # Duplicate the geo arg table for the new arg
         # Then make the new arg
         #
-        
-        
+
         t = self.bundle.schema.add_table(table_name)
         
         ot = self.table
         
         for c in ot.columns:
-                self.bundle.schema.add_column(t,c.name,datatype=c.datatype)
+            self.bundle.schema.add_column(t,c.name,datatype=c.datatype)
                 
-        self.bundle.schema.add_column(t,'_db_lon',datatype=Column.DATATYPE_REAL)
-        self.bundle.schema.add_column(t,'_db_lat',datatype=Column.DATATYPE_REAL)
-        self.bundle.database.commit()
-
-        pid = self.identity
-        pid.table = table_name
-        arg = self.bundle.partitions.new_partition(pid)
-        arg.create_with_tables()
         
         #
         # Open a connection to spatialite and run the query to 
@@ -237,10 +230,44 @@ class GeoPartition(Partition):
         except:
             raise ConfigurationError('Did not find spatialite on path. Install spatialite')
         
+        # Check the type of geometry:
+        p = subprocess.Popen(('spatialite {file} "select GeometryType(geometry) FROM {table} LIMIT 1;"'
+                              .format(file=self.database.path,table = self.identity.table)), 
+                             stdout = subprocess.PIPE, shell=True)
+        
+        out, _ = p.communicate()
+        out = out.strip()
+        
+        if out == 'POINT':
+            self.bundle.schema.add_column(t,'_db_lon',datatype=Column.DATATYPE_REAL)
+            self.bundle.schema.add_column(t,'_db_lat',datatype=Column.DATATYPE_REAL)
+            
+            command_template = """spatialite -csv -header {file} "select *,   
+            X(Transform(geometry, 4326)) AS _db_lon, Y(Transform(geometry, 4326)) AS _db_lat 
+            FROM {table}" """  
+        else:
+            self.bundle.schema.add_column(t,'_wkb',datatype=Column.DATATYPE_TEXT)
+            
+            command_template = """spatialite -csv -header {file} "select *,   
+            AsBinary(Transform(geometry, 4326)) AS _wkb
+            FROM {table}" """              
+
+        self.bundle.database.commit()
+
+        pid = self.identity
+        pid.table = table_name
+        arg = self.bundle.partitions.new_partition(pid)
+        arg.create_with_tables()
+
+        #
+        # Now extract the data into a new database. 
+        #
+
         command = command_template.format(file=self.database.path,
                                           table = self.identity.table)
+
         
-        #self.bundle.log("Running: {}".format(command))
+        self.bundle.log("Running: {}".format(command))
         
         p = subprocess.Popen(command, stdout = subprocess.PIPE, shell=True)
         stdout, stderr = p.communicate()
@@ -558,7 +585,7 @@ class Partitions(object):
         except:
             raise ConfigurationError('Did not find ogr2ogr on path. Install gdal/ogr')
         
-        ogr_create="ogr2ogr  -f SQLite {output} -nln \"{table}\" {input}  -dsco SPATIALITE=yes"
+        ogr_create="ogr2ogr -skipfailures -f SQLite {output} -nln \"{table}\" {input}  -dsco SPATIALITE=yes"
         
         if not pid.table:
             raise ValueError("Pid must have a table name")
@@ -572,7 +599,7 @@ class Partitions(object):
         
         dir_ = os.path.dirname(partition.database.path)
         if not os.path.exists(dir_):
-            self.bundle.log("Make dir_ "+dir_)
+            self.bundle.log("Make dir: "+dir_)
             os.makedirs(dir_)
         
         cmd = ogr_create.format(input = shape_file,

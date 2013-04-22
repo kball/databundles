@@ -181,6 +181,7 @@ class Column(Base):
     DATATYPE_TIME = 'time'
     DATATYPE_TIMESTAMP = 'timestamp'
     DATATYPE_POINT = 'point' # Spatalite, sqlite extensions for geo
+    DATATYPE_LINESTRING = 'linestring' # Spatalite, sqlite extensions for geo
     DATATYPE_CHAR = 'text'
     DATATYPE_VARCHAR = 'text'
     DATATYPE_BLOB = 'blob'
@@ -198,6 +199,7 @@ class Column(Base):
                 DATATYPE_TIMESTAMP,
                 DATATYPE_VARCHAR,
                 DATATYPE_POINT,
+                DATATYPE_LINESTRING,
                 DATATYPE_BLOB
              ]
 
@@ -213,6 +215,7 @@ class Column(Base):
         DATATYPE_TIME:sqlalchemy.types.Time,
         DATATYPE_TIMESTAMP:sqlalchemy.types.DateTime,
         DATATYPE_POINT:sqlalchemy.types.Text,
+        DATATYPE_LINESTRING:sqlalchemy.types.LargeBinary,
         DATATYPE_BLOB: sqlalchemy.types.LargeBinary,
         'varchar':sqlalchemy.types.Text,
         }
@@ -228,7 +231,8 @@ class Column(Base):
         DATATYPE_DATE: str,
         DATATYPE_TIME: str,
         DATATYPE_TIMESTAMP: str,
-        DATATYPE_POINT: str,
+        DATATYPE_POINT: buffer,
+        DATATYPE_LINESTRING: buffer,
         DATATYPE_BLOB: buffer,
         'varchar': str
         }
