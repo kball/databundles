@@ -201,7 +201,7 @@ def library_command(args, rc):
                     row['table'] = table.name
                     row['column'] = col.name
                     row['is_pk'] = 1 if col.is_primary_key else ''
-                    row['is_fk'] = 1 if col.is_foreign_key else ''
+                    row['is_fk'] =  col.foreign_key if col.foreign_key else ''
                     row['type'] = col.datatype.upper()
                     row['default'] = col.default
                     row['description'] = col.description

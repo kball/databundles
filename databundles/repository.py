@@ -415,7 +415,7 @@ class Repository(object):
             self.repo_name = repo
             self.set_api()
         
-        self.bundle.update_configuration()
+        
         from os.path import  basename
     
         ckb = self.api.update_or_new_bundle_extract(self.bundle)

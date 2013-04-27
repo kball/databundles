@@ -109,6 +109,7 @@ class Bundle(object):
     
     def query(self,*args, **kwargs):
         """Convience function for self.database.connection.execute()"""
+        print args
         return self.database.connection.execute(*args, **kwargs)
     
     
@@ -425,19 +426,20 @@ class BuildBundle(Bundle):
             sys.stdout.write("\n")
             self.ptick_count = 0
 
-    def init_log_rate(self, N=5000):
+    def init_log_rate(self, N=5000, message=''):
         """Initialze the log_rate function. Returnas a partial function to call for
         each event"""
       
         import functools 
         d =  [0,  # number of items processed
                 None, # start time
-                N] #frequency to log a message
+                N,  #frequency to log a message
+                message]
 
         return functools.partial(self._log_rate, d)
 
     
-    def _log_rate(self,d, message=''):
+    def _log_rate(self,d, message=None):
         """Log a message for the Nth time the method is called.
         
         d is the object returned from init_log_rate
@@ -448,16 +450,14 @@ class BuildBundle(Bundle):
         if not d[1]:
             d[1] = time.time()
     
+        if not message:
+            message = d[3]
+    
         d[0] += 1
         if d[0] % d[2] == 0:
             # Prints the processing rate in 1,000 records per sec.
-            self.log(message+str(int( d[0]/(time.time()-d[1])))+'/s '+str(d[0]/1000)+"K ") 
+            self.log(message+': '+str(int( d[0]/(time.time()-d[1])))+'/s '+str(d[0]/1000)+"K ") 
         
-            
-
-    ###
-    ### Process Methods
-    ###
 
     ### Prepare is run before building, part of the devel process.  
 
@@ -498,7 +498,14 @@ class BuildBundle(Bundle):
         
         if not self.database.exists():
             self.database.create()
-        
+
+        sf = self.filesystem.path(self.config.build.get('schema_file', 'meta/schema.csv'))
+
+        if os.path.exists(sf):
+            with open(sf, 'rbU') as f:
+                self.schema.schema_from_file(f)      
+                self.schema.create_tables()     
+
         return True
     
     def post_prepare(self):
@@ -527,6 +534,9 @@ class BuildBundle(Bundle):
     ### Submit the package to the library
  
     def pre_install(self):
+        
+        self.update_configuration()
+        
         return True
     
     def install(self, library_name='default'):  
@@ -559,6 +569,7 @@ class BuildBundle(Bundle):
     ### Submit the package to the repository
  
     def pre_submit(self):
+        self.update_configuration()
         return True
     
     ### Submit the package to the repository

@@ -8,56 +8,23 @@ Revised BSD License, included in this distribution as LICENSE.txt
 import os.path
 import anydbm
 
-class ValueInserter(object):
+class ValueWriter(object):
     '''Inserts arrays of values into  database table'''
-    def __init__(self, bundle, table, db, cache_size=50000, text_factory = None, replace=False):
+    def __init__(self, bundle,  db, cache_size=50000, text_factory = None, replace=False):
         import string 
         self.bundle = bundle
-        self.table = table
         self.db = db
         self.session = self.db.session
         self.connection = self.db.connection
-        self.ins = self.table.insert()
         self.cache = []
-        self.header = [c.name for c in self.table.columns]
         self.transaction = None
         self.cache_size = cache_size
-
-        if replace:
-            self.ins = self.ins.prefix_with('OR REPLACE')
+        self.statement = None
+        
 
         if text_factory:
             print self.db.engine.raw_connection()
             self.db.engine.raw_connection().connection.text_factory = text_factory
-
-    def insert(self, values):
-       
-        try:
-            if isinstance(values, dict):
-                d = values
-            else:
-                d  = dict(zip(self.header, values))
-         
-            self.cache.append(d)
-         
-            if len(self.cache) >= self.cache_size:
-                
-                self.connection.execute(self.ins, self.cache)
-                self.cache = []
-                
-        except (KeyboardInterrupt, SystemExit):
-            self.transaction.rollback()
-            self.transaction = None
-            self.cache = []
-            raise
-        except Exception as e:
-            self.bundle.error("Exception during ValueInserter.insert: "+str(e))
-            self.transaction.rollback()
-            self.transaction = None
-            self.cache = []
-            raise e
-
-        return True
 
     def __enter__(self): 
         self.transaction = self.connection.begin()
@@ -67,7 +34,7 @@ class ValueInserter(object):
 
         if len(self.cache) > 0 :       
             try:
-                self.connection.execute(self.ins, self.cache)
+                self.connection.execute(self.statement, self.cache)
                 if self.transaction:
                     self.transaction.commit()
                     self.transaction = None
@@ -97,7 +64,114 @@ class ValueInserter(object):
                 
         return self
         
+ 
+class ValueInserter(ValueWriter):
+    '''Inserts arrays of values into  database table'''
+    def __init__(self, bundle, table, db, cache_size=50000, text_factory = None, replace=False): 
+        super(ValueInserter, self).__init__(bundle, db, cache_size=50000, text_factory = text_factory)  
+   
+        self.table = table
+        
+        self.header = [c.name for c in self.table.columns]
+   
+        self.statement = self.table.insert()
+        if replace:
+            self.statement = self.statement.prefix_with('OR REPLACE')
+
+
+    def insert(self, values):
+       
+        try:
+            if isinstance(values, dict):
+                d = values
+            else:
+                d  = dict(zip(self.header, values))
+         
+            self.cache.append(d)
+         
+            if len(self.cache) >= self.cache_size:
+                
+                self.connection.execute(self.statement, self.cache)
+                self.cache = []
+                
+        except (KeyboardInterrupt, SystemExit):
+            self.transaction.rollback()
+            self.transaction = None
+            self.cache = []
+            raise
+        except Exception as e:
+            self.bundle.error("Exception during ValueInserter.insert: "+str(e))
+            self.transaction.rollback()
+            self.transaction = None
+            self.cache = []
+            raise e
+
+        return True
+   
+class ValueUpdater(ValueWriter):
+    '''Updates arrays of values into  database table'''
+    def __init__(self, bundle, table, db,  cache_size=50000, text_factory = None): 
+        
+        from sqlalchemy.sql.expression import bindparam, and_
+        super(ValueUpdater, self).__init__(bundle, db, cache_size=50000, text_factory = text_factory)  
     
+        self.table = table
+        self.statement = self.table.update()
+     
+        wheres = []
+        for primary_key in table.primary_key:
+            wheres.append(primary_key == bindparam('_'+primary_key.name))
+            
+        if len(wheres) == 1:
+            self.statement = self.statement.where(wheres[0])
+        else:
+            self.statement = self.statement.where(and_(wheres))
+       
+        self.values = None
+       
+
+    def update(self, values):
+        from sqlalchemy.sql.expression import bindparam
+        
+        if not self.values:
+            names = values.keys()
+            
+            binds = {}
+            for col_name in names:
+                if not col_name.startswith("_"):
+                    raise ValueError("Columns names must start with _ for use in updater")
+                
+                column = self.table.c[col_name[1:]]
+                binds[column.name] = bindparam(col_name)
+                
+                self.statement = self.statement.values(**binds)
+       
+        try:
+            if isinstance(values, dict):
+                d = values
+            else:
+                d  = dict(zip(self.header, values))
+         
+            self.cache.append(d)
+         
+            if len(self.cache) >= self.cache_size:
+                
+                self.connection.execute(self.statement, self.cache)
+                self.cache = []
+                
+        except (KeyboardInterrupt, SystemExit):
+            self.transaction.rollback()
+            self.transaction = None
+            self.cache = []
+            raise
+        except Exception as e:
+            self.bundle.error("Exception during ValueInserter.insert: "+str(e))
+            self.transaction.rollback()
+            self.transaction = None
+            self.cache = []
+            raise e
+
+        return True    
 class TempFile(object): 
            
     def __init__(self, bundle,  db, table, suffix=None, header=None, ignore_first=False):
@@ -325,6 +399,8 @@ class Database(object):
       
         self._last_attach_name = None
         
+        self._attachments = set()
+        
         self._table_meta_cache = {}
         
         self._tempfiles = {}
@@ -482,6 +558,27 @@ class Database(object):
             
         
         return ValueInserter(self.bundle, table , self,**kwargs)
+        
+    def updater(self, table_or_name=None,**kwargs):
+      
+        if table_or_name is None and self.partition.table is not None:
+            table_or_name = self.partition.table
+      
+        if isinstance(table_or_name, basestring):
+            table_name = table_or_name
+            if not table_name in self.inspector.get_table_names():
+                t_meta, table = self.bundle.schema.get_table_meta(table_name) #@UnusedVariable
+                t_meta.create_all(bind=self.engine)
+                
+                if not table_name in self.inspector.get_table_names():
+                    raise Exception("Don't have table "+table_name)
+            table = self.table(table_name)
+            
+        else:
+            table = self.table(table_or_name.name)
+            
+        
+        return ValueUpdater(self.bundle, table , self,**kwargs)
         
     def load_sql(self, sql_file):
         import sqlite3
@@ -669,6 +766,12 @@ class Database(object):
         
     def query(self,*args, **kwargs):
         """Convience function for self.connection.execute()"""
+        
+        if isinstance(args[0], basestring):
+            fd = { x:x for x in self._attachments }
+        
+            args = (args[0].format(**fd),) + args[1:]
+        
         return self.connection.execute(*args, **kwargs)
         
         
@@ -693,6 +796,7 @@ class Database(object):
         """
         from identity import Identity
         from partition import Partition
+        from bundle import Bundle
     
         if isinstance(id_,basestring):
             #  Strings are path names
@@ -702,6 +806,8 @@ class Database(object):
         elif isinstance(id_,Database):
             path = id_.path
         elif isinstance(id_,Partition):
+            path = id_.database.path
+        elif isinstance(id_,Bundle):
             path = id_.database.path
         else:
             raise Exception("Can't attach: Don't understand id_: {}".format(repr(id_)))
@@ -716,6 +822,8 @@ class Database(object):
         self.connection.execute(q)
            
         self._last_attach_name = name
+        
+        self._attachments.add(name)
         
         return name
         
@@ -732,6 +840,8 @@ class Database(object):
             name = self._last_attach_name
     
         self.connection.execute("""DETACH DATABASE {} """.format(name))
+    
+        self._attachments.remove(name)
     
     
     
@@ -860,7 +970,7 @@ class GeoDb(PartitionDb):
         super(GeoDb, self).__init__(bundle, partition, base_path, **kwargs)  
 
         def load_spatialite(this):
-            print 'HERE, in GeoDB Loading Spatialite. ', this.path
+            pass # SHould load the spatialite library into sqlite here. 
 
         self.add_post_create(load_spatialite)
    

@@ -227,7 +227,12 @@ class BundleFilesystem(Filesystem):
         '''Resolve a path that is relative to the bundle root into an 
         absoulte path'''
      
+        if len(args) == 0:
+            raise ValueError("must supply at least one argument")
+        
+        
         args = (self.root_directory,) +args
+            
         try:
             p = os.path.normpath(os.path.join(*args))    
         except AttributeError as e:
@@ -504,6 +509,22 @@ class BundleFilesystem(Filesystem):
         
         return file_
         
+    def load_yaml(self,*args):
+        """Load a yaml file from the bundle file system. Arguments are passed to self.path()
+        And if the first path element is not absolute, pre-pends the bundle path. 
+        
+        Returns an AttrDict of the results. 
+        """
+        from databundles.util import AttrDict  
+        
+        f = self.path(*args)
+        
+        ad = AttrDict()
+        ad.update_yaml(f)
+        
+        return ad
+
+
 
     def get_url(self,source_url, create=False):
         '''Return a database record for a file'''

@@ -80,6 +80,7 @@ class Partition(object):
 
     def query(self,*args, **kwargs):
         """Convience function for self.database.connection.execute()"""
+     
         return self.database.connection.execute(*args, **kwargs)
         
 
@@ -187,6 +188,21 @@ class GeoPartition(Partition):
         
         self._db_class = GeoDb
         
+    def get_srs_wkt(self):
+        
+        #
+        # !! Assumes only one layer!
+        
+        q ="select srs_wkt from geometry_columns, spatial_ref_sys where spatial_ref_sys.srid == geometry_columns.srid;"
+        
+        return self.database.query(q).first()[0]
+
+    def get_srs(self):
+        import ogr 
+        
+        srs = ogr.osr.SpatialReference()
+        srs.ImportFromWkt(self.get_srs_wkt())
+        return srs
 
     def convert(self, table_name, progress_f=None):
         """Convert a spatialite geopartition to a regular arg
@@ -369,6 +385,7 @@ class Partitions(object):
         from databundles.orm import Partition as OrmPartition
         
         s = self.bundle.database.session
+        
         return s.query(OrmPartition)
  
     
@@ -579,13 +596,27 @@ class Partitions(object):
         import  tempfile, uuid
         from databundles.database import Database
         from databundles.dbexceptions import ConfigurationError
+        from databundles.geo.util import get_shapefile_geometry_types
+        
+        try: extant = self.partitions.find(pid)
+        except: extant = None # Fails with ValueError because table does not exist. 
+        
+        if extant:
+            raise Exception('Geo partition already exists for pid: {}'.format(pid.name))
+        
+        if shape_file.startswith('http'):
+            shape_url = shape_file
+            shape_file = self.bundle.filesystem.download_shapefile(shape_url)
         
         try:
             subprocess.check_output('ogr2ogr --help-general', shell=True)
         except:
             raise ConfigurationError('Did not find ogr2ogr on path. Install gdal/ogr')
         
-        ogr_create="ogr2ogr -skipfailures -f SQLite {output} -nln \"{table}\" {input}  -dsco SPATIALITE=yes"
+        self.bundle.log("Checking types in file")
+        types, type = get_shapefile_geometry_types(shape_file)
+        
+        ogr_create="ogr2ogr -explodecollections -skipfailures -f SQLite {output} -nlt  {type} -nln \"{table}\" {input}  -dsco SPATIALITE=yes"
         
         if not pid.table:
             raise ValueError("Pid must have a table name")
@@ -604,7 +635,9 @@ class Partitions(object):
         
         cmd = ogr_create.format(input = shape_file,
                                 output = partition.database.path,
-                                table = table_name )
+                                table = table_name,
+                                type = type
+                                 )
         
         self.bundle.log("Running: "+ cmd)
     
@@ -617,14 +650,33 @@ class Partitions(object):
 
 
     def find_or_new(self, pid=None, **kwargs):
-
-        partition =  self.find(pid, **kwargs)
-    
-        if not partition:
-            partition = self.new_partition(pid, **kwargs)
-            if partition.identity.table:     
-                partition.create_with_tables(partition.identity.table)    
+        '''Find a partition identified by pid, and if it does not exist, create it. 
         
+        Args:
+            pid A partition Identity
+            tables String or array of tables to copy form the main partition
+        '''
+        
+        try: partition =  self.find(pid, **kwargs)
+        except: partition = None
+    
+        if partition:
+            return partition
+    
+        tables = kwargs.get('tables',kwargs.get('table',pid.table if pid else None))
+    
+        if tables and not isinstance(tables, (list,tuple)):
+            tables = [tables]
+    
+        if tables and pid and pid.table and pid.table not in tables:
+            tables.append(partition.identity.table)
+
+      
+        partition = self.new_partition(pid, **kwargs)
+        
+        if tables:    
+            partition.create_with_tables(tables)  
+
         return partition;
     
     def delete(self, partition):

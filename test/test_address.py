@@ -55,6 +55,7 @@ class TestBase(unittest.TestCase):
         from collections import OrderedDict
         
         self.streets = OrderedDict([
+            ('Esquire Glen', (None, 'Esquire','gln')),
             ('  BLOCK I AVENUE', (None, 'I','ave')),
             ('  BLOCK BLOCK BLOCK ACACIA AVENUE', (None, 'Acacia','ave')),
             ('block of wilbur', (None, 'Wilbur',None)),            

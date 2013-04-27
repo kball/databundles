@@ -344,6 +344,12 @@ class ParserState(object):
                 return a
             
         @property
+        def dir_street(self):
+            """Return all components of the street name as a string, excluding the number and type. Include number
+            and direction, if it is set"""
+            return " ".join([ str(i).title() for i in [self.street_direction, self.street_name] if i ]).strip()
+
+        @property
         def street(self):
             """Return all components of the street name as a string, excluding the number"""
             return " ".join([ str(i).title() for i in [self.street_direction, self.street_name, self.street_type ] if i ]).strip()
@@ -572,7 +578,7 @@ class ParserState(object):
             return False
 
         def parse_numbered_street(self):
-         
+            '''Parse a street that is names with a number'''
             ttype, toks = self.next()
             if ttype != Scanner.NUMBER:
                 self.unshift(ttype, toks)
@@ -587,7 +593,7 @@ class ParserState(object):
             else:
                 self.unshift(ttype, toks)
                 
-            self.street_name = number+ordinal
+            self.street_name = str(int(number))+ordinal
        
             return True
         

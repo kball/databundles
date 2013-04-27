@@ -328,35 +328,37 @@ class OrderedDictYAMLLoader(yaml.Loader):
         if not self.dir:   
             raise ConfigurationError("Can't include file: wasn't able to set base directory")
 
-        filename = os.path.join(self.dir, self.construct_scalar(node))
+        relpath = self.construct_scalar(node)
+        abspath = os.path.join(self.dir,relpath)
 
-        if not os.path.exists(filename):
-            raise ConfigurationError("Can't include file '{}': Does not exist".format(filename))
+        if not os.path.exists(abspath):
+            raise ConfigurationError("Can't include file '{}': Does not exist".format(abspath))
 
-        with open(filename, 'r') as f:
+        with open(abspath, 'r') as f:
             
-            parts = filename.split('.')
+            parts = abspath.split('.')
             ext = parts.pop()
             
             if ext == 'yaml':
                 return yaml.load(f, OrderedDictYAMLLoader)
             else:
-                return IncludeFile(filename, f.read())
+                return IncludeFile(abspath, relpath, f.read())
 
 # IncludeFile and include_representer ensures that when config files are re-written, they are
 # represented as an include, not the contents of the include
 class IncludeFile(str):
     
-    def __new__(cls, filename, data):
+    def __new__(cls, abspath, relpath, data):
         s =  str.__new__(cls,  data)
-        s.filename = filename
+        s.abspath = abspath
+        s.relpath = relpath
         return s
         
     def __str__(self):
         return self.data
  
 def include_representer(dumper, data):
-    return dumper.represent_scalar(u'!include', data.filename)
+    return dumper.represent_scalar(u'!include', data.relpath)
     
 
 # http://pypi.python.org/pypi/layered-yaml-attrdict-config/12.07.1

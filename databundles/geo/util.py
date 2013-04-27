@@ -441,5 +441,55 @@ def bound_clusters_in_raster( a, aa, shape_file_dir,
 
         return envelopes 
 
+def get_shapefile_geometry_types(shape_file):
     
+        type_map = {'1':'GEOMETRY',
+                    '2':'GEOMETRYCOLLECTION',  
+                    '3':'POINT',
+                    '4':'MULTIPOINT', 
+                    '5':'POLYGON', 
+                    '6':'MULTIPOLYGON', 
+                    '7':'LINESTRING', 
+                    '8':'MULTILINESTRING',
+                    '3D Point':'POINT',
+                    '3D Multi Point':'MULTIPOINT', 
+                    '3D Polygon':'POLYGON', 
+                    '3D Multi Polygon':'MULTIPOLYGON', 
+        }
+    
+        shapes = ogr.Open(shape_file)
+        layer = shapes.GetLayer(0)
 
+        types = set()
+        type_ = None
+        
+        limit = 20000
+        count = layer.GetFeatureCount()
+        if count > limit:
+            skip = layer.GetFeatureCount() / limit
+        else:
+            skip = 1
+            
+        checked = 0
+        for i in range(0,layer.GetFeatureCount(),skip):
+            feature = layer.GetFeature(i)
+            types.add(type_map[ogr.GeometryTypeToName(feature.geometry().GetGeometryType())])
+            checked += 1
+
+        if len(types) == 1:
+            type_ = list(types).pop()
+        elif len(types) == 2:
+            if set(('POLYGON','MULTIPOLYGON')) & types == set(('POLYGON','MULTIPOLYGON')):
+                type_ = 'MULTIPOLYGON'
+            elif set(('POINT', 'MULTIPOINT')) & types == set(('POINT', 'MULTIPOINT')):
+                type_ = 'MULTIPOINT'
+            elif set(('LINESTRING', 'MULTILINESTRING')) & types == set(('LINESTRING', 'MULTILINESTRING')):
+                type_ = 'MULTILINESTRING'
+            else:
+                raise Exception("Didn't get valid combination of types: "+str(types))
+        else:
+            raise Exception("Can't deal with files that have three more type_ different geometry types, or less than one: "+str(types))
+     
+    
+        return types, type_
+    
