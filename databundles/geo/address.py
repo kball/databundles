@@ -148,7 +148,7 @@ def init_rdp():
     
     # how to add Apt, Suite, etc.
     suiteRef = (
-                oneOf("Suite Ste Apt Apartment Room Rm #", caseless=True) + 
+                oneOf("Suite Ste Apt Apartment Room Rm # Unit", caseless=True) + 
                 Optional(".") + 
                 Word(alphanums+'-')("suitenumber"))
     
@@ -190,12 +190,27 @@ def init_street_types():
                 street_types[row[0].lower()] =  row[1].lower()
             
         highway_words = [ k for k,v in street_types.items() if v == 'hwy']
-        highway_regex = r'\b(?:' + '|'.join(highway_words) + r')\b'
-                
-            
-        
-            
-    return street_types, highway_words, re.compile(highway_regex)
+        highway_regex = re.compile(r'\b(?:' + '|'.join(highway_words) + r')\b')
+
+    return street_types, highway_words, highway_regex
+
+suite_words = None
+suite_regex = None
+def init_suite_types():
+    import re
+    global suite_words, suite_regex
+    
+    if not suite_words:
+        suite_words = ['suite','ste',
+                       'apt','apartment',
+                       'room','rm',
+                       '#','no',
+                       'unit'
+                       ]
+
+        suite_regex = re.compile(r'\b(?:' + '|'.join(suite_words) + r')\b')
+
+    return suite_words, suite_regex
 
 class ParseError(Exception):
     pass
@@ -326,12 +341,14 @@ class ParserState(object):
             self.line = None
 
             self.street_types,self.highway_words,self.highway_regex  = init_street_types()
+            self.suite_words,self.suite_regex  = init_suite_types()
 
             self.number = None
             self.is_block = False
             self.street_direction = None
             self.street_name = None
             self.street_type = None
+            self.suite = None
             self.cross_street = None
 
         def __str__(self):
@@ -471,16 +488,6 @@ class ParserState(object):
             
         
         def parse(self):
-    
-            #
-            # See if we have a street type as the last item
-            #
-            ttype, last_toks = self.peek(self.LAST)
-           
-            if last_toks.lower() in self.street_types:
-                self.street_type = self.street_types[last_toks.lower()]
-                self.pop()
-                              
 
             #
             # Start with the number
@@ -501,6 +508,27 @@ class ParserState(object):
                 else: 
                     break
                 
+            # Pull a suite, unit, room identifier off the end. 
+            if self.has(self.suite_regex):
+                suite_names = []
+                
+                while True:
+                    r = self.pop()
+                    
+                    if self.suite_regex.match(r[1]):
+                        break
+                    else:
+                        suite_names.append(r[1])
+                self.suite = ' '.join(suite_names)
+
+            #
+            # See if we have a street type as the last item
+            #
+            ttype, last_toks = self.peek(self.LAST)
+           
+            if last_toks.lower() in self.street_types:
+                self.street_type = self.street_types[last_toks.lower()]
+                self.pop()
 
             self.parse_direction() # N, S, E, W
  
@@ -536,7 +564,7 @@ class ParserState(object):
                         self.street_direction = toks
                     elif toks in ['business','loop']:
                         suffix.append(toks)
-                    elif ttype == Scanner.WORD and toks != '-':
+                    elif ttype == Scanner.WORD and toks != '-' and toks:
                         adj.append(toks)
                 else:
                     hwy_word = toks
@@ -549,7 +577,9 @@ class ParserState(object):
                 else:
                     hwy_word = "highway"
     
-                self.street_name = " ".join(adj+[hwy_word,str(number)]+suffix).title()
+                
+                parts = adj+[hwy_word,str(number)]+suffix
+                self.street_name = " ".join(parts).title()
                 return True
             else:
                 self.restore()
@@ -578,7 +608,7 @@ class ParserState(object):
             return False
 
         def parse_numbered_street(self):
-            '''Parse a street that is names with a number'''
+            '''Parse a street that is named with a number'''
             ttype, toks = self.next()
             if ttype != Scanner.NUMBER:
                 self.unshift(ttype, toks)
@@ -593,8 +623,8 @@ class ParserState(object):
             else:
                 self.unshift(ttype, toks)
                 
-            self.street_name = str(int(number))+ordinal
-       
+            self.street_name = (str(int(number))+ordinal).title()
+
             return True
         
         def parse_simple_street(self):

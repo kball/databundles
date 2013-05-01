@@ -343,6 +343,8 @@ class LibraryDb(object):
         from databundles.orm import Dataset
         from databundles.bundle import Bundle
                 
+        self.remove_bundle(bundle)
+                
         bdbs = bundle.database.session 
         s = self.session
         dataset = bdbs.query(Dataset).one()

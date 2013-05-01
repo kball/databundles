@@ -55,12 +55,19 @@ class TestBase(unittest.TestCase):
         from collections import OrderedDict
         
         self.streets = OrderedDict([
-            ('Esquire Glen', (None, 'Esquire','gln')),
-            ('  BLOCK I AVENUE', (None, 'I','ave')),
-            ('  BLOCK BLOCK BLOCK ACACIA AVENUE', (None, 'Acacia','ave')),
             ('block of wilbur', (None, 'Wilbur',None)),            
             ('wilbur', (None, 'Wilbur',None)),
             ('wil bur', (None, 'Wil Bur',None)),
+            ('Carmel Mountain Rd', (None, 'Carmel Mountain','rd')),
+            ('Federal Blvd Suite B', (None, 'Federal','blvd')),
+            ('Fairmount Ave Suite 300B', (None, 'Fairmount','ave')),
+            ('Black Mountain Rd Suite 10', (None, 'Black Mountain','rd')),
+            (' Clairemont Mesa Blvd Suite 203', (None, 'Clairemont Mesa','blvd')),
+            (' La Jolla Blvd Suite D', (None, 'La Jolla','blvd')),
+            (' Silverton Ave Suite 108', (None, 'Silverton','ave')),                     
+            ('Esquire Glen', (None, 'Esquire','gln')),
+            ('  BLOCK I AVENUE', (None, 'I','ave')),
+            ('  BLOCK BLOCK BLOCK ACACIA AVENUE', (None, 'Acacia','ave')),
             ('wilbur st.', (None, 'Wilbur','st')),
             ('wil bur place', (None, 'Wil Bur','pl')),
             ('wilbur pl.', (None, 'Wilbur','pl')),
@@ -140,6 +147,24 @@ class TestBase(unittest.TestCase):
             self.assertEquals(check[2],ps.street_type)
             
         
+        
+    def test_errors(self):
+        from databundles.geo.address import ParserState
+        import imp
+
+        bundle = imp.load_source('bundle', 
+            '/Users/eric/proj/Bundles/src/civicdata/sandiego.gov/sandiego.gov-businesses-orig/bundle.py')
+        b = bundle.Bundle()
+
+        p = b.partitions.find(table='businesses', grain='errors')
+
+        for row in p.query("SELECT * FROM businesses"):
+            ps = ParserState(row['address'])
+         
+            ps.parse()
+            
+            print ps
+            
 
     def x_test_streets(self):
         from databundles.geo.address import  init_rdp

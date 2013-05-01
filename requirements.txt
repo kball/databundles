@@ -9,3 +9,4 @@ ckanclient
 requests
 boto
 python-dateutil
+fuzzy
