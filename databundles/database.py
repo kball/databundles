@@ -8,6 +8,28 @@ Revised BSD License, included in this distribution as LICENSE.txt
 import os.path
 import anydbm
 
+class FeatureInserter(object):
+    def __init__(self):
+        pass
+    
+    def __enter__(self):
+        pass
+    
+    def __exit__(self, type_, value, traceback):
+        
+        self.close()
+               
+        if type_ is not None:
+            self.bundle.error("Got Exception: "+str(value))
+            return False
+                
+        return self
+    
+    def close(self):
+        pass
+    
+    
+
 class ValueWriter(object):
     '''Inserts arrays of values into  database table'''
     def __init__(self, bundle,  db, cache_size=50000, text_factory = None, replace=False):
@@ -973,6 +995,9 @@ class GeoDb(PartitionDb):
             pass # SHould load the spatialite library into sqlite here. 
 
         self.add_post_create(load_spatialite)
+   
+    def FeatureInserter(self, table):
+        pass
    
       
 class BundleDb(Database):

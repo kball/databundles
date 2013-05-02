@@ -24,19 +24,17 @@ class Test(TestBase):
     def tearDown(self):
         pass
 
-    def test_basic(self):
+    def x_test_basic(self):
         from databundles.geo.analysisarea import get_analysis_area,  draw_edges
         from databundles.geo import Point
         from databundles.geo.kernel import GaussianKernel
              
-        aa = get_analysis_area(self.bundle.library, geoid = '0666000')
+        aa = get_analysis_area(self.bundle.library, geoid = 'CG0666000')
         
         a = aa.new_array()
 
         #draw_edges(a)
         print a.shape, a.size
-        
-        print a
         
         gaussian = GaussianKernel(11,6)
         
@@ -46,6 +44,37 @@ class Test(TestBase):
          
         
         aa.write_geotiff('/tmp/box.tiff',  a,  data_type=GDT_Float32)
+
+    def test_sfschema(self):
+        from databundles.geo.sfschema import SFSchema
+        from databundles.geo.analysisarea import get_analysis_area
+        _, communities = self.bundle.library.dep('communities')
+        
+        aa = get_analysis_area(self.bundle.library, geoid = 'CG0666000')
+        
+        path1 = '/tmp/geot1.kml'
+        if os.path.exists(path1): os.remove(path1)
+        sfs1 = SFSchema(self.bundle, path1, 'geot1' )
+        
+        path2 = '/tmp/geot2.kml'
+        if os.path.exists(path2): os.remove(path2)
+       
+        sfs2 = SFSchema(self.bundle, path2, 'geot2', source_srs=communities.get_srs())        
+        
+        print sfs1.type, sfs2.type
+        
+        for row in communities.query("""
+         SELECT *, 
+         X(Transform(Centroid(geometry), 4326)) AS lon, 
+         Y(Transform(Centroid(geometry), 4326)) as lat,
+         AsText(geometry) as wkt,
+         AsBinary(geometry) as wkb
+         FROM communities"""):
+            sfs1.add_feature( {'name':row['cpname'], 'lat': row['lat'], 'lon': row['lon'], 'wkt': row['wkt']})
+            sfs2.add_feature( {'name':row['cpname'], 'lat': row['lat'], 'lon': row['lon'], 'wkt': row['wkt']})
+
+        sfs1.close()
+        sfs2.close()
 
 
     def demo2(self):

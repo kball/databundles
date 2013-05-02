@@ -42,7 +42,7 @@ class Geocoder(object):
         
         return self._block_geocode_parts(ps.number, ps.street_name,  ps.street_type, city, state)
 
-    def geocode_address(self, street, city, state):
+    def geocode_blockgeocode_address(self, street, city, state):
         """ Just parses the street,. Expects the city, state and zip to be broken out. """
 
         try: ps = self.parser.parse(street)
@@ -62,17 +62,24 @@ class Geocoder(object):
         street = street.title()
 
         queries = [
-            ("""SELECT 10 as quality, * FROM geocode_block WHERE  (lcity = ?  or rcity = ? )
+            ("""SELECT 10 as gcquality, * FROM segments WHERE  (lcity = ?  or rcity = ? )
             AND street = ? AND street_type = ? AND ? BETWEEN lnumber AND hnumber
-            ORDER BY segment_source_id""",(city,  city, street, street_type, number)),
-            ("""SELECT 9 as quality, * FROM geocode_block WHERE (lcity = ?  or rcity = ? ) AND 
+            AND has_addresses = 1
+            ORDER BY hnumber ASC""",(city,  city, street, street_type, number)),
+                   
+            ("""SELECT 9 as gcquality, * FROM segments WHERE (lcity = ?  or rcity = ? ) AND 
             street = ? AND ? BETWEEN lnumber AND hnumber
-            ORDER BY segment_source_id""",(city, city,  street, number)),
-            ("""SELECT 8 as quality, * FROM geocode_block WHERE street = ? AND ? BETWEEN lnumber AND hnumber
-            ORDER BY segment_source_id""",(street, number)),
-            ("""SELECT 7 as quality, * FROM geocode_block WHERE  (lcity = ?  or rcity = ? )
-            AND street = ? AND street_type = ? AND ? BETWEEN lnumber-100 AND hnumber+100
-            ORDER BY segment_source_id""",(city,  city, street, street_type, number))
+            AND has_addresses = 1
+            ORDER BY hnumber ASC""",(city, city,  street, number)),
+                   
+            ("""SELECT 8 as gcquality, * FROM segments WHERE (lcity = ?  or rcity = ? ) AND 
+            street = ? AND ? BETWEEN lnumber AND hnumber
+            ORDER BY hnumber ASC""",(city, city,  street, number)),
+                   
+            ("""SELECT 7 as gcquality, * FROM segments WHERE street = ? AND ? BETWEEN lnumber AND hnumber
+            AND has_addresses = 1
+            ORDER BY hnumber ASC""",(street, number)),
+                   
         ]
 
         for query, args in queries:
@@ -82,31 +89,12 @@ class Geocoder(object):
             for ar in self.addresses.query(query, *args  ):
                 ar = dict(ar)
                 
-                city = ar.get('lcity', ar.get('rcity'))
-
-                r = {
-                    'quality': ar['quality'],
-                    'addresses_id': None,
-                    'segment_source_id':  ar['segment_source_id'],
-                    'address_source_id': None,
-                    'zip': ar.get('lzip'),
-                    'street': ar['street'],
-                    'street_dir':  ar['street_dir'],
-                    'street_type': ar['street_type'],
-                    'x': ar['xm'],
-                    'y': ar['ym'],
-                    'number': number,
-                    'hnumber': ar['hnumber'],
-                    'lnumber': ar['lnumber'],
-                    'city' : city
-                }
-                
-                candidates.setdefault((city,ar['street'],ar['street_type']),[]).append(r)
+                candidates.setdefault(ar['segment_source_id'],[]).append(ar)
 
             if len(candidates) > 0:
                 return candidates
 
-        return []
+        return {}
     
     def _address_geocode_parts(self, number, street, street_type, city, state):
 
@@ -148,9 +136,7 @@ class Geocoder(object):
                 ar = dict(ar)
                 
                 city = ar.get('city', ar.get('rcity'))
-                
-               
-                
+
                 r = {
                     'quality': quality,
                     'addresses_id': ar.get('addresses_id'),

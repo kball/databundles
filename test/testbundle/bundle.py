@@ -30,8 +30,9 @@ class Bundle(BuildBundle):
              
         for table in self.schema.tables:       
             pid = PartitionIdentity(self.identity, table=table.name)
-            partition = self.partitions.new_partition(pid)   
-            partition.create_with_tables(table.name)
+            if not table.name.startswith('geo'):
+                partition = self.partitions.new_partition(pid)   
+                partition.create_with_tables(table.name)
                     
     
     def build(self):

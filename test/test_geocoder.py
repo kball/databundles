@@ -26,7 +26,7 @@ class Test(TestBase):
     def tearDown(self):
         pass
 
-    def x_test_basic(self):
+    def test_basic(self):
         from pprint import pprint
         from databundles.geo.geocoder import Geocoder               
         g = Geocoder(self.bundle.library, addresses_ds='geoaddresses')               
@@ -53,7 +53,7 @@ class Test(TestBase):
         w.writerow(row)
             
 
-    def test_crime(self):
+    def x_test_crime(self):
         from databundles.geo.address import Parser
         from databundles.geo.geocoder import Geocoder
         import csv
