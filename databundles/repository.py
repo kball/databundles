@@ -141,9 +141,14 @@ class Repository(object):
 
         with open(file_, 'w') as f:
             conn.row_factory = sqlite3.Row
+            q = extract_data['query']
             rows = conn.execute(extract_data['query'])
             
             first = rows.fetchone()
+            
+            if not first:
+                raise Exception("Got no data from query: {}".format(q))
+            
             writer = csv.writer(f, quoting=csv.QUOTE_NONNUMERIC)
 
             writer.writerow(first.keys())

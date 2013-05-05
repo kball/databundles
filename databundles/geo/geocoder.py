@@ -135,7 +135,7 @@ class Geocoder(object):
             for ar in self.addresses.query(query, *args  ):
                 ar = dict(ar)
                 
-                city = ar.get('city', ar.get('rcity'))
+                city = city.title() if city else ar.get('city', ar.get('rcity'))
 
                 r = {
                     'quality': quality,

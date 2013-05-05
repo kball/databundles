@@ -493,3 +493,50 @@ def get_shapefile_geometry_types(shape_file):
     
         return types, type_
     
+def segment_points(bundle, area_dep, area_table = None):
+    """A generator that yields information that can be used to classify
+    points into areas"""
+    
+    import osr
+    _, areas = bundle.library.dep(area_dep)
+
+    if area_table is None:
+        area_table = areas.identity.table
+
+    dest_srs = ogr.osr.SpatialReference()
+    dest_srs.ImportFromEPSG(4326)
+    
+    source_srs = areas.get_srs()
+    
+    transform = osr.CoordinateTransformation(source_srs, dest_srs)
+    
+    for area in areas.query("SELECT * from {}_norm".format(area_table)):
+        
+        name = area['name']
+        id_ = area['id']
+        
+        g = ogr.CreateGeometryFromWkt(area['wkt'])
+        g.Transform(transform)
+        
+        e = g.GetEnvelope()
+                
+        where = ("lon BETWEEN {x1} AND {x2} AND lat BETWEEN {y1} and {y2}"
+                 .format(x1=e[0], x2=e[1], y1=e[2], y2=e[3]))       
+        
+        def is_in(x, y):
+            p = ogr.Geometry(ogr.wkbPoint)
+            p.SetPoint_2D(0, x, y)
+
+            if g.Contains(p):
+                return True
+            else:
+                return False
+        
+        yield name, id_, where, is_in
+
+    
+    
+    
+    
+    
+    

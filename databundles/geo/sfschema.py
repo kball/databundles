@@ -19,7 +19,7 @@ ogr_type_map = {
         Column.DATATYPE_TIMESTAMP: ogr.OFTDateTime, 
         }
 
-class SFSchema(object):
+class TableShapefile(object):
 
     def __init__(self, bundle, path, table, dest_srs=4326, source_srs=None):
 
@@ -37,7 +37,7 @@ class SFSchema(object):
         else:
             self.format = extension[1:]
 
-        if format in ('kml','geojson'):
+        if self.format in ('kml','geojson'):
             dest_srs=4326
       
         self.srs = self._get_srs(dest_srs)
@@ -69,6 +69,7 @@ class SFSchema(object):
                 typ = c.datatype
                 geo_col_names[0] = c.name
                 geo_col_pos[0] = i
+                break
             elif c.name == 'lat' or c.name == 'y':
                 typ = 'point'
                 geo_col_names[1] = c.name
@@ -77,7 +78,7 @@ class SFSchema(object):
                 typ = 'point'
                 geo_col_names[0] = c.name
                 geo_col_pos[0] = i
-                
+          
         return typ ,  geo_col_names,    geo_col_pos 
                 
         
@@ -90,7 +91,7 @@ class SFSchema(object):
             
             fdfn =  ogr.FieldDefn(str(c.name), ogr_type_map[c.datatype] )
             
-            if c.datatype == Column.DATATYPE_TEXT:
+            if c.datatype == Column.DATATYPE_TEXT and self.format == 'shapefile':
                 if not c.size:
                     raise ConfigurationError("Column {} must specify a size".format(c.name))
                 fdfn.SetWidth(c.size)
@@ -100,6 +101,7 @@ class SFSchema(object):
     def geo_vals(self, row):
         """Return the geometry fields from a row. Returnes a two item tuple, 
         with (x,y) for a point, or (Geometry,non) for blob, wbk or wkt geometry"""
+
         
         if self.type == 'point':
             if isinstance(row, dict):
@@ -114,6 +116,8 @@ class SFSchema(object):
                 return (row[self.geo_col_pos[0]], None)
         
     def get_geometry(self, row):
+        import StringIO
+        
         x,y = self.geo_vals(row)
             
         if self.type == 'point':
@@ -122,11 +126,11 @@ class SFSchema(object):
                 
         elif self.geo_col_names[0] == 'geometry':
             # ? Not sure what this is?
-            geometry = ogr.CreateGeometryFromWkb(x)
+            geometry = ogr.CreateGeometryFromWkt(x)
         elif self.geo_col_names[0] == 'wkt':
             geometry = ogr.CreateGeometryFromWkt(x)
         elif self.geo_col_names[0] == 'wkb':    
-            geometry = ogr.CreateGeometryFromWkt(x)
+            geometry = ogr.CreateGeometryFromWkb(x)
 
         if geometry:
             if not geometry.TransformTo(self.srs):
@@ -134,10 +138,14 @@ class SFSchema(object):
             
         return geometry
             
-    def add_feature(self, row):
-
+    def add_feature(self, row, source_srs=None):
+        
         geometry = self.get_geometry(row)
         
+        if source_srs is not None and source_srs != self.source_srs:
+            self.source_srs = self._get_srs(source_srs)
+            self.transform = osr.CoordinateTransformation(self.source_srs, self.srs)
+            
         if self.layer is None:
             type_ =  geometry.GetGeometryType() 
             self.layer = self.ds.CreateLayer( str(self.table.name), self.srs, type_)
@@ -149,8 +157,13 @@ class SFSchema(object):
         if isinstance(row, dict):
             for i,c in enumerate(self.table.columns):
                 if i not in self.geo_col_pos:
-                    if row.get(c.name, False):
-                        feature.SetField(i, str(row[c.name]))
+                    v = row.get(c.name, False)
+                  
+                    if v and isinstance(v, unicode):
+                        v = str(v)
+                    
+                    if v:
+                        feature.SetField(i, v)
         else:
             for i,v in enumerate(row):
                 if i not in self.geo_col_pos:

@@ -7,13 +7,17 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 import os.path
 import anydbm
+from databundles.geo.sfschema import TableShapefile
 
 class FeatureInserter(object):
-    def __init__(self):
-        pass
+    def __init__(self, bundle, path, table, dest_srs=4326, source_srs=None):
+        
+        self.bundle = bundle
+
+        self.sf = TableShapefile(bundle, path, table, dest_srs, source_srs)
     
     def __enter__(self):
-        pass
+        return self
     
     def __exit__(self, type_, value, traceback):
         
@@ -25,10 +29,12 @@ class FeatureInserter(object):
                 
         return self
     
+    def insert(self, row, source_srs=None):
+        
+        return self.sf.add_feature( row, source_srs)
+    
     def close(self):
-        pass
-    
-    
+        self.sf.close()
 
 class ValueWriter(object):
     '''Inserts arrays of values into  database table'''
@@ -43,7 +49,6 @@ class ValueWriter(object):
         self.cache_size = cache_size
         self.statement = None
         
-
         if text_factory:
             print self.db.engine.raw_connection()
             self.db.engine.raw_connection().connection.text_factory = text_factory
@@ -432,9 +437,13 @@ class Database(object):
     def name(self):
         return Database.BUNDLE_DB_NAME
 
+    @classmethod
+    def make_path(cls, container):
+        return container.path + cls.EXTENSION
+
     @property 
     def path(self):
-        return self.container.path + self.EXTENSION
+        return self.make_path(self.container)
     
     def sub_dir(self, *args):
         return  self.container.sub_dir(*args)
@@ -996,16 +1005,18 @@ class GeoDb(PartitionDb):
 
         self.add_post_create(load_spatialite)
    
-    def FeatureInserter(self, table):
-        pass
+    def inserter(self,  table = None, dest_srs=4326, source_srs=None):
+        
+        if table is None and self.partition.identity.table:
+            table = self.partition.identity.table
+        
+        return FeatureInserter(self.bundle, self.partition.database.path, table, dest_srs, source_srs)
    
-      
 class BundleDb(Database):
     '''Represents the database version of a bundle that is installed in a library'''
     def __init__(self, path):
       
         super(BundleDb, self).__init__(None, path)  
-
 
 def _pragma_on_connect(dbapi_con, con_record):
     '''ISSUE some Sqlite pragmas when the connection is created'''

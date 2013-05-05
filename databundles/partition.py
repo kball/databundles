@@ -79,9 +79,9 @@ class Partition(object):
         return self._database
 
     def query(self,*args, **kwargs):
-        """Convience function for self.database.connection.execute()"""
+        """Convience function for self.database.query()"""
      
-        return self.database.connection.execute(*args, **kwargs)
+        return self.database.query(*args, **kwargs)
         
 
     def tempfile(self, table=None, suffix=None,ignore_first=False):
@@ -204,6 +204,15 @@ class GeoPartition(Partition):
         srs.ImportFromWkt(self.get_srs_wkt())
         return srs
 
+    def create(self, dest_srs=4326, source_srs=None):
+        
+        from databundles.geo.sfschema import TableShapefile
+        
+        tsf = TableShapefile(self.bundle, self._db_path.make_path(self), self.identity.table,
+                             dest_srs = dest_srs, source_srs = source_srs )
+        
+        tsf.close()
+
     def convert(self, table_name, progress_f=None):
         """Convert a spatialite geopartition to a regular arg
         by extracting the geometry and re-projecting it to WGS84
@@ -302,8 +311,6 @@ class GeoPartition(Partition):
             for i, line in enumerate(reader):
                 ins.insert(line)
                 progress_f(i)
-                
-                
 
 
 class Partitions(object):
@@ -585,7 +592,16 @@ class Partitions(object):
         p = self.partition(op, is_geo=kwargs.get('is_geo',None))
         return p
 
-    def new_geo_partition(self, pid, shape_file):
+    def new_geo_partition(self, pid=None, **kwargs):
+        
+        if kwargs.get('shape_file'):
+            return self._new_geo_partition_from_shape( pid, shape_file=kwargs.get('shape_file'))
+        else:
+            kwargs['is_geo'] = True
+            return self.new_partition(pid, **kwargs)
+        
+        
+    def _new_geo_partition_from_shape(self, pid, shape_file):
         """Load a shape file into a partition as a spatialite database. 
         
         Will also create a schema entry for the table speficified in the 
@@ -676,6 +692,33 @@ class Partitions(object):
         
         if tables:    
             partition.create_with_tables(tables)  
+
+        return partition;
+    
+    def find_or_new_geo(self, pid=None, **kwargs):
+        '''Find a partition identified by pid, and if it does not exist, create it. 
+        
+        Args:
+            pid A partition Identity
+            tables String or array of tables to copy form the main partition
+        '''
+        
+        try: partition =  self.find(pid, **kwargs)
+        except: partition = None
+    
+        if partition:
+            return partition
+    
+        tables = kwargs.get('tables',kwargs.get('table',pid.table if pid else None))
+    
+        if tables and not isinstance(tables, (list,tuple)):
+            tables = [tables]
+    
+        if tables and pid and pid.table and pid.table not in tables:
+            tables.append(partition.identity.table)
+
+      
+        partition = self.new_geo_partition(pid, **kwargs)
 
         return partition;
     
