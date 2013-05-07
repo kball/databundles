@@ -3,6 +3,7 @@ Create an OGR shapefile from a schema
 '''
 import ogr, osr
 import os
+import os.path
 from databundles.orm import Column
 from databundles.dbexceptions import ConfigurationError
 
@@ -55,6 +56,8 @@ class TableShapefile(object):
         self.ds = self.create_datasource(path, self.format)
 
         self.type, self.geo_col_names, self.geo_col_pos  = self.figure_feature_type()
+
+
         
         self.layer = None
 
@@ -64,13 +67,19 @@ class TableShapefile(object):
         typ = None
         geo_col_names = [None, None]
         geo_col_pos = [None, None]
+        
+        
+        # First look for a geometry column. If it exists, the x/y, or lon/lat
+        # columns are secondary, for the centroid. 
         for i,c in enumerate(self.table.columns):
             if c.name == 'geometry' or c.name == 'wkb' or c.name == 'wkt':
                 typ = c.datatype
                 geo_col_names[0] = c.name
                 geo_col_pos[0] = i
-                break
-            elif c.name == 'lat' or c.name == 'y':
+                return typ ,  geo_col_names,    geo_col_pos 
+     
+        for i,c in enumerate(self.table.columns):       
+            if c.name == 'lat' or c.name == 'y':
                 typ = 'point'
                 geo_col_names[1] = c.name
                 geo_col_pos[1] = i
@@ -83,7 +92,7 @@ class TableShapefile(object):
                 
         
     def load_schema(self, layer):
-        """Create fidls definitions in the layer"""
+        """Create fields definitions in the layer"""
         for c in self.table.columns:
             
             if c.name in ('wkt','wkb','geometry'):
@@ -93,7 +102,7 @@ class TableShapefile(object):
             
             if c.datatype == Column.DATATYPE_TEXT and self.format == 'shapefile':
                 if not c.size:
-                    raise ConfigurationError("Column {} must specify a size".format(c.name))
+                    raise ConfigurationError("Column {} must specify a size for shapefile output".format(c.name))
                 fdfn.SetWidth(c.size)
                 
             layer.CreateField(fdfn)
@@ -116,8 +125,7 @@ class TableShapefile(object):
                 return (row[self.geo_col_pos[0]], None)
         
     def get_geometry(self, row):
-        import StringIO
-        
+
         x,y = self.geo_vals(row)
             
         if self.type == 'point':
@@ -131,10 +139,15 @@ class TableShapefile(object):
             geometry = ogr.CreateGeometryFromWkt(x)
         elif self.geo_col_names[0] == 'wkb':    
             geometry = ogr.CreateGeometryFromWkb(x)
+        else:
+            raise Exception("Didn't find geometery column")
 
         if geometry:
             if not geometry.TransformTo(self.srs):
                 raise Exception("Failed to transform Geometry")
+        else:
+            
+            raise Exception("Didn't get a geometry object: x="+str(x)+" type="+str(self.type)+" gcn="+self.geo_col_names[0])
             
         return geometry
             
@@ -163,7 +176,8 @@ class TableShapefile(object):
                         v = str(v)
                     
                     if v:
-                        feature.SetField(i, v)
+                        feature.SetField(str(c.name), v)
+                      
         else:
             for i,v in enumerate(row):
                 if i not in self.geo_col_pos:
@@ -197,7 +211,7 @@ class TableShapefile(object):
         return srs
     
     def create_datasource(self, path, fmt):
-
+        import os
 
         options = []
         
@@ -213,12 +227,23 @@ class TableShapefile(object):
         else: 
             raise Exception("Unknown format: {} ".format(fmt))
             
+        if not os.path.exists(os.path.dirname(path)):
+            os.makedirs(os.path.dirname(path))
         
         ds = drv.CreateDataSource(path, options=options)
          
         if ds is None:
-            raise Exception("Failed to create datasource: {}".format(path))
+            import os
+            self.bundle.error("Failed to create datasource. Will delete and try again: {}".format(path))
+        
+            if os.path.exists(path):
+                os.remove(path)
+
+            ds = drv.CreateDataSource(path, options=options)
             
+            if ds is None:
+                raise Exception("Failed to create datasource: {}".format(path))
+
         return ds
     
     def close(self):

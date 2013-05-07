@@ -354,10 +354,14 @@ class Schema(object):
                                    data=data
                                    )
 
-    def as_csv(self):
+    def as_csv(self, f=None):
         """Return the current schema as a CSV file"""
         import csv, sys
         from collections import OrderedDict
+
+        if f is None:
+            f = sys.stdout
+
 
         w = None
         
@@ -371,9 +375,9 @@ class Schema(object):
                 row['type'] = col.datatype.upper()
                 row['default'] = col.default
                 row['description'] = col.description
-                
+
                 if not w:
-                    w = csv.DictWriter(sys.stdout,row.keys())
+                    w = csv.DictWriter(f,row.keys())
                     w.writeheader()
                 
                 w.writerow(row)
@@ -477,6 +481,26 @@ class {name}(Base):
             f.write(self.as_orm())
             
         
+    def add_views(self):
+        """Add views defined in the configuration"""
+        
+        for p in self.bundle.partitions:
+
+            if not p.table:
+                continue
+  
+            views = self.bundle.config.views.get(p.table.name, False)
+ 
+            if not views:
+                continue
+            
+            for name, view in views.items():
+                self.bundle.log("Adding view: {} to {}".format(name, p.identity.name))
+                sql = "DROP VIEW IF EXISTS {}; ".format(name)
+                p.database.connection.execute(sql)
+                  
+                sql = "CREATE VIEW {} AS {};".format(name, view)
+                p.database.connection.execute(sql)  
         
     
         

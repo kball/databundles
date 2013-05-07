@@ -491,6 +491,50 @@ class BundleFilesystem(Filesystem):
 
         return out_file
 
+    def read_csv(self, f, key = None):
+        """Read a CSV into a dictionary of dicts or list of dicts
+        
+        Args:
+            f a string or file object ( a FLO with read() )
+            key columm or columns to use as the key. If None, return a list
+        
+        """
+        
+        opened = False
+        if isinstance(f, basestring):
+            f = open(f,'rb')
+            opened = True
+        
+        import csv
+        
+        reader  = csv.DictReader(f)
+    
+        if key is None:
+            out = []
+        else:
+            if isinstance(key, (list,tuple)):
+                def make_key(row):
+                    return tuple([str(row[i]) for i in key])
+            else:
+                def make_key(row):
+                    return row[key]
+                
+            out = {}
+    
+        for row in reader:
+                     
+            if key is None:
+                out.append(row)
+            else:
+                out[make_key(row)] = row
+        
+        if opened:
+            f.close
+
+
+
+        return out
+
     def download_shapefile(self, url):
         """Downloads a shapefile, unzips it, and returns the .shp file path"""
         import os

@@ -30,6 +30,10 @@ class FeatureInserter(object):
         return self
     
     def insert(self, row, source_srs=None):
+        from sqlalchemy.engine.result import RowProxy
+        
+        if isinstance(row, RowProxy):
+            row  = dict(row)
         
         return self.sf.add_feature( row, source_srs)
     

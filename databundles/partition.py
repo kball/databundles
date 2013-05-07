@@ -208,7 +208,7 @@ class GeoPartition(Partition):
         
         from databundles.geo.sfschema import TableShapefile
         
-        tsf = TableShapefile(self.bundle, self._db_path.make_path(self), self.identity.table,
+        tsf = TableShapefile(self.bundle, self._db_class.make_path(self), self.identity.table,
                              dest_srs = dest_srs, source_srs = source_srs )
         
         tsf.close()

@@ -182,6 +182,8 @@ class Column(Base):
     DATATYPE_TIMESTAMP = 'timestamp'
     DATATYPE_POINT = 'point' # Spatalite, sqlite extensions for geo
     DATATYPE_LINESTRING = 'linestring' # Spatalite, sqlite extensions for geo
+    DATATYPE_POLYGON = 'polygon' # Spatalite, sqlite extensions for geo
+    DATATYPE_MULTIPOLYGON = 'multipolygon' # Spatalite, sqlite extensions for geo
     DATATYPE_CHAR = 'text'
     DATATYPE_VARCHAR = 'text'
     DATATYPE_BLOB = 'blob'
@@ -200,6 +202,8 @@ class Column(Base):
                 DATATYPE_VARCHAR,
                 DATATYPE_POINT,
                 DATATYPE_LINESTRING,
+                DATATYPE_POLYGON,
+                DATATYPE_MULTIPOLYGON,
                 DATATYPE_BLOB
              ]
 
@@ -217,6 +221,8 @@ class Column(Base):
         DATATYPE_POINT:sqlalchemy.types.Text,
         DATATYPE_LINESTRING:sqlalchemy.types.LargeBinary,
         DATATYPE_BLOB: sqlalchemy.types.LargeBinary,
+        DATATYPE_POLYGON: sqlalchemy.types.LargeBinary,
+        DATATYPE_MULTIPOLYGON: sqlalchemy.types.LargeBinary,
         'varchar':sqlalchemy.types.Text,
         }
 
@@ -233,6 +239,8 @@ class Column(Base):
         DATATYPE_TIMESTAMP: str,
         DATATYPE_POINT: buffer,
         DATATYPE_LINESTRING: buffer,
+        DATATYPE_POLYGON: buffer,
+        DATATYPE_MULTIPOLYGON: buffer,
         DATATYPE_BLOB: buffer,
         'varchar': str
         }
