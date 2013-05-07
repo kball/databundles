@@ -453,6 +453,7 @@ def get_shapefile_geometry_types(shape_file):
                     '8':'MULTILINESTRING',
                     '3D Point':'POINT',
                     '3D Multi Point':'MULTIPOINT', 
+                    'Polygon':'POLYGON', 
                     '3D Polygon':'POLYGON', 
                     '3D Multi Polygon':'MULTIPOLYGON', 
         }
