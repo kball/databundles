@@ -109,8 +109,7 @@ class Bundle(object):
     
     def query(self,*args, **kwargs):
         """Convience function for self.database.connection.execute()"""
-        print args
-        return self.database.connection.execute(*args, **kwargs)
+        return self.database.query(*args, **kwargs)
     
     
 class DbBundle(Bundle):

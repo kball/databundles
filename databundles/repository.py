@@ -95,11 +95,12 @@ class Repository(object):
 
         if extract_data.get('function',False):
             file_ = self._do_function_extract(extract_data)
-        elif extract_data.get('query',False):
+        elif extract_data.get('query',False) or extract_data.get('source_table',False):
             file_ = self._do_query_extract(extract_data)
         else:
             from databundles.dbexceptions import ConfigurationError
-            raise ConfigurationError("Bad Extract config: {}".format(extract_data))
+            self.bundle.error("Bad Extract config: {}".format(extract_data))
+            raise ConfigurationError("Bad Extract config")
 
         return file_
         
@@ -133,21 +134,26 @@ class Repository(object):
         else:
             file_ =  os.path.join(tempfile.gettempdir(), str(uuid.uuid4()) )
 
-    
+        if extract_data.get('source_table') and  extract_data.get('extract_table'):
+            query = self.bundle.schema.extract_query(extract_data['source_table'],extract_data['extract_table'] )
+        else:
+            query = extract_data['query']
+       
         self.bundle.log("Extracting {} to {}".format(extract_data['name'],file_))
-        self.bundle.log("Extract query: {} ".format(extract_data['query']))
 
         conn = sqlite3.connect(p.database.path)
 
+        lr = self.bundle.init_log_rate(100000,"Extract to {}".format(file_name))
+
         with open(file_, 'w') as f:
             conn.row_factory = sqlite3.Row
-            q = extract_data['query']
-            rows = conn.execute(extract_data['query'])
+            
+            rows = conn.execute(query)
             
             first = rows.fetchone()
             
             if not first:
-                raise Exception("Got no data from query: {}".format(q))
+                raise Exception("Got no data from query: {}".format(query))
             
             writer = csv.writer(f, quoting=csv.QUOTE_NONNUMERIC)
 
@@ -155,6 +161,7 @@ class Repository(object):
             writer.writerow(tuple(first))
             
             for row in rows:
+                lr()
                 writer.writerow(tuple(row))
 
   

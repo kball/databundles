@@ -153,6 +153,7 @@ class Column(Base):
     datatype = SAColumn('c_datatype',Text)
     size = SAColumn('c_size',Integer)
     width = SAColumn('c_width',Integer)
+    sql = SAColumn('c_sql',Text)
     precision = SAColumn('c_precision',Integer)
     flags = SAColumn('c_flags',Text)
     description = SAColumn('c_description',Text)
@@ -188,71 +189,36 @@ class Column(Base):
     DATATYPE_VARCHAR = 'text'
     DATATYPE_BLOB = 'blob'
 
-    
-    types = [
-                DATATYPE_TEXT,
-                DATATYPE_INTEGER,
-                DATATYPE_INTEGER64,
-                DATATYPE_REAL,
-                DATATYPE_FLOAT,
-                DATATYPE_NUMERIC,
-                DATATYPE_DATE,
-                DATATYPE_TIME,
-                DATATYPE_TIMESTAMP,
-                DATATYPE_VARCHAR,
-                DATATYPE_POINT,
-                DATATYPE_LINESTRING,
-                DATATYPE_POLYGON,
-                DATATYPE_MULTIPOLYGON,
-                DATATYPE_BLOB
-             ]
-
-    sqlalchemy_type_map = { 
-        None: sqlalchemy.types.Text,
-        DATATYPE_TEXT: sqlalchemy.types.Text,
-        DATATYPE_INTEGER:sqlalchemy.types.Integer,
-        DATATYPE_INTEGER64:sqlalchemy.types.Integer,
-        DATATYPE_NUMERIC:sqlalchemy.types.Float,
-        DATATYPE_REAL:sqlalchemy.types.Float, 
-        DATATYPE_FLOAT:sqlalchemy.types.Float,        
-        DATATYPE_DATE: sqlalchemy.types.Date,
-        DATATYPE_TIME:sqlalchemy.types.Time,
-        DATATYPE_TIMESTAMP:sqlalchemy.types.DateTime,
-        DATATYPE_POINT:sqlalchemy.types.Text,
-        DATATYPE_LINESTRING:sqlalchemy.types.LargeBinary,
-        DATATYPE_BLOB: sqlalchemy.types.LargeBinary,
-        DATATYPE_POLYGON: sqlalchemy.types.LargeBinary,
-        DATATYPE_MULTIPOLYGON: sqlalchemy.types.LargeBinary,
-        'varchar':sqlalchemy.types.Text,
+    types  = {
+        DATATYPE_TEXT:(sqlalchemy.types.Text,str,'TEXT'),
+        DATATYPE_VARCHAR:(sqlalchemy.types.Text,str,'TEXT'),
+        DATATYPE_CHAR:(sqlalchemy.types.Text,str,'TEXT'),
+        DATATYPE_INTEGER:(sqlalchemy.types.Integer,int,'INTEGER'),
+        DATATYPE_INTEGER64:(sqlalchemy.types.Integer,int,'INTEGER'),
+        DATATYPE_REAL:(sqlalchemy.types.Float,float,'REAL'),
+        DATATYPE_FLOAT:(sqlalchemy.types.Float,float,'REAL'),
+        DATATYPE_NUMERIC:(sqlalchemy.types.Float,float,'REAL'),
+        DATATYPE_DATE:(sqlalchemy.types.Date,str,'DATE'),
+        DATATYPE_TIME:(sqlalchemy.types.Time,str,'TIME'),
+        DATATYPE_TIMESTAMP:(sqlalchemy.types.DateTime,str,'TIMESTAMP'),
+        DATATYPE_POINT:(sqlalchemy.types.LargeBinary,buffer,'POINT'),
+        DATATYPE_LINESTRING:(sqlalchemy.types.LargeBinary,buffer,'LINESTRING'),
+        DATATYPE_POLYGON:(sqlalchemy.types.LargeBinary,buffer,'POLYGON'),
+        DATATYPE_MULTIPOLYGON:(sqlalchemy.types.LargeBinary,buffer,'MULTIPOLYGON'),
+        DATATYPE_BLOB:(sqlalchemy.types.LargeBinary,buffer,'BLOB')
         }
-
-    python_type_map = { 
-        None: str,
-        DATATYPE_TEXT: str,
-        DATATYPE_INTEGER: int,
-        DATATYPE_INTEGER64: int,
-        DATATYPE_REAL: float,
-        DATATYPE_FLOAT: float,
-        DATATYPE_NUMERIC: float,        
-        DATATYPE_DATE: str,
-        DATATYPE_TIME: str,
-        DATATYPE_TIMESTAMP: str,
-        DATATYPE_POINT: buffer,
-        DATATYPE_LINESTRING: buffer,
-        DATATYPE_POLYGON: buffer,
-        DATATYPE_MULTIPOLYGON: buffer,
-        DATATYPE_BLOB: buffer,
-        'varchar': str
-        }
-    
 
     @property
     def sqlalchemy_type(self):
-        return self.sqlalchemy_type_map[self.datatype]
+        return self.types[self.datatype][0]
     
     @property
     def python_type(self):
-        return self.python_type_map[self.datatype]
+        return self.types[self.datatype][1]
+ 
+    @property
+    def schema_type(self):
+        return self.types[self.datatype][2]
         
     def __init__(self,**kwargs):
      
@@ -265,7 +231,8 @@ class Column(Base):
         self.datatype = kwargs.get("datatype",None) 
         self.size = kwargs.get("size",None) 
         self.precision = kwargs.get("precision",None) 
-        self.width = kwargs.get("width",None)      
+        self.width = kwargs.get("width",None)    
+        self.sql = kwargs.get("sql",None)      
         self.flags = kwargs.get("flags",None) 
         self.description = kwargs.get("description",None) 
         self.keywords = kwargs.get("keywords",None) 

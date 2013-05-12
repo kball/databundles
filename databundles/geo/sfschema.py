@@ -22,7 +22,7 @@ ogr_type_map = {
 
 class TableShapefile(object):
 
-    def __init__(self, bundle, path, table, dest_srs=4326, source_srs=None):
+    def __init__(self, bundle, path, table, dest_srs=4326, source_srs=None, name=None):
 
         self.bundle = bundle
         self.path = path
@@ -57,9 +57,13 @@ class TableShapefile(object):
 
         self.type, self.geo_col_names, self.geo_col_pos  = self.figure_feature_type()
 
-
-        
         self.layer = None
+        
+        if name:
+            self.name = name
+        else:
+            self.name = str(self.table.name)
+        
 
 
     def figure_feature_type(self):
@@ -98,13 +102,23 @@ class TableShapefile(object):
             if c.name in ('wkt','wkb','geometry'):
                 continue
             
-            fdfn =  ogr.FieldDefn(str(c.name), ogr_type_map[c.datatype] )
+            dt = c.datatype
+            size = c.size
             
-            if c.datatype == Column.DATATYPE_TEXT and self.format == 'shapefile':
-                if not c.size:
-                    raise ConfigurationError("Column {} must specify a size for shapefile output".format(c.name))
-                fdfn.SetWidth(c.size)
-                
+            if self.format == 'shapefile':
+                if dt == Column.DATATYPE_TIME:
+                    dt = Column.DATATYPE_TEXT
+                    size = 8
+                    
+            
+            fdfn =  ogr.FieldDefn(str(c.name), ogr_type_map[dt] )
+            
+            if self.format == 'shapefile':
+                if dt == Column.DATATYPE_TEXT:
+                    if not size:
+                        raise ConfigurationError("Column {} must specify a size for shapefile output".format(c.name))
+                    fdfn.SetWidth(size)
+
             layer.CreateField(fdfn)
           
     def geo_vals(self, row):
@@ -161,7 +175,11 @@ class TableShapefile(object):
             
         if self.layer is None:
             type_ =  geometry.GetGeometryType() 
-            self.layer = self.ds.CreateLayer( str(self.table.name), self.srs, type_)
+            self.layer = self.ds.CreateLayer( self.name, self.srs, type_)
+            
+            if self.layer is None:
+                raise Exception("Failed to create layer {} ".format(str(self.table.name)))
+            
             self.load_schema(self.layer)
 
         
@@ -169,13 +187,13 @@ class TableShapefile(object):
 
         if isinstance(row, dict):
             for i,c in enumerate(self.table.columns):
-                if i not in self.geo_col_pos:
+                if i not in self.geo_col_pos or c.name in ['x','y','lat','lon']:
                     v = row.get(c.name, False)
                   
-                    if v and isinstance(v, unicode):
+                    if v is not None and isinstance(v, unicode):
                         v = str(v)
                     
-                    if v:
+                    if v is not None:
                         feature.SetField(str(c.name), v)
                       
         else:
@@ -221,7 +239,7 @@ class TableShapefile(object):
             drv = ogr.GetDriverByName( "GeoJSON" )
         elif fmt == 'sqlite' or fmt == 'db':
             drv = ogr.GetDriverByName( "SQLite" )
-            options = ['SPATIALITE=YES', 'INIT_WITH_EPSG=YES','OGR_SQLITE_SYNCHRONOUS=OFF']
+            options = ['SPATIALITE=YES', 'INIT_WITH_EPSG=YES','OGR_SQLITE_SYNCHRONOUS=OFF', 'OGR_SQLITE_CACHE=1024']
         elif fmt == 'shapefile':
             drv = ogr.GetDriverByName( "ESRI Shapefile" )
         else: 

@@ -54,7 +54,6 @@ class ValueWriter(object):
         self.statement = None
         
         if text_factory:
-            print self.db.engine.raw_connection()
             self.db.engine.raw_connection().connection.text_factory = text_factory
 
     def __enter__(self): 
@@ -230,6 +229,9 @@ class TempFile(object):
         self._writer = None
         self._reader = None
         
+    def __enter__(self): 
+        return self
+        
     @property
     def writer(self):
         if self._writer is None:
@@ -266,6 +268,10 @@ class TempFile(object):
                 mode = 'a+'
             else:
                 mode = 'w'
+            
+            if not os.path.exists(self.path):
+                if not os.path.exists(os.path.dirname(self.path)):
+                    os.makedirs(os.path.dirname(self.path))
             
             self.file = open(self.path, mode)
             self._writer = csv.writer(self.file)
@@ -320,6 +326,16 @@ class TempFile(object):
             if hk in self.db._tempfiles:
                 del self.db._tempfiles[hk]
   
+    
+    def __exit__(self, type_, value, traceback):
+        
+        self.close()
+               
+        if type_ is not None:
+            self.bundle.error("Got Exception: "+str(value))
+            return False
+                
+        return self
 
 class DbmFile(object):
     
@@ -806,6 +822,7 @@ class Database(object):
             fd = { x:x for x in self._attachments }
         
             args = (args[0].format(**fd),) + args[1:]
+            
         
         return self.connection.execute(*args, **kwargs)
         

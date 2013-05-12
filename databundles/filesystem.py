@@ -514,7 +514,7 @@ class BundleFilesystem(Filesystem):
         else:
             if isinstance(key, (list,tuple)):
                 def make_key(row):
-                    return tuple([str(row[i]) for i in key])
+                    return tuple([ str(row[i].strip()) if row[i].strip() else None for i in key])
             else:
                 def make_key(row):
                     return row[key]

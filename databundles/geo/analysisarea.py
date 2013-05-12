@@ -361,16 +361,14 @@ class AnalysisArea(object):
         import math
         return math.ceil(v/100.0) * 100
         
-
-    def get_aa_from_envelope(self, envelope, name=None, geoid=None):
+    @classmethod
+    def new_from_envelope(self, envelope_srs,  envelope, name=None, geoid=None, **kwargs):
         """Create a new AA given the envelope from a GDAL geometry."""
         import util
         d_srs =  ogr.osr.SpatialReference()
         d_srs.ImportFromEPSG(4326) # Lat/Long in WGS84
-    
-        trans = ogr.osr.CoordinateTransformation(self.srs, d_srs)
 
-        env1_bb = util.create_bb(envelope, self.srs)
+        env1_bb = util.create_bb(envelope, envelope_srs)
         env1_bb.TransformTo(d_srs)       
         env2_bb = util.create_bb(env1_bb.GetEnvelope(), env1_bb.GetSpatialReference()).GetEnvelope()
 
@@ -386,15 +384,38 @@ class AnalysisArea(object):
              'northmax': self.ru(envelope[3])
              }      
 
+        d = dict(d.items() + kwargs.items())
 
         return AnalysisArea( 
                   name,
                   geoid , # 'name' is used twice, pick the first. 
-                  srid=self.srid,                       
-                  srswkt=self.srswkt,
+                  srid=int(envelope_srs.GetAuthorityCode('PROJCS')),                       
+                  srswkt=envelope_srs.ExportToWkt(),
                   **d)
 
-
+    @property
+    def ll_envelope(self):
+        """Lat/Lon envelope"""
+        return (self.lonmin, self.lonmax, self.latmin, self.latmax)
+    
+    @property
+    def ne_envelope(self):
+        """Norhting/Easting envelope"""
+        return (self.eastmin, self.eastmax, self.northmin, self.northmax)
+    
+    def to_json(self):
+        import json
+        return json.dumps(self.__dict__)
+    
+    @classmethod
+    def from_json(cls, jstr):
+        import json
+        
+        d = json.loads(jstr)
+      
+        return AnalysisArea( **d)
+   
+    
     def __str__(self):
         return ("AnalysisArea    : {name} \n"+
                 "WGS84  Extents  : ({lonmin},{latmin}) ({lonmax},{latmax})\n"+

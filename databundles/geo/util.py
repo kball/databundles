@@ -515,8 +515,7 @@ def segment_points(areas, query, where_template=None):
     dest_srs.ImportFromEPSG(4326)
 
     source_srs = areas.get_srs()
-   
-    
+
     transform = osr.CoordinateTransformation(source_srs, dest_srs)
     
     if where_template is None:

@@ -5,7 +5,7 @@
 /* Project name:                                                          */
 /* Author:                                                                */
 /* Script type:           Database creation script                        */
-/* Created on:            2012-08-30 20:23                                */
+/* Created on:            2013-05-11 19:32                                */
 /* ---------------------------------------------------------------------- */
 
 
@@ -108,6 +108,7 @@ CREATE TABLE columns (
     c_units TEXT,
     c_universe TEXT,
     c_scale REAL,
+    c_sql TEXT,
     c_data TEXT,
     CONSTRAINT PK_columns PRIMARY KEY (c_id),
     CONSTRAINT TUC_columns_1 UNIQUE (c_sequence_id, c_t_id),

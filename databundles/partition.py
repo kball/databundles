@@ -595,24 +595,41 @@ class Partitions(object):
     def new_geo_partition(self, pid=None, **kwargs):
         
         if kwargs.get('shape_file'):
-            return self._new_geo_partition_from_shape( pid, shape_file=kwargs.get('shape_file'))
+            
+            return self._new_geo_partition_from_shape( pid, **kwargs)
         else:
             kwargs['is_geo'] = True
             return self.new_partition(pid, **kwargs)
         
         
-    def _new_geo_partition_from_shape(self, pid, shape_file):
+    def _new_geo_partition_from_shape(self, pid=None,  **kwargs):
         """Load a shape file into a partition as a spatialite database. 
         
         Will also create a schema entry for the table speficified in the 
         table parameter of the  pid, using the fields from the table in the
         shapefile
         """
-        import subprocess, sys
-        import  tempfile, uuid
-        from databundles.database import Database
+        import subprocess
         from databundles.dbexceptions import ConfigurationError
         from databundles.geo.util import get_shapefile_geometry_types
+        
+        shape_file=kwargs.get('shape_file')
+        
+        t_srs=kwargs.get('t_srs')
+        
+        if t_srs:
+            t_srs_opt = '-t_srs EPSG:{}'.format(t_srs)
+        else:
+            t_srs_opt = ''
+            
+        if not pid: 
+            time = kwargs.get('time',None)
+            space = kwargs.get('space', None)
+            table = kwargs.get('table', None)
+            grain = kwargs.get('grain', None)
+            name = kwargs.get('name', None)
+            pid = PartitionIdentity(self.bundle.identity, time=time, space=space, table=table, grain=grain, name=name)
+               
         
         try: extant = self.partitions.find(pid)
         except: extant = None # Fails with ValueError because table does not exist. 
@@ -632,7 +649,9 @@ class Partitions(object):
         self.bundle.log("Checking types in file")
         types, type = get_shapefile_geometry_types(shape_file)
         
-        ogr_create="ogr2ogr -explodecollections -skipfailures -f SQLite {output} -nlt  {type} -nln \"{table}\" {input}  -dsco SPATIALITE=yes"
+        #ogr_create="ogr2ogr -explodecollections -skipfailures -f SQLite {output} -nlt  {type} -nln \"{table}\" {input}  -dsco SPATIALITE=yes"
+        
+        ogr_create="ogr2ogr  -progress -skipfailures -f SQLite {output} -gt 65536 {t_srs} -nlt  {type} -nln \"{table}\" {input}  -dsco SPATIALITE=yes"
         
         if not pid.table:
             raise ValueError("Pid must have a table name")
@@ -652,7 +671,8 @@ class Partitions(object):
         cmd = ogr_create.format(input = shape_file,
                                 output = partition.database.path,
                                 table = table_name,
-                                type = type
+                                type = type,
+                                t_srs = t_srs_opt
                                  )
         
         self.bundle.log("Running: "+ cmd)

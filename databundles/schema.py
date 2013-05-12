@@ -148,12 +148,12 @@ class Schema(object):
         from sqlalchemy import Column as SAColumn
         from sqlalchemy import Table as SATable
         
-        type_map = Column.sqlalchemy_type_map
-
         def translate_type(column):
-            # Creates a lot of unnecessary objects, but spped is not important here.  
-            type_map[Column.DATATYPE_NUMERIC] = sqlalchemy.types.Numeric(column.precision, column.scale),  
-            return type_map[column.datatype]
+            # Creates a lot of unnecessary objects, but speed is not important here.  
+            if column.datatype == Column.DATATYPE_NUMERIC:
+                return sqlalchemy.types.Numeric(column.precision, column.scale)
+            else:
+                return Column.types[column.datatype][0]
         
         metadata = MetaData()
         
@@ -247,6 +247,35 @@ class Schema(object):
         
         return metadata, at
  
+    def generate_indexes(self, table):
+        """Used for adding indexes to geo partitions. Generates index CREATE commands"""
+        
+         
+        indexes = {}
+        uindexes = {}
+        
+        for column in table.columns:
+            # assemble non unique indexes
+            if column.indexes and column.indexes.strip():
+                for cons in column.indexes.strip().split(','):
+                    if cons.strip() not in indexes:
+                        indexes[cons.strip()] = set()
+                    indexes[cons.strip()].add(column)
+
+            # assemble  unique indexes
+            if column.uindexes and column.uindexes.strip():
+                for cons in column.uindexes.strip().split(','):
+                    if cons.strip() not in uindexes:
+                        uindexes[cons.strip()] = set()
+                    uindexes[cons.strip()].add(column)
+
+        for index_name, cols in indexes.items():
+            yield "CREATE INDEX IF NOT EXISTS {} ON parcels ({});".format(index_name, ','.join([c.name for c in cols]) )
+            
+        for index_name, cols in uindexes.items():
+            yield "CREATE UNIQUE INDEX IF NOT EXISTS {} ON parcels ({});".format(index_name, ','.join([c.name for c in cols]) )
+             
+                    
     def create_tables(self):
         '''Create the defined tables as database tables.'''
         self.bundle.database.commit()
@@ -261,21 +290,13 @@ class Schema(object):
         import csv, re
         
         reader  = csv.DictReader(file_)
-    
-        #self.bundle.log("Generating schema from file")
-       
+
         t = None
 
-        #tm = { name.lower():Column.sqlalchemy_type_map[name.lower()] for name in Column.types }
-
-        
         new_table = True
         last_table = None
         line_no = 1; # Accounts for file header. Data starts on line 2
         for row in reader:
-
-            # If the spreadsheet gets downloaded rom Google Spreadsheets, it is
-            # in UTF-8
             
             line_no += 1
             
@@ -351,7 +372,8 @@ class Schema(object):
                                    illegal_value = illegal_value,
                                    size = size,
                                    width = width,
-                                   data=data
+                                   data=data,
+                                   sql=row['sql']
                                    )
 
     def as_csv(self, f=None):
@@ -489,6 +511,9 @@ class {name}(Base):
             if not p.table:
                 continue
   
+            if not self.bundle.config.group('views'):
+                raise ConfigurationError('add_views() requires views to be specified in the configuration file')
+                
             views = self.bundle.config.views.get(p.table.name, False)
  
             if not views:
@@ -502,5 +527,28 @@ class {name}(Base):
                 sql = "CREATE VIEW {} AS {};".format(name, view)
                 p.database.connection.execute(sql)  
         
-    
+    def extract_query(self, source_table, extract_table, extra_columns=None):
+     
+        st = self.table(source_table)
+        
+        et = self.table(extract_table)
+
+        if not et:
+            raise Exception("Didn't find table {} for source {}".format(extract_table, source_table))
+
+        lines = []
+        for col in et.columns: 
+            if col.sql:
+                sql = col.sql
+            else:
+                continue
+
+            lines.append("CAST({sql} AS {type}) AS {col}".format(sql=sql, col=col.name,type=col.schema_type))
+            
+        if extra_columns:
+            lines = lines + extra_columns
+            
+        return  "SELECT " + ',\n'.join(lines) + " FROM {} ".format(st.name)
+     
+  
         
