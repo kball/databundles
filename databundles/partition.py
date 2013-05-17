@@ -136,32 +136,26 @@ class Partition(object):
             clean. If True, delete the database first. Defaults to true. 
         
         '''
-     
+
         if clean:
             self.database.delete()
 
         self.database.create(copy_tables = False)
 
-        if tables is not None:
-        
-            if not isinstance(tables, list):
-                tables = [tables]
-        
-            for table in tables:         
-                self.database.copy_table_from(self.bundle.database,table)
-        elif self.table:
-            self.database.copy_table_from(self.bundle.database,self.table.name)
-            tables = [self.table.name]
-     
-        if tables:
-            for t in tables:
-                if not t in self.database.inspector.get_table_names():
-                    t_meta, table = self.bundle.schema.get_table_meta(t) #@UnusedVariable
-                    t_meta.create_all(bind=self.database.engine)
-    
+        self.add_tables(tables)
+
+    def add_tables(self,tables):
+
+        for t in tables:
+            if not t in self.database.inspector.get_table_names():
+                t_meta, table = self.bundle.schema.get_table_meta(t) #@UnusedVariable
+                t_meta.create_all(bind=self.database.engine)       
 
     def create(self):
-        self.create_with_tables(tables=self.identity.table)
+
+        tables = self.data.get('tables',[])
+
+        self.create_with_tables(tables=tables)
 
 
     @property
@@ -173,6 +167,12 @@ class Partition(object):
         import geo.util
         return geo.util.extents(self.database,self.table.name, where=where)
         
+    def inserter(self, table_or_name=None,**kwargs):
+        
+        if not self.database.exists():
+            self.create()
+
+        return self.database.inserter(table_or_name,**kwargs)
 
     def __repr__(self):
         return "<partition: {}>".format(self.name)
@@ -185,9 +185,9 @@ class GeoPartition(Partition):
     def __init__(self, bundle, record):
         super(GeoPartition, self).__init__(bundle, record)
         from .database import GeoDb
-        
+
         self._db_class = GeoDb
-        
+
     def get_srs_wkt(self):
         
         #
@@ -205,13 +205,15 @@ class GeoPartition(Partition):
         return srs
 
     def create(self, dest_srs=4326, source_srs=None):
-        
+
         from databundles.geo.sfschema import TableShapefile
         
         tsf = TableShapefile(self.bundle, self._db_class.make_path(self), self.identity.table,
                              dest_srs = dest_srs, source_srs = source_srs )
         
         tsf.close()
+        
+        self.add_tables(self.data.get('tables',None))
 
     def convert(self, table_name, progress_f=None):
         """Convert a spatialite geopartition to a regular arg
@@ -540,8 +542,7 @@ class Partitions(object):
         '''Create a new ORM Partrition object, or return one if
         it already exists '''
         from databundles.orm import Partition as OrmPartition, Table
-
-
+     
         s = self.bundle.database.session
    
         if pid.table:
@@ -550,13 +551,28 @@ class Partitions(object):
         else:
             table = None
          
+        # 'tables' are additional tables that are part of the partion ,beyond the one in the identity
+        # Probably a bad idea. 
+        tables = kwargs.get('tables',kwargs.get('table',pid.table if pid else None))
+    
+        if tables and not isinstance(tables, (list,tuple)):
+            tables = [tables]
+    
+        if tables and pid and pid.table and pid.table not in tables:
+            tables = list(tables)
+            tables.append(pid.table)
+         
+        data=kwargs.get('data',{})
+        
+        data['tables'] = tables
+         
         op = OrmPartition(name = pid.name,
              space = pid.space,
              grain = pid.grain, 
              time = pid.time,
              t_id = table.id_ if table else None,
              d_id = self.bundle.identity.id_,
-             data=kwargs.get('data',None),
+             data=data,
              state=kwargs.get('state',None),)  
 
         return op
@@ -568,7 +584,7 @@ class Partitions(object):
         s.query(OrmPartition).delete()
         
     def new_partition(self, pid=None, **kwargs):
-     
+ 
         if not pid: 
             time = kwargs.get('time',None)
             space = kwargs.get('space', None)
@@ -577,7 +593,7 @@ class Partitions(object):
             name = kwargs.get('name', None)
             pid = PartitionIdentity(self.bundle.identity, time=time, space=space, table=table, grain=grain, name=name)
             
-     
+
         extant = self.find_orm(pid, **kwargs).all()
         
         for p in extant:
@@ -588,7 +604,7 @@ class Partitions(object):
         s = self.bundle.database.session
         s.add(op)   
         s.commit()     
-       
+        
         p = self.partition(op, is_geo=kwargs.get('is_geo',None))
         return p
 
@@ -707,10 +723,9 @@ class Partitions(object):
         if tables and pid and pid.table and pid.table not in tables:
             tables.append(partition.identity.table)
 
-      
         partition = self.new_partition(pid, **kwargs)
         
-        if tables:    
+        if tables:   
             partition.create_with_tables(tables)  
 
         return partition;
@@ -728,16 +743,7 @@ class Partitions(object):
     
         if partition:
             return partition
-    
-        tables = kwargs.get('tables',kwargs.get('table',pid.table if pid else None))
-    
-        if tables and not isinstance(tables, (list,tuple)):
-            tables = [tables]
-    
-        if tables and pid and pid.table and pid.table not in tables:
-            tables.append(partition.identity.table)
 
-      
         partition = self.new_geo_partition(pid, **kwargs)
 
         return partition;

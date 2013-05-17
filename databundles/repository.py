@@ -42,6 +42,22 @@ class Repository(object):
         
         self._api =  databundles.client.ckan.Ckan( repo_config.url, repo_config.key)   
         
+        # Look for an S3 filestore
+        
+        if repo_config.get('s3-filestore', False):
+            from databundles.filesystem import S3Cache
+
+            config = repo_config.get('s3-filestore')
+
+            self.filestore =  S3Cache(bucket=config.get('bucket'), 
+                    prefix=config.get('prefix', None),
+                    access_key=config.get('access_key'),
+                    secret=config.get('secret'))
+            
+        else:
+            self.filestore = None
+        
+        
         return self.api
         
    
@@ -88,6 +104,7 @@ class Repository(object):
         done_if = extract_data.get('done_if',False)
  
         if not force and done_if and self._validate_for_expr(done_if, True):
+            path =  extract_data['path'] # for eval
             if eval(done_if): 
                 self.bundle.log("For extract {}, done_if ( {} ) evaluated true"
                          .format(extract_data['_name'], done_if)) 
@@ -134,8 +151,15 @@ class Repository(object):
         else:
             file_ =  os.path.join(tempfile.gettempdir(), str(uuid.uuid4()) )
 
-        if extract_data.get('source_table') and  extract_data.get('extract_table'):
+        if extract_data.get('source_table', False) and  extract_data.get('extract_table', False):
             query = self.bundle.schema.extract_query(extract_data['source_table'],extract_data['extract_table'] )
+
+            where = extract_data.get('extract_where', False)
+            
+            if where:
+                query = query + " WHERE "+where
+            
+            
         else:
             query = extract_data['query']
        
@@ -148,8 +172,13 @@ class Repository(object):
         with open(file_, 'w') as f:
             conn.row_factory = sqlite3.Row
             
-            rows = conn.execute(query)
-            
+            try:
+                rows = conn.execute(query)
+            except:
+                print query
+                raise
+                
+                
             first = rows.fetchone()
             
             if not first:
@@ -164,7 +193,6 @@ class Repository(object):
                 lr()
                 writer.writerow(tuple(row))
 
-  
         return file_       
     
     def _send(self, package, extract_data, file_):
@@ -181,14 +209,34 @@ class Repository(object):
             format = None
         
         name = extract_data.get('name', os.path.basename(file_))
-        
-        r = self.api.add_file_resource(package, file_, 
-                            name=name,
-                            description=extract_data['description'],
-                            content_type = content_type, 
-                            format=format
-                            )
-        
+
+        #
+        # If the filestore exists, write to S3 first, the upload the URL
+        if self.filestore:
+            from databundles.util import md5_for_file
+            urlf = self.filestore.public_url_f()
+            path = self.bundle.identity.path+'/'+name
+
+            # Don't upload if  S3 has the file of the same key and md5
+            md5 =  md5_for_file(file_)
+            if not self.filestore.has(path, md5=md5):
+                self.filestore.put(file_, path, public=True, md5=md5)
+         
+            r = self.api.add_url_resource(package, urlf(path), name,
+                    description=extract_data['description'],
+                    content_type = content_type, 
+                    format=format,
+                    hash=md5
+                    )
+            
+        else:
+            
+            r = self.api.add_file_resource(package, file_, 
+                                name=name,
+                                description=extract_data['description'],
+                                content_type = content_type, 
+                                format=format
+                                )
         
         return r
         
@@ -266,6 +314,7 @@ class Repository(object):
                 partitions = [partition]
             else:
                 l = self.bundle.library
+               
                 r = l.get(partition_name)
                 if r.partition:
                     partitions = [r.partition]
@@ -289,6 +338,7 @@ class Repository(object):
         return out
          
     def _sub(self, data):
+        import datetime
         
         if data.get('aa', False):
             from databundles.geo.analysisarea import get_analysis_area
@@ -301,12 +351,17 @@ class Repository(object):
             
             data = dict(data.items() + aa_d.items())
 
+        data['bundle_name'] = self.bundle.identity.name
+        data['date'] = datetime.datetime.now().date().isoformat()
+
         data['query'] = data.get('query','').format(**data)
+        data['extract_where'] = data.get('extract_where','').format(**data)
         data['title'] = data.get('title','').format(**data)
         data['description'] = data.get('description','').format(**data)
         data['name'] = data.get('name','').format(**data)
         data['path'] = self.bundle.filesystem.path('extracts',format(data['name']))
         data['done_if'] = data.get('done_if','').format(**data)
+        
   
         return data
 

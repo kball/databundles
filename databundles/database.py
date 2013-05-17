@@ -10,11 +10,12 @@ import anydbm
 from databundles.geo.sfschema import TableShapefile
 
 class FeatureInserter(object):
-    def __init__(self, bundle, path, table, dest_srs=4326, source_srs=None):
-        
-        self.bundle = bundle
+    def __init__(self, partition, table, dest_srs=4326, source_srs=None):
 
-        self.sf = TableShapefile(bundle, path, table, dest_srs, source_srs)
+        self.bundle = partition.bundle
+        
+        self.sf = TableShapefile(self.bundle, partition.database.path, table, dest_srs, source_srs)
+        
     
     def __enter__(self):
         return self
@@ -98,7 +99,7 @@ class ValueWriter(object):
 class ValueInserter(ValueWriter):
     '''Inserts arrays of values into  database table'''
     def __init__(self, bundle, table, db, cache_size=50000, text_factory = None, replace=False): 
-        super(ValueInserter, self).__init__(bundle, db, cache_size=50000, text_factory = text_factory)  
+        super(ValueInserter, self).__init__(bundle, db, cache_size=cache_size, text_factory = text_factory)  
    
         self.table = table
         
@@ -110,7 +111,7 @@ class ValueInserter(ValueWriter):
 
 
     def insert(self, values):
-       
+      
         try:
             if isinstance(values, dict):
                 d = values
@@ -123,6 +124,7 @@ class ValueInserter(ValueWriter):
                 
                 self.connection.execute(self.statement, self.cache)
                 self.cache = []
+            
                 
         except (KeyboardInterrupt, SystemExit):
             self.transaction.rollback()
@@ -590,7 +592,7 @@ class Database(object):
         
 
     def inserter(self, table_or_name=None,**kwargs):
-      
+
         if table_or_name is None and self.partition.table is not None:
             table_or_name = self.partition.table
       
@@ -606,8 +608,7 @@ class Database(object):
             
         else:
             table = self.table(table_or_name.name)
-            
-        
+
         return ValueInserter(self.bundle, table , self,**kwargs)
         
     def updater(self, table_or_name=None,**kwargs):
@@ -1031,7 +1032,7 @@ class GeoDb(PartitionDb):
         if table is None and self.partition.identity.table:
             table = self.partition.identity.table
         
-        return FeatureInserter(self.bundle, self.partition.database.path, table, dest_srs, source_srs)
+        return FeatureInserter(self.partition,  table, dest_srs, source_srs)
    
 class BundleDb(Database):
     '''Represents the database version of a bundle that is installed in a library'''

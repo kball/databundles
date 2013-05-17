@@ -224,7 +224,8 @@ class Ckan(object):
 
         description = bundle.config.about.get('description','').format(
                 datetime=datetime.datetime.now().isoformat('T'),
-                date=datetime.date.today().isoformat()
+                date=datetime.date.today().isoformat(),
+                bundle_name = bundle.identity.name
             )
 
         payload['notes'] = description
@@ -408,6 +409,7 @@ class Ckan(object):
         resource = dict(name=name,
                 mimetype=content_type,
                 size=size, 
+                hash=kwargs.get('hash', None),
                 url=url)
         
         for k,v in kwargs.items():

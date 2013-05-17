@@ -22,14 +22,17 @@ def get_analysis_area(library, **kwargs):
     Keyword Arguments:
     
         geoid: The geoid of the analysis area
-        extents_ds: The name of the dependency for the extents dataset. Defaults to 'extents'
+        ependency_name: The name of the dependency for the extents dataset. Defaults to 'places'
      
     :rtype: An `AnalysisArea` object.
     
     """
-    geoid = kwargs.get('geoid')
+    
+    
+    
+    
 
-    extentsds = kwargs.get('extents_ds', 'extents')
+    extentsds = kwargs.get('dependency_name', 'places')
 
     try:
         bundle,_ = library.dep(extentsds)
@@ -50,11 +53,18 @@ def get_analysis_area(library, **kwargs):
     
     s = db.session
     
-    query = (s.query(places_t, spcs_t)
-             .join(spcs_t, spcs_t.columns.spcs_id == places_t.columns.spcs_id)
-             .filter(places_t.columns.geoid == geoid)
-            )
-            
+    if  kwargs.get('geoid', False):
+        geoid = kwargs['geoid']
+        
+        query = (s.query(places_t, spcs_t)
+                 .join(spcs_t, spcs_t.columns.spcs_id == places_t.columns.spcs_id)
+                 .filter(places_t.columns.geoid == geoid)
+                )
+    else:
+        state = kwargs.get('state', False)
+        county = kwargs.get('county', False)
+        place = kwargs.get('place', False)
+   
     row =  query.first()
     
     if not row:

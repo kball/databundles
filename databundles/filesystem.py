@@ -1333,8 +1333,8 @@ class S3Cache(object):
         raise NotImplementedError('Should only use the stream interface. ')
     
   
-    def put(self, source, rel_path):  
-        sink = self.put_stream(rel_path)
+    def put(self, source, rel_path, public=False,  md5=None):  
+        sink = self.put_stream(rel_path, public=public, md5=md5)
         
         copy_file_or_flo(source, sink)
         
@@ -1371,7 +1371,7 @@ class S3Cache(object):
       
     
             
-    def put_stream(self, rel_path):
+    def put_stream(self, rel_path, public=False, md5=None):
         '''Return a flie object that can be written to to send data to S3. 
         This will result in a multi-part upload, possible with each part
         being sent in its own thread '''
@@ -1404,16 +1404,23 @@ class S3Cache(object):
         if self.prefix is not None:
             rel_path = self.prefix+"/"+rel_path
 
+        metadata = {}
+        
+        if md5:
+            metadata['md5'] = md5 # Multipart uploads don't use md5 for etag
+            
         this = self
         
         buffer_size = 5*1024*1024 # Min part size is 5MB
         num_threads = 4
         thread_upload_queue = Queue.Queue(maxsize=50)
         
+        
         for i in range(num_threads):
             t = ThreadUploader(i, thread_upload_queue)
             t.setDaemon(True)
             t.start()
+
 
         class flo:
             '''Object that is returned to the called, for the caller to issue
@@ -1421,7 +1428,7 @@ class S3Cache(object):
        
             def __init__(self):
 
-                self.mp = this.bucket.initiate_multipart_upload(rel_path)
+                self.mp = this.bucket.initiate_multipart_upload(rel_path, metadata=metadata)
                 self.part_number = 1;
                 self.buffer = io.BytesIO()
      
@@ -1445,7 +1452,6 @@ class S3Cache(object):
             
             def close(self):
                
-              
                 if self.buffer.tell() > 0:
                     self._send_buffer()
 
@@ -1457,6 +1463,10 @@ class S3Cache(object):
                 thread_upload_queue.join()  # Wait for all of the threads to exit
                              
                 self.mp.complete_upload()
+                
+                if public:
+                    this.bucket.set_acl('public-read', rel_path)
+                
             
         return flo()
      
@@ -1471,7 +1481,6 @@ class S3Cache(object):
         from boto.s3.key import Key
         
         k = Key(self.bucket)
-
         k.key = rel_path
         k.delete()    
         
@@ -1481,6 +1490,25 @@ class S3Cache(object):
         path = path.strip('/')
         
         raise NotImplementedError() 
+
+    def has(self, rel_path, md5=None):
+        """Return true if the version of the file already exists in the repo"""
+        from boto.s3.key import Key
+
+        if self.prefix is not None:
+            rel_path = self.prefix+"/"+rel_path
+            
+        key = self.bucket.get_key(rel_path)
+       
+        if not key:
+            return False
+        elif not md5:
+            return True
+        elif md5 != key.metadata['md5']:
+            return False
+        else:
+            return True
+      
 
     def public_url_f(self):
         ''' Returns a function that will convert a rel_path into a public URL'''
@@ -1498,6 +1526,7 @@ class S3Cache(object):
         
         return public_url_f_inner
         
+    
     
 
 # Stolen from : https://bitbucket.org/fabian/filechunkio/src/79ba1388ee96/LICENCE?at=default

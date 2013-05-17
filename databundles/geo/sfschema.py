@@ -22,7 +22,7 @@ ogr_type_map = {
 
 class TableShapefile(object):
 
-    def __init__(self, bundle, path, table, dest_srs=4326, source_srs=None, name=None):
+    def __init__(self, bundle, path, table, dest_srs=4326, source_srs=None, name = None):
 
         self.bundle = bundle
         self.path = path
@@ -31,7 +31,14 @@ class TableShapefile(object):
         if not self.table:
             raise ConfigurationError("Didn't find table: {}".format(table))
 
-        basename, extension = os.path.splitext(path)
+        basename, extension = os.path.splitext(self.path)
+
+        if extension[1:] == 'zip':
+            self.compress = True
+            basename, extension = os.path.splitext(basename)
+            self.path = basename+extension
+        else:
+            self.compress = False
 
         if not extension:
             self.format = 'shapefile'
@@ -53,19 +60,27 @@ class TableShapefile(object):
         else:
             self.transform = None
 
-        self.ds = self.create_datasource(path, self.format)
+        self.ds = self.create_datasource(self.path, self.format)
 
         self.type, self.geo_col_names, self.geo_col_pos  = self.figure_feature_type()
 
         self.layer = None
-        
-        if name:
-            self.name = name
-        else:
-            self.name = str(self.table.name)
-        
 
-
+        self.name = basename.split('/')[-1]
+      
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, type_, value, traceback):
+        
+        self.close()
+               
+        if type_ is not None:
+            self.bundle.error("Got Exception: "+str(value))
+            return False
+                
+        return self
+      
     def figure_feature_type(self):
         
         typ = None
@@ -178,7 +193,7 @@ class TableShapefile(object):
             self.layer = self.ds.CreateLayer( self.name, self.srs, type_)
             
             if self.layer is None:
-                raise Exception("Failed to create layer {} ".format(str(self.table.name)))
+                raise Exception("Failed to create layer {} ".format(self.name))
             
             self.load_schema(self.layer)
 
@@ -230,6 +245,7 @@ class TableShapefile(object):
     
     def create_datasource(self, path, fmt):
         import os
+        from databundles.util import rm_rf
 
         options = []
         
@@ -239,7 +255,8 @@ class TableShapefile(object):
             drv = ogr.GetDriverByName( "GeoJSON" )
         elif fmt == 'sqlite' or fmt == 'db':
             drv = ogr.GetDriverByName( "SQLite" )
-            options = ['SPATIALITE=YES', 'INIT_WITH_EPSG=YES','OGR_SQLITE_SYNCHRONOUS=OFF', 'OGR_SQLITE_CACHE=1024']
+            options = ['SPATIALITE=YES', 'INIT_WITH_EPSG=YES','OGR_SQLITE_SYNCHRONOUS=OFF', 
+                       'OGR_SQLITE_CACHE=1024', '-gt 50000', 'COMPRESS_GEOM=yes']
         elif fmt == 'shapefile':
             drv = ogr.GetDriverByName( "ESRI Shapefile" )
         else: 
@@ -248,22 +265,41 @@ class TableShapefile(object):
         if not os.path.exists(os.path.dirname(path)):
             os.makedirs(os.path.dirname(path))
         
+        if os.path.exists(path):
+            if os.path.isdir(path):
+                rm_rf(path)
+            else:
+                os.remove(path)
+        
         ds = drv.CreateDataSource(path, options=options)
          
-        if ds is None:
-            import os
-            self.bundle.error("Failed to create datasource. Will delete and try again: {}".format(path))
         
-            if os.path.exists(path):
-                os.remove(path)
-
-            ds = drv.CreateDataSource(path, options=options)
-            
-            if ds is None:
-                raise Exception("Failed to create datasource: {}".format(path))
+        if ds is None:
+            raise Exception("Failed to create datasource: {}".format(path))
 
         return ds
     
+    def compress_file(self):
+        import zipfile
+        import os
+
+        with zipfile.ZipFile(self.path+'.zip', 'w') as zf:
+            if os.path.isdir(self.path):
+                for f in os.listdir(self.path):
+                    absf = os.path.join(self.path,f)
+                    if os.path.isfile(absf):
+                        zf.write(absf, self.name+'/'+f)
+            else:
+                zf.write(self.path)
+
     def close(self):
-        self.ds.Destroy()
+        
+        self.ds.SyncToDisk()
+        self.ds.Release()
+        
+        
+        if self.compress:
+            self.compress_file()
+        
+        
 

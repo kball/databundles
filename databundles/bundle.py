@@ -112,6 +112,12 @@ class Bundle(object):
         return self.database.query(*args, **kwargs)
     
     
+    @property
+    def web(self):
+        """Return a web object for creating web pages about this bundle"""
+        from databundles.web import Web
+        return Web(self)
+    
 class DbBundle(Bundle):
 
     def __init__(self, database_file):
@@ -517,7 +523,7 @@ class BuildBundle(Bundle):
         return True
 
     def prepare(self):
-        
+
         if not self.database.exists():
             self.database.create()
 

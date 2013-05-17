@@ -297,7 +297,6 @@ class Schema(object):
         last_table = None
         line_no = 1; # Accounts for file header. Data starts on line 2
         for row in reader:
-            
             line_no += 1
             
             if not row.get('column', False) and not row.get('table', False):
@@ -373,7 +372,7 @@ class Schema(object):
                                    size = size,
                                    width = width,
                                    data=data,
-                                   sql=row['sql']
+                                   sql=row.get('sql',None)
                                    )
 
     def as_csv(self, f=None):
