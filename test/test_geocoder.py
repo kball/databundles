@@ -8,14 +8,9 @@ import unittest
 from  testbundle.bundle import Bundle
 from databundles.run import  RunConfig
 from test_base import  TestBase
+import os
 
-addresses =[
-( '1200  BLOCK NATIONAL CITY BOULEVARD', 'NATIONAL CITY' ),
-( '1600  BLOCK GUY STREET', 'SAN DIEGO' ),
-( '900  BLOCK NATIONAL CITY BOULEVARD', 'NATIONAL CITY' ),
-( '6700  BLOCK BENSON AVENUE', 'SAN DIEGO' ),
-]
-        
+     
 class Test(TestBase):
  
     def setUp(self):
@@ -29,14 +24,16 @@ class Test(TestBase):
     def test_basic(self):
         from pprint import pprint
         from databundles.geo.geocoder import Geocoder               
-        g = Geocoder(self.bundle.library, addresses_ds='geoaddresses')               
+        g = Geocoder(self.bundle.library)               
+                     
+        max = 10
                           
-    
-        for block_address, city in addresses:
-
-            candidates = g.geocode_semiblock(block_address, city, 'CA')
-            
-            pprint(candidates)
+        with open(os.path.join(os.path.dirname(__file__),'test_geocoder_addresses.txt')) as f:
+            for line in f:
+                max -= 1
+                if not max:
+                    break;
+                
 
 
     def write_error_row(self, code, arg, p, w, address, city):

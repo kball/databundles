@@ -97,15 +97,21 @@ class TableShapefile(object):
                 geo_col_pos[0] = i
                 return typ ,  geo_col_names,    geo_col_pos 
      
+        vals = 0 
         for i,c in enumerate(self.table.columns):       
             if c.name == 'lat' or c.name == 'y':
                 typ = 'point'
                 geo_col_names[1] = c.name
                 geo_col_pos[1] = i
+                vals += 1
             elif  c.name == 'lon' or c.name == 'x':
                 typ = 'point'
                 geo_col_names[0] = c.name
                 geo_col_pos[0] = i
+                vals += 1
+                
+            if vals == 2:
+                break
           
         return typ ,  geo_col_names,    geo_col_pos 
                 
@@ -205,9 +211,9 @@ class TableShapefile(object):
                 if i not in self.geo_col_pos or c.name in ['x','y','lat','lon']:
                     v = row.get(c.name, False)
                   
-                    if v is not None and isinstance(v, unicode):
+                    if v is not None and  not isinstance(v, (int, float)):
                         v = str(v)
-                    
+
                     if v is not None:
                         feature.SetField(str(c.name), v)
                       

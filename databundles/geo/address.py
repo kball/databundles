@@ -16,172 +16,33 @@ import sys
 from functools import partial
 import tokenize, token
 
-def init_rdp():
-    cmb = partial(Combine, joinString=" ", adjacent=False )
-    
-    
-    street_suffixes = {}
-    suffix_keywords = []
-    with open(os.path.join(os.path.dirname(sys.modules[__name__].__file__),'support','suffixes.csv'), 'rb') as f:
-        reader = csv.reader(f)
-        for row in reader:
-            street_suffixes[row[0]] =  row[1]
-            suffix_keywords.append(Keyword(row[0], caseless=True) + Optional(Suppress(".")))
-    
+class ParseError(Exception):
+    pass
+
+class Parser(object):
+
+    def __init__(self, cities = None):
+        '''
+        Constructor
+        '''
+        import re
+
+        self.street_types, self.highway_words , self.highway_regex = self.init_street_types()
+        self.suite_words, self.suite_regex = self.init_suite_types()
         
-    #
-    # From http://pyparsing.wikispaces.com/file/view/streetAddressParser.py
-    #
-    
-    # define number as a set of words
-    units = oneOf("Zero One Two Three Four Five Six Seven Eight Nine Ten"
-              "Eleven Twelve Thirteen Fourteen Fifteen Sixteen Seventeen Eighteen Nineteen",caseless=True)
-    tens = oneOf("Ten Twenty Thirty Forty Fourty Fifty Sixty Seventy Eighty Ninety",caseless=True)
-    hundred = CaselessLiteral("Hundred")
-    thousand = CaselessLiteral("Thousand")
-    OPT_DASH = Optional("-")
-    
-    numberword = ((( units + OPT_DASH + Optional(thousand) + OPT_DASH + 
-                      Optional(units + OPT_DASH + hundred) + OPT_DASH + 
-                      Optional(tens)) ^ tens ) 
-                   + OPT_DASH + Optional(units) )
-    
-    # number can be any of the forms 123, 21B, 222-A or 23 1/2
-    housenumber = (
-        originalTextFor(
-                        numberword | 
-                        Combine(Word(nums) + Optional(OPT_DASH + oneOf(list(alphas))+FollowedBy(White()))) + Optional(OPT_DASH + "1/2")
-        ).setResultsName("number").setName('house_number') +
-        Suppress(Optional(Word(nums))) # SANDAG crime addresses have this odd extra 0          
-    )
-    
-    
-    blocknumber = (housenumber + Suppress("block")).setResultsName("blocknumber")
-    
-    numberSuffix = (
-                Suppress(Optional(" ")) + 
-                (CaselessLiteral("st") ^ CaselessLiteral("th") ^ CaselessLiteral("nd") ^ CaselessLiteral("rd"))
-                +FollowedBy(White())
-                ).setName("numberSuffix")
-    
-    streetnumber = originalTextFor( Word(nums) + Optional(OPT_DASH + "1/2") + Optional(numberSuffix) ) 
-    
-    
-    # types of streets 
-    type_suffix = (
-        Combine( MatchFirst(suffix_keywords)) + ~FollowedBy(Word(alphas))
-    ).setParseAction(lambda x : street_suffixes[x[0]].lower())
-    
-    
-    nsew = (
-            CaselessKeyword('North') ^ CaselessKeyword('South') ^  CaselessKeyword('East') ^ CaselessKeyword('West') ^
-            CaselessKeyword('NE') ^ CaselessKeyword('NW') ^  CaselessKeyword('SE') ^ CaselessKeyword('SW')  ^
-            CaselessKeyword('N') ^ CaselessKeyword('S') ^  CaselessKeyword('E') ^ CaselessKeyword('W')
-            ) + Suppress(Optional("."))+ ~FollowedBy(type_suffix)
-    
-    # Wilbur ave
-    # Wild Burr Ave
-    
-    simple_named_street = cmb(Optional(nsew) + ~nsew + OneOrMore(~type_suffix+Word(alphas+'-')))
-    
-    numbered_street = (
-        cmb( Optional(nsew) + Combine(Word(nums) + Optional(OPT_DASH + "1/2") + Optional(numberSuffix)))
-    )
-    
-    direction_street =  oneOf("North South East West").setName('direction_street')
-    
-    short_numbered_highway = cmb(
-        (CaselessLiteral('SR').setParseAction(replaceWith('Highway')) | 
-         CaselessLiteral('I').setParseAction(replaceWith('Interstate')) )+
-        Suppress(Optional(White())+Optional(Literal("-"))+Optional(White()))+
-        Word(nums) 
-    ) + Suppress(Optional(
-        CaselessKeyword('nb') | # No idea what this is. From "I - 5 Nb" on Camp Pendelton
-        CaselessKeyword('business')
-    ))
-    
-    highway_words = (Word('Highway') | Word('hwy'))
-    
-    trailing_number_highway = cmb(               
-        ZeroOrMore( ~highway_words + Word(alphas) ) +   
-        highway_words +
-        Word(nums)                 
-    )
-    
-    def set_street_type(s, loc, toks):
-        toks['street_type'] = 'highway'
-    
-    streetName =   (                
-        (
-         short_numbered_highway |
-         trailing_number_highway 
-        )("street_name").setParseAction(set_street_type)  
-        |
-        cmb(
-         numbered_street |
-         simple_named_street 
-        )("street_name") +  Optional(type_suffix("street_type")) 
-    )
-    
-    
-    # PO Box handling
-    acronym = lambda s : Regex(r"\.?\s*".join(s)+r"\.?")
-    poBoxRef = (
-                (
-                 acronym("PO") | 
-                 acronym("APO") | 
-                 acronym("AFP")
-                ) + Optional(CaselessLiteral("BOX"))
-               ) + Word(alphanums)("boxnumber")
-    
-    
-    intersection = ( streetName +  ( '@' | Keyword("and",caseless=True)) + streetName )
-    
-    streetAddress = ( poBoxRef("street") ^ 
-                      blocknumber + streetName ^ 
-                      housenumber + streetName ^ 
-                      streetName ^ 
-                      intersection 
-                    ) + Optional(Suppress(','))
-    
-    streetAddress = housenumber + streetName
-    
-    # how to add Apt, Suite, etc.
-    suiteRef = (
-                oneOf("Suite Ste Apt Apartment Room Rm # Unit", caseless=True) + 
-                Optional(".") + 
-                Word(alphanums+'-')("suitenumber"))
-    
-    #streetAddress = streetAddress + Optional(Suppress(',')) + Optional(suiteRef("suite"))
-    
-    
-    city = Word(alphanums+ " "+"-").setResultsName("city") + Optional(Suppress(','))
-    
-    state = Word(alphanums).setResultsName("state") + Optional(Suppress(','))
-    
-    zipCode = Regex("\d{5}(?:[-\s]\d{4})?").setResultsName("zipCode")
-    
-    address = (
-              streetAddress ^
-              streetAddress + city ^
-              streetAddress + city + state ^
-              streetAddress + city + state + zipCode 
-    
-            ) + Optional(Optional(Suppress(',')) + "USA") # Added by google geocoder100
+        self.zip_regex = re.compile(r'^(\d{5}(\-\d{4})?)$')
 
+        # Punting on the full state regex for now. 
+        self.state_regex = re.compile(r'^(ca)$')
 
-    return address, streetName
-
-street_types = None
-highway_words = None,
-highway_regex = None,
-def init_street_types():
-    import re
-    
-    global street_types, highway_words, highway_regex
-    
-    if not street_types:
+        if cities:
+            self.city_words, self.city_regex = self.init__cities(cities)
         
+        self.scanner  = Scanner(self)
+        
+    def init_street_types(self):
+        import re
+
         street_types = {}
         
         with open(os.path.join(os.path.dirname(sys.modules[__name__].__file__),'support','suffixes.csv'), 'rb') as f:
@@ -191,16 +52,13 @@ def init_street_types():
             
         highway_words = [ k for k,v in street_types.items() if v == 'hwy']
         highway_regex = re.compile(r'\b(?:' + '|'.join(highway_words) + r')\b')
-
-    return street_types, highway_words, highway_regex
-
-suite_words = None
-suite_regex = None
-def init_suite_types():
-    import re
-    global suite_words, suite_regex
     
-    if not suite_words:
+        return street_types, highway_words, highway_regex
+    
+
+    def init_suite_types(self):
+        import re
+
         suite_words = ['suite','ste',
                        'apt','apartment',
                        'room','rm',
@@ -210,36 +68,25 @@ def init_suite_types():
 
         suite_regex = re.compile(r'\b(?:' + '|'.join(suite_words) + r')\b')
 
-    return suite_words, suite_regex
-
-class ParseError(Exception):
-    pass
-
-class Parser(object):
-
-    def __init__(self):
-        '''
-        Constructor
-        '''
-        pass
+        return suite_words, suite_regex
     
-        self.rdp  = init_rdp()
+
 
     def parse(self, addrstr):
      
         if not addrstr.strip():
             return False
            
-        bas =  addrstr.split('/')
+        bas =  addrstr.split(' / ')
      
         if len(bas) == 0:
             return False
         elif len(bas) == 1:
-            return ParserState(addrstr).parse()
+            return ParserState(self, addrstr).parse()
         else:
-            ps1 = ParserState(bas[0]).parse()
+            ps1 = ParserState(self, bas[0]).parse()
             if bas[1]:
-                ps2 = ParserState(bas[1]).parse()
+                ps2 = ParserState(self, bas[1]).parse()
                 ps1.cross_street = ps2
                 
         
@@ -275,17 +122,30 @@ class Parser(object):
         return p
   
     
-class Scanner():
+class Scanner(object):
   
     END = 0
     WORD = 1
-    NUMBER = 2
+    PHRASE = 2
+    NUMBER = 4
+    ALPHANUMBER = 5
+    MULTINUMBER = 6
+    FRACTIONNUMBER = 7
+    CONJUNCTION = 96
+    SUITEINTRO = 97
+    COMMA = 98
     OTHER = 99
   
     types = {
       END : 'END',
       WORD: 'WORD',
+      SUITEINTRO: 'SUITEINTRO',
       NUMBER: 'NUMBER',
+      ALPHANUMBER: 'ALPHANUMBER',
+      MULTINUMBER: 'MULTINUMBER',
+      FRACTIONNUMBER: 'FRACTIONNUMBER',
+      CONJUNCTION: 'CONJUNCTION',
+      COMMA: 'COMMA',
       OTHER: 'OTHER'
     }
   
@@ -294,21 +154,72 @@ class Scanner():
         return (Scanner.WORD, token.lower().strip('.'))
     
     @staticmethod 
+    def s_phrase(scanner, token): 
+        """A Comma delimited word phrase"""
+        return (Scanner.PHRASE,token.lower().strip(',').strip())
+   
+    @staticmethod 
+    def s_suiteintro(scanner, token): 
+        return (Scanner.SUITEINTRO,token.lower().strip(',').strip())
+    
+    
+    @staticmethod 
     def s_number(scanner, token): 
         return (Scanner.NUMBER,token)
-    
+
+    @staticmethod 
+    def s_alphanumber(scanner, token): 
+        return (Scanner.ALPHANUMBER,token)
+
+    @staticmethod 
+    def s_fractionnumber(scanner, token): 
+        import re
+        
+        t1, t2 = re.split(r'\s*[\/]\s*',token,1)
+        
+        return (Scanner.MULTINUMBER,'{}/{}'.format(t1,t2))
+
+    @staticmethod 
+    def s_multinumber(scanner, token): 
+        import re
+        
+        t1, t2 = re.split(r'\s*[\&\/\-]\s*',token,1)
+        
+        return (Scanner.MULTINUMBER,'{}-{}'.format(t1,t2))
+
     @staticmethod
     def s_other(scanner, token): 
         return (Scanner.OTHER, token.lower().strip())
 
-    def __init__(self):
+    @staticmethod
+    def s_comma(scanner, token): 
+        return (Scanner.COMMA, '')
+
+    @staticmethod
+    def s_conjunction(scanner, token): 
+        return (Scanner.CONJUNCTION, '')
+
+    
+
+    def __init__(self, parser):
         import re
         
+        self.parser = parser
+        
+        suite_regex = r'(' + '|'.join(self.parser.suite_words) + r')'
+
         self.scanner = re.Scanner([
             (r"\s+", None),
-            (r"[a-zA-Z\.\-]+", self.s_word),
+            (suite_regex, self.s_suiteintro),
+            (r"\d+\s*[\/]\s*\d+", self.s_fractionnumber),
+            (r"[a-zA-Z]*\d+[a-zA-Z]*\s*[\&\-]\s*[a-zA-Z]*\d+[a-zA-Z]*", self.s_multinumber),
+            (r"[a-zA-Z\.\-\'\`]+", self.s_word),
+            (r"\d+[a-zA-Z]+", self.s_alphanumber),
+            (r"[a-zA-Z]+\d+", self.s_alphanumber),
             (r"\d+", self.s_number),
-            (r".+", self.s_other),
+            (r",", self.s_comma),
+            (r"&", self.s_conjunction),
+            (r".+\b", self.s_other),
         ])
 
     def scan(self, s):
@@ -318,18 +229,20 @@ class Scanner():
 class ParserState(object):
     
     
-        def __init__(self, s):
+        def __init__(self, parser,  s):
             '''
             Constructor
             '''
-            import StringIO
+            import re
+            
+            self.parser = parser
         
             self.input = s
             
             self.tokens = []
-            s = Scanner()
-            self.tokens, rest = s.scan(self.input)
-       
+            
+            self.tokens, rest = self.parser.scanner.scan(self.input)
+
             self.tokens.append( (Scanner.END, ''))
 
             self._saved_tokens = []
@@ -340,26 +253,31 @@ class ParserState(object):
             self.end = None
             self.line = None
 
-            self.street_types,self.highway_words,self.highway_regex  = init_street_types()
-            self.suite_words,self.suite_regex  = init_suite_types()
-
             self.number = None
+            self.multinumber = None
+            self.fraction = None
             self.is_block = False
             self.street_direction = None
             self.street_name = None
             self.street_type = None
             self.suite = None
+            self.zip = None
+            self.state = None
+            self.city = None
             self.cross_street = None
+
 
         def __str__(self):
 
-            a = " ".join([ str(i).title() for i in [self.number, self.street_direction, self.street_name, self.street_type ] if i ])
+            a = " ".join([ str(i).title() for i in [self.number, self.street_direction, 
+                                                    self.street_name, self.street_type,
+                                                    self.state, self.zip ] if i ])
             
             if self.cross_street:
                 return a + " / "+str(self.cross_street)
             else:
                 return a
-            
+
         @property
         def dir_street(self):
             """Return all components of the street name as a string, excluding the number and type. Include number
@@ -396,10 +314,16 @@ class ParserState(object):
             
             return {
                     'number': self.number,
+                    'multinumber': self.multinumber,
+                    'fraction' : self.fraction, 
+                    'suite' : self.suite, 
                     'is_block': self.is_block,
                     'street_name':self.street_name,
                     'street_direction':self.street_direction,
-                    'street_type':self.street_type
+                    'street_type':self.street_type,
+                    'city':self.city,
+                    'state':self.state,
+                    'zip':self.zip
                     }
         
         def next(self, location = 0):
@@ -410,8 +334,13 @@ class ParserState(object):
                 return Scanner.END, None
 
         def unshift(self,type, token):
-            """Put a toekn back on the front of the token list. """
+            """Put a token back on the front of the token list. """
             self.tokens = [(type, token)] + self.tokens
+            self.ttype, self.toks = (type, token)
+
+        def put(self,pos, type, token):
+            """Put a token back at a given  position. """
+            self.tokens = self.tokens[0:pos] + [(type, token)] + self.tokens[pos:]
             self.ttype, self.toks = (type, token)
 
         def pop(self):
@@ -421,48 +350,69 @@ class ParserState(object):
         def peek(self, location=0):
             """Look at and item without removing it. Use LAST to peek at the end"""
             try:
-                ttype, toks = self.tokens[location]
-                return int(ttype), toks
+                try:
+                    ttype, toks = self.tokens[location]
+                    return int(ttype), toks
+                except IndexError:
+                    return Scanner.END, None       
             except StopIteration:
                 return Scanner.END, None       
 
         def has(self, p):
             import re
             """Return true if the remainder of the string has the given token. 
-            p may be a string or a rexex. """
+            p may be a string, rexex or integer. 
+            
+                p, string: a string token value 
+                p, regex: a regularexpresstion to match to the toekn value
+                p, integer: a token type
+            
+            """
 
             if isinstance(p, basestring):
                 return str(p) in [ str(toks) for _, toks in self.tokens  ]
+            elif isinstance(p, int):
+                return p in [ type_ for type_, _ in self.tokens  ]
             else:
-                return len([ str(toks) for _, toks in self.tokens if re.match(p,str(toks)) ]) > 0
+                matches = [ str(toks) for _, toks in self.tokens if re.search(p,str(toks)) ]
+                return len(matches) > 0
 
-        def find(self,p):
+        def find(self,p, reverse=False):
             """Return the position in the remining tokens of the first token that matches the
-            string or regex"""
+            string, integer or regex"""
             import re
             
             if isinstance(p, basestring):
                 def eq(x):
-                    return x == p
+                    return x[1] == p
+            elif isinstance(p, int):
+                def eq(x):
+                    return x[0] == p
             else:
                 def eq(x):
-                    return re.match(p,str(x))
+                    return re.search(p,str(x[1]))
             
-            for i,t in enumerate(self.tokens):
-                if eq(t[1]):
-                    return i
+            if not reverse:
+                for i,t in enumerate(self.tokens):
+                    if eq(t):
+                        return i
+            else:
+                for i,t in reversed(list(enumerate(self.tokens))):
+                    if eq(t):
+                        return i
                 
             return False
               
-        def pluck(self,p):
+        def pluck(self,p, reverse = False):
             """Remove and return from the remaining tokens the first token that matches the string or regex"""
             
-            p = self.find(p)
+            p = self.find(p, reverse)
             
             if p is False:
                 return False
             
             return self.next(p)
+        
         
         def save(self):
             """Save the current set of remaining tokens, to restore later"""
@@ -488,14 +438,31 @@ class ParserState(object):
             
         
         def parse(self):
-
+            import re 
             #
             # Start with the number
             #
- 
+
             if self.peek()[0] == Scanner.NUMBER: 
                 self.number = int(self.next()[1])
+                
+            elif self.peek()[0] == Scanner.MULTINUMBER: 
+                self.multinumber = self.next()[1]
+                
+            elif self.peek()[0] == Scanner.ALPHANUMBER: 
+                matches = re.match(r'(\d+)([a-zA-Z]+)',self.next()[1] )
+                self.number = int(matches.group(1))
+                self.suite =matches.group(2)
   
+  
+            #
+            # Fractions on the house number
+            #
+            
+            if self.peek()[0] == Scanner.FRACTIONNUMBER: 
+                self.fraction = self.next()[1]
+                
+            
             #
             # Remove "block" if it exists. In the SANDAG crime dataset, 
             # There are many entries with "BLOCK" twice. 
@@ -508,26 +475,94 @@ class ParserState(object):
                 else: 
                     break
                 
+            #
+            # Remove a zip, or zip + 4. We've already removed a leading
+            # house number, so we shouldn't get matches for 5 digit house numbers
+            #
+            
+            if self.has(self.parser.zip_regex):
+                t = self.pluck(self.parser.zip_regex, reverse=True)
+                if t:
+                    self.zip = t[1]
+                
+            #
+            #  Remove a state code, if it is the last
+            #
+            if self.has(self.parser.state_regex):
+                if self.parser.state_regex.match(self.peek(self.LAST)[1]):
+                    t = self.pop()
+                    self.state = t[1]
+    
+                    if self.peek(self.LAST)[0] == self.parser.scanner.COMMA:
+                        self.pop()
+              
+            #
+            # Extract complex suite codes. 
+            #
+       
+            if self.has(self.parser.scanner.SUITEINTRO):
+                p = self.find(self.parser.scanner.SUITEINTRO)
+                o = []
+                while True:
+                    t = self.next(p)
+
+                    if t[0] not in (Scanner.SUITEINTRO,
+                                    Scanner.NUMBER, 
+                                    Scanner.MULTINUMBER,
+                                    Scanner.ALPHANUMBER):
+                        break
+                                            
+                        
+                    elif t[0] != self.parser.scanner.SUITEINTRO:
+                        o.append(t[1])
+                        
+                if t[0] != self.parser.scanner.COMMA:
+                    self.put(p, *t)
+                    
+                self.suite = ' '.join(reversed(o))   
+                
+            #
+            # Comma delimited strings at the end are usually the city
+            #
+
+            if self.has(self.parser.scanner.COMMA):
+                p = self.find(self.parser.scanner.COMMA, reverse = True)
+   
+                o = []
+                while True:
+                    t = self.next(p)
+                    if t[0] == self.parser.scanner.END:
+                        self.put(p, *t)
+                        break
+                    elif t[0] != self.parser.scanner.COMMA:
+                        o.append(t[1])
+                        
+                self.city = ' '.join(o)
+                
             # Pull a suite, unit, room identifier off the end. 
-            if self.has(self.suite_regex):
+            if self.has(self.parser.suite_regex):
+
                 suite_names = []
                 
                 while True:
                     r = self.pop()
                     
-                    if self.suite_regex.match(r[1]):
+                    if self.parser.suite_regex.match(r[1]):
                         break
                     else:
                         suite_names.append(r[1])
-                self.suite = ' '.join(suite_names)
+                self.suite = ' '.join(reversed(suite_names))
+
+
 
             #
             # See if we have a street type as the last item
             #
+
             ttype, last_toks = self.peek(self.LAST)
            
-            if last_toks.lower() in self.street_types:
-                self.street_type = self.street_types[last_toks.lower()]
+            if last_toks.lower() in self.parser.street_types:
+                self.street_type = self.parser.street_types[last_toks.lower()]
                 self.pop()
 
             self.parse_direction() # N, S, E, W
@@ -546,7 +581,7 @@ class ParserState(object):
         def parse_highway(self):
             import re
 
-            if not self.has(self.highway_regex):
+            if not self.has(self.parser.highway_regex):
                 return False
 
             self.save()
@@ -556,7 +591,7 @@ class ParserState(object):
             hwy_word = None
             number = None
             for ttype, toks in self.rest():
-                if not re.match(self.highway_regex, toks):
+                if not re.match(self.parser.highway_regex, toks):
    
                     if ttype == Scanner.NUMBER:
                         number = toks
@@ -609,8 +644,10 @@ class ParserState(object):
 
         def parse_numbered_street(self):
             '''Parse a street that is named with a number'''
+
             ttype, toks = self.next()
-            if ttype != Scanner.NUMBER:
+            
+            if ttype not in (Scanner.NUMBER, Scanner.ALPHANUMBER):
                 self.unshift(ttype, toks)
                 return
        
@@ -623,7 +660,7 @@ class ParserState(object):
             else:
                 self.unshift(ttype, toks)
                 
-            self.street_name = (str(int(number))+ordinal).title()
+            self.street_name = (str(number)+ordinal).title()
 
             return True
         

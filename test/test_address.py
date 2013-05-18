@@ -125,14 +125,72 @@ class TestBase(unittest.TestCase):
              ('10700 Jamacha , SAN DIEGO, CA',(10700,'Jamacha',None,'SAN DIEGO')),  
              ('10700 block Jamacha , SAN DIEGO, CA',(10700,'Jamacha',None,'SAN DIEGO')),    
         ])
+        
+        
+        self.header = ['input', 'number','multinumber','fraction','street_direction',
+                  'street_name', 'street_type','suite', 'city',  'state','zip', 'is_block']
 
 
     def tearDown(self):
         pass
 
+    
 
-    def test_altparser(self):
-        from databundles.geo.address import ParserState, Scanner, init_street_types
+    def x_test_license_addresses(self):
+        from pprint import pprint 
+        import os           
+        from databundles.geo.address import Parser
+        import csv
+
+        parser = Parser()
+    
+
+    
+        success = 0
+        failure = 0
+        total = 0
+        f_input =  os.path.join(os.path.dirname(__file__),'support','test_geocoder_addresses.txt')
+        f_output =  os.path.join(os.path.dirname(__file__),'support','test_geocoder_addresses.out.csv')
+        with open(f_output, 'w') as out:
+            writer = csv.DictWriter(out, self.header)
+            writer.writeheader()
+            with open(f_input) as f:
+                for line in f:
+             
+                    total += 1
+             
+                    print '----'
+                    print line
+             
+                    try: 
+                        ps = parser.parse(line)
+                        if not ps:
+                            failure += 1
+                            continue
+                    except Exception as e:
+                        print "ERROR", e
+                        failure += 1
+                        continue
+
+                    d = ps.as_dict()
+                    d['input'] = line.strip()
+                    writer.writerow(d)
+                    
+                    print d
+                    print
+                        
+                        
+                    if not ps.city:
+                        failure += 1
+                    else:
+ 
+                        success += 1
+                
+            print 
+            print "total={} success={} failure={} rate={}".format(total, success, failure, round((float(failure)/float(total)*100), 3))
+
+    def x_test_altparser(self):
+        from databundles.geo.address import ParserState
      
         for street, check in self.streets.items():
         
@@ -149,8 +207,12 @@ class TestBase(unittest.TestCase):
         
         
     def test_errors(self):
-        from databundles.geo.address import ParserState
+        from databundles.geo.address import Parser
         import imp
+        import os
+        import csv
+
+        parser = Parser()
 
         bundle = imp.load_source('bundle', 
             '/Users/eric/proj/Bundles/src/civicdata/sandiego.gov/sandiego.gov-businesses-orig/bundle.py')
@@ -158,94 +220,18 @@ class TestBase(unittest.TestCase):
 
         p = b.partitions.find(table='businesses', grain='errors')
 
-        for row in p.query("SELECT * FROM businesses"):
-            ps = ParserState(row['address'])
-         
-            ps.parse()
-            
-            print ps
-            
+        f_output =  os.path.join(os.path.dirname(__file__),'support','business_addresses.out.csv')
+        with open(f_output, 'w') as out:
+            writer = csv.DictWriter(out, self.header)
+            writer.writeheader()
 
-    def x_test_streets(self):
-        from databundles.geo.address import  init_rdp
-        _, streetName = init_rdp()
-
-        for a,out in self.streets.items():
-            try:
-                p = streetName.parseString(a) #@UndefinedVariable
-            except:
-                print a
-                print '123456789_'*8
-                raise
-            
-            try:
-                self.assertEquals(out[0],str(p['street_name']))
-                self.assertEquals(out[1],p.get('street_type'))
-            except:
-                print p.dump()
-                raise
-
-
-    def x_test_addresses(self):
-        from databundles.geo.address import Parser
-        from collections import OrderedDict
-
-        ap = Parser()
-
-        for a,out in self.addresses.items():
-            try:
-                p = ap.parse(a) #@UndefinedVariable
-            except:
-                print a
-                print '123456789_'*8
-                raise
-        
-            try:
-                self.assertEquals(out[0],int(p['number']))
-                self.assertEquals(out[1],str(p['street_name']))
-                self.assertEquals(out[2],p.get('street_type'))
-            except:
-                print p.dump()
-                raise
-
-
-    def x_test_basic(self):
-        
-        from databundles.geo.address import Parser
-       
-        
-        ap = Parser()
-  
-        
-        p = ap.parse('100 10th street')
-        print p.dump()
-        self.assertTrue(p.get('city',None) is None)
-        self.assertEquals('10th', p['street_name'])
-
-        p = ap.parse('100 10th street, city, state')
-        print p.dump()
-        self.assertEquals('10th', p['street_name'])
-
-        p = ap.parse('100 10th st, city, state')
-        print p.dump()
-
-        self.assertEquals('10th', p['street_name'])    
-
-        #p = ap.parse('206 W 10TH st, city, state')
-        #print p.dump()
-
-        self.assertEquals('10th', p['street_name'])   
-
-        for t in map(str.strip,tests):
-            if t:
-                
-                print t
-                print count
-                
-                p = ap.parse(t)
-                
-                print p.dump()
-                
+            for row in p.query("SELECT * FROM businesses"):
+    
+                ps = parser.parse(row['address'])
+    
+                d = ps.as_dict()
+                d['input'] = row['address'].strip()
+                writer.writerow(d)
 
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']

@@ -2,7 +2,7 @@ build:
     geoheaderFile: meta/geoschema.csv
     dependencies:
       usgeo: census.gov-geography-dim-orig-a7d9
-      geoaddresses: clarinova.com-geocode-sandiego-orig-429e-segments
+      geocoder: clarinova.com-geocode-casnd-429e-segments
       crime: sandag.org-crimeincidents-orig-429e-incidents
       communities: sangis.org-neighborhoods-orig-429e-communities.sd
       extents: clarinova.com-extents-2012-7ba4

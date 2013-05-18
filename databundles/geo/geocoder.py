@@ -33,7 +33,7 @@ class Geocoder(object):
         """Calls either geocode_street() geocode_intersection()"""
         
         result = None
-        if '/' in  street:
+        if ' / ' in  street:
             
             s1, s2 = street.split('/',1)
             result = self.geocode_intersection(s1,s2, city.strip())
@@ -93,7 +93,14 @@ class Geocoder(object):
                 winner = s
                 max_score = score
 
-
+        if winner:
+            winner['lat'] = winner['latc']
+            winner['lon'] = winner['lonc']
+            winner['x'] = winner['xc']
+            winner['y'] = winner['yc']
+            winner['gctype'] = 'cns/segment'
+            winner['gcquality'] = winner['score']     
+            
         return winner
     
     
@@ -115,7 +122,9 @@ class Geocoder(object):
         intr = self.addresses.query(q, ps1.street_name, ps2.street_name, ps2.street_name, ps1.street_name).first()
 
         if intr:
-            return dict(intr)
+            winner = dict(intr)
+            winner['gctype'] = 'cns/intersection'
+            return winner
         else:
             return None
         
