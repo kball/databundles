@@ -204,6 +204,18 @@ class GeoPartition(Partition):
         srs.ImportFromWkt(self.get_srs_wkt())
         return srs
 
+    def get_transform(self, dest_srs=4326):
+        """Get an ogr transform object to convert from the SRS of this partition 
+        to another"""
+        import ogr, osr
+        
+      
+        srs2 = ogr.osr.SpatialReference()
+        srs2.ImportFromEPSG(dest_srs) 
+        transform = osr.CoordinateTransformation(self.get_srs(), srs2)
+
+        return transform
+
     def create(self, dest_srs=4326, source_srs=None):
 
         from databundles.geo.sfschema import TableShapefile
