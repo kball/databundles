@@ -127,7 +127,7 @@ class TestBase(unittest.TestCase):
         ])
         
         
-        self.header = ['input', 'number','multinumber','fraction','street_direction',
+        self.header = ['input', 'output', 'number','multinumber','fraction','street_direction',
                   'street_name', 'street_type','suite', 'city',  'state','zip', 'is_block']
 
 
@@ -136,8 +136,7 @@ class TestBase(unittest.TestCase):
 
     
 
-    def x_test_license_addresses(self):
-        from pprint import pprint 
+    def test_address_files(self):
         import os           
         from databundles.geo.address import Parser
         import csv
@@ -149,8 +148,9 @@ class TestBase(unittest.TestCase):
         success = 0
         failure = 0
         total = 0
-        f_input =  os.path.join(os.path.dirname(__file__),'support','test_geocoder_addresses.txt')
-        f_output =  os.path.join(os.path.dirname(__file__),'support','test_geocoder_addresses.out.csv')
+        filename = "bad_license_addresses"
+        f_input =  os.path.join(os.path.dirname(__file__),'support',filename + '.txt')
+        f_output =  os.path.join(os.path.dirname(__file__),'support',filename + '.out.csv')
         with open(f_output, 'w') as out:
             writer = csv.DictWriter(out, self.header)
             writer.writeheader()
@@ -160,7 +160,7 @@ class TestBase(unittest.TestCase):
                     total += 1
              
                     print '----'
-                    print line
+                    print line.strip()
              
                     try: 
                         ps = parser.parse(line)
@@ -174,9 +174,11 @@ class TestBase(unittest.TestCase):
 
                     d = ps.as_dict()
                     d['input'] = line.strip()
+                    d['output'] = str(ps)
                     writer.writerow(d)
                     
                     print d
+                    print ps
                     print
                         
                         
@@ -206,7 +208,7 @@ class TestBase(unittest.TestCase):
             
         
         
-    def test_errors(self):
+    def x_test_errors(self):
         from databundles.geo.address import Parser
         import imp
         import os
@@ -231,6 +233,7 @@ class TestBase(unittest.TestCase):
     
                 d = ps.as_dict()
                 d['input'] = row['address'].strip()
+                d['output'] = str(ps)
                 writer.writerow(d)
 
 if __name__ == "__main__":

@@ -27,60 +27,23 @@ def get_analysis_area(library, **kwargs):
     :rtype: An `AnalysisArea` object.
     
     """
-    
-    
-    
-    
+    from databundles.datasets.geo import US
+    import json
 
-    extentsds = kwargs.get('dependency_name', 'places')
+    state_code = kwargs.get('state', False)
+    county_code = kwargs.get('county', False)
+    place_code = kwargs.get('place', False)
 
-    try:
-        bundle,_ = library.dep(extentsds)
-    except ConfigurationError:
-        raise
-        raise ConfigurationError(("MISSING DEPENDENCY: To get extents, the configuration  "+
-            "must specify a dependency with a set named '{0}', in build.dependencies.{0}"+
-            "See https://github.com/clarinova/databundles/wiki/Error-Messages#geoanalysisareasget_analysis_area ")
-            .format(extentsds))
-
-    if not bundle:
-        raise ConfigurationError("Didn't find the dataset declared for the '{}' dependency".format(extentsds))
-    
-    db = bundle.database
-    
-    places_t = db.table('places')
-    spcs_t = db.table('spcs')
-    
-    s = db.session
-    
-    if  kwargs.get('geoid', False):
-        geoid = kwargs['geoid']
-        
-        query = (s.query(places_t, spcs_t)
-                 .join(spcs_t, spcs_t.columns.spcs_id == places_t.columns.spcs_id)
-                 .filter(places_t.columns.geoid == geoid)
-                )
+    if place_code:
+        code = place_code
+        place = US(library).place(place_code)
     else:
-        state = kwargs.get('state', False)
-        county = kwargs.get('county', False)
-        place = kwargs.get('place', False)
-   
-    row =  query.first()
+        raise NotImplemented()
     
-    if not row:
-        raise Exception("Failed to get analysis area record for geoid: {}".format(geoid))
+    if not place:
+        raise Exception("Failed to get analysis area record for geoid: {}".format(code))
 
-    return AnalysisArea( row[6],row.geoid , # 'name' is used twice, pick the first. 
-                      row.eastmin, 
-                      row.eastmax, 
-                      row.northmin, 
-                      row.northmax, 
-                      row.lonmin, 
-                      row.lonmax, 
-                      row.latmin, 
-                      row.latmax,
-                      row.srid,                       
-                      row.srswkt)
+    return AnalysisArea(**json.loads(place['aa']))
 
 
 def draw_edges(a):
@@ -115,7 +78,7 @@ class AnalysisArea(object):
         
         Args:
         
-            scale: The size of a side of a cell in array, in meters. 
+            _scale: The size of a side of a cell in array, in meters. 
         
         """
         self.name = name
@@ -132,7 +95,7 @@ class AnalysisArea(object):
         
         self.srid = srid
         self.srswkt = srswkt
-        self.scale = scale # UTM meters per grid area
+        self._scale = scale # UTM meters per grid area
         
         #Dimensions ust be even by MAJOR_GRID
      
@@ -141,16 +104,26 @@ class AnalysisArea(object):
             raise Exception("Bounding box dimensions must be even modulo {}"
                             .format(self.MAJOR_GRID))
                                  
-        if  self.MAJOR_GRID % self.scale != 0:
-            raise Exception("The scale {} must divide evenly into the MAJOR_GRID {}"
-                            .format(self.scale, self.MAJOR_GRID))                                                
-    
-        self.size_x = (self.eastmax - self.eastmin) / self.scale
-        self.size_y = (self.northmax - self.northmin) / self.scale
+
 
     def new_array(self, dtype=float):
         return zeros((self.size_y, self.size_x), dtype = dtype)
 
+    @property
+    def scale(self):
+        return self._scale
+    
+    @scale.setter
+    def scale(self, scale):
+        
+        self._scale = scale
+        
+        if  self.MAJOR_GRID % self._scale != 0:
+            raise Exception("The _scale {} must divide evenly into the MAJOR_GRID {}"
+                            .format(self._scale, self.MAJOR_GRID))                                                
+    
+        self.size_x = (self.eastmax - self.eastmin) / self._scale
+        self.size_y = (self.northmax - self.northmin) / self._scale        
 
 
     def new_masked_array(self, dtype=float, nodata=0):
@@ -222,8 +195,8 @@ class AnalysisArea(object):
         def _transformer(x,y):
             xp,yp,z =  trans.TransformPoint(x,y)
             return Point(
-                         int(round((xp-self.eastmin)/self.scale)),
-                         int(round((yp-self.northmin)/self.scale))
+                         int(round((xp-self.eastmin)/self._scale)),
+                         int(round((yp-self.northmin)/self._scale))
                     )
         
         return _transformer
@@ -315,9 +288,9 @@ class AnalysisArea(object):
         from osgeo import gdal
     
         driver = gdal.GetDriverByName('GTiff') 
-            
+ 
         out = driver.Create(file_, 
-                            self.size_x*over_sample, self.size_y*over_sample,
+                            int(self.size_x*over_sample), int(self.size_y*over_sample),
                             bands, 
                             data_type, 
                             options = [ 'COMPRESS=LZW' ])  
@@ -430,8 +403,9 @@ class AnalysisArea(object):
         return ("AnalysisArea    : {name} \n"+
                 "WGS84  Extents  : ({lonmin},{latmin}) ({lonmax},{latmax})\n"+
                 "SPZone Extents  : ({eastmin},{northmin}) ({eastmax},{northmax})\n"+
-                "Size            : ({size_x}, {size_y})\n"
-                "EPGS SRID:     : {srid}\n"+
+                "Size            : ({size_x}, {size_y})\n" + 
+                "Scale           : {_scale}\n" + 
+                "EPGS SRID:      : {srid}\n"+
                 "Pro4txt: {proj4txt}"
         ).format(proj4txt=self.srs.ExportToProj4(),**self.__dict__)
         

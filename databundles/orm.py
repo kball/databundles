@@ -161,7 +161,7 @@ class Column(Base):
     measure = SAColumn('c_measure',Text)
     units = SAColumn('c_units',Text)
     universe = SAColumn('c_universe',Text)
-    scale = SAColumn('c_scale',Real)
+    _scale = SAColumn('c_scale',Real)
     data = SAColumn('c_data',MutationDict.as_mutable(JSONEncodedDict))
 
     is_primary_key = SAColumn('c_is_primary_key',Boolean, default = False)
@@ -239,7 +239,7 @@ class Column(Base):
         self.measure = kwargs.get("measure",None) 
         self.units = kwargs.get("units",None) 
         self.universe = kwargs.get("universe",None) 
-        self.scale = kwargs.get("scale",None) 
+        self._scale = kwargs.get("_scale",None) 
         self.data = kwargs.get("data",None) 
 
         # the table_name attribute is not stored. It is only for

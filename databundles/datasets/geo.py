@@ -13,12 +13,28 @@ class US:
     """ Access to US states, regions, etc. """
     def __init__(self, library):
         self.library = library
+
+                    
+    
+    @property 
+    def usgeo(self):
         try:
-            self.bundle, _ = self.library.dep('usgeo')
+            usgeo, _ = self.library.dep('usgeo')
         except ConfigurationError:
             raise ConfigurationError("MISSING DEPENDENCY: "+"To use the US geo datasets, the bundle ( or library  ) must specify a"+
-               " dependency with a set named 'usgeo', in build.dependencies.usgeo")
-                    
+               " dependency with a set named 'usgeo', in build.dependencies.usgeo")      
+        return usgeo
+              
+    @property 
+    def places(self):
+        try:
+            _, places = self.library.dep('places')
+        except ConfigurationError:
+            raise ConfigurationError("MISSING DEPENDENCY: "+"To use the US county datasets, the bundle ( or library  ) must specify a"+
+               " dependency with a set named 'places', in build.dependencies.places. "+
+               " See https://github.com/clarinova/databundles/wiki/Error-Messages#geoanalysisareasget_analysis_area")      
+        return places
+              
     
     @property
     def states(self):
@@ -46,13 +62,13 @@ class US:
             if not abbrev:
                 abbrev = kwargs.get('abbrev')
             
-            rows = self.bundle.query("SELECT * FROM states WHERE stusab = ?", abbrev.upper() )
+            rows = self.usgeo.query("SELECT * FROM states WHERE stusab = ?", abbrev.upper() )
         elif kwargs.get('fips'):
-            rows = self.bundle.query("SELECT * FROM states WHERE state = ?", int(kwargs.get('fips')))
+            rows = self.usgeo.query("SELECT * FROM states WHERE state = ?", int(kwargs.get('fips')))
         elif kwargs.get('ansi'):
-            rows = self.bundle.query("SELECT * FROM states WHERE statens = ?", int(kwargs.get('ansi')))
+            rows = self.usgeo.query("SELECT * FROM states WHERE statens = ?", int(kwargs.get('ansi')))
         elif kwargs.get('census'):
-            rows = self.bundle.query("SELECT * FROM states WHERE statece = ?", int(kwargs.get('ansi')))
+            rows = self.usgeo.query("SELECT * FROM states WHERE statece = ?", int(kwargs.get('ansi')))
         else:
             rows = None
             
@@ -62,7 +78,16 @@ class US:
         else:
             return None
         
-                
+               
+    def county(self, code):
+        pass
+    
+    
+    def place(self, code):
+        
+        row = self.places.query("SELECT * FROM places WHERE code = ? LIMIT 1", code).first()    
+        
+        return row
     
 class USState:
     """Represents a US State, with acessors for counties, tracks, blocks and other regions
@@ -116,5 +141,12 @@ class USState:
     def __str__(self):
         return "<{}:{}>".format('USState',self.row['name']);
         
+def UsCounty(object):
+    
+    def __init__(self,library, row):
+        self.library = library
+        self.row = row
+    
+    
         
     

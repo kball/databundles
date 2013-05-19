@@ -28,18 +28,23 @@ class Geocoder(object):
                 "must specify a dependency with a set named '{0}', in build.dependencies.{0}"+
                 "See https://github.com/clarinova/databundles/wiki/Error-Messages#geogeocodergeocoder__init__")
                 .format(addressesds))
+
+        self.by_scode, self.by_name = self.jur_codes()
          
-    def geocode(self, street, city):
+    def get_srs(self):
+        return self.addresses.get_srs() 
+        
+    def geocode(self, street):
         """Calls either geocode_street() geocode_intersection()"""
         
         result = None
         if ' / ' in  street:
             
             s1, s2 = street.split('/',1)
-            result = self.geocode_intersection(s1,s2, city.strip())
+            result = self.geocode_intersection(s1,s2)
        
         else:
-            try:address = self.geocode_street(street, city.strip())
+            try:address = self.geocode_street(street)
             except Exception as e:
                 raise
                 address = None
@@ -49,14 +54,119 @@ class Geocoder(object):
                 
         return result
           
-         
-    def geocode_street(self, street, city):
+    def geocode_address(self, address):
+        """Geocode an address"""
+       
+        # Current implementation just interpolates from the low to high address
+       
+        try: ps = self.parser.parse(address)
+        except: ps = False
+    
+        if not ps:
+            return None   
+       
+        r = {'address': None, 'segment': None}
+       
+        segment = self._geocode_segment(ps)
+       
+        if not segment:
+            return None
+
+        r['segment'] = segment
+
+        # Try to get a specific address within the segment. 
+        if ps.number <= segment['hnumber'] and ps.number >= segment['lnumber']:
+           
+            address = self.addresses.query("""
+                SELECT * FROM addresses WHERE segment_source_id = ? 
+                ORDER BY ABS(number - ?) ASC LIMIT 1""", segment['segment_source_id'], ps.number).first()
+              
+            if address:
+                if  abs( int(address['number']) - ps.number) < (segment['hnumber'] - segment['lnumber']) :
+                    r['address'] = address
+                    r['gctype'] = 'cns/address'
+                    x = address['x']
+                    y = address['y']
+                    r['gcquality'] = abs( int(address['number']) - ps.number)
+                    ps.number = address['number'] # For re-coding the address later. 
+                else:
+                    pass
+                    #print abs( int(address['number']) - ps.number), address['number'],  segment['lnumber'],ps.number, segment['hnumber']
+                
+
+        if not r['address']:
+            try:
+                
+                number = ps.number
+                number_low = segment['lnumber']
+                number_high = segment['hnumber']
+                x1,y1,x2,y2 = segment['x1'], segment['y1'], segment['x2'], segment['y2']
+                
+                m = float(y2-y1) / float(x2-x1)
+                b = y1 - m*x1
+                
+                # Ratio to convert house number units into x units. 
+                ntx = float(x2-x1) / float(  number_high - number_low )
+                x = ntx*(number-number_low)+x1
+                
+                # Plain old linear equation
+                y = m*x + b 
+                
+                r['gctype'] = 'cns/seginterp'
+                
+                #
+                #  Punt and use the midpoint if the difference is too large. 
+                #
+                import math
+                
+                # Distance from the address to the midpoint
+                xd = segment['xm'] - x
+                yd = segment['ym'] - y
+                d1 = math.sqrt(xd*xd + yd*yd)
+    
+                # distance from end to end. 
+                xd = x1 - x2
+                yd = y1 - y2
+                d2 = math.sqrt(xd*xd + yd*yd)
+                
+                r['gcquality'] = int(d2 - d1)
+                
+                if d1 > d2:
+                    raise Exception()
+                    #print "d: ", r, d1, d2
+                    #print "n: ", number, number_high, number_low
+                
+            except:
+                x = segment['xm']
+                y = segment['ym']
+                r['gctype'] = 'cns/segmid'
+                r['gcquality'] = 0
+    
+        #ps.number = segment['number']
+        
+        ps.city = segment['city']
+        ps.street_name = segment['street']
+        ps.street_type = segment['street_type']
+        ps.street_direction = segment['street_dir']
+
+        r['x'] = x
+        r['y'] = y
+        r['codedaddress'] = str(ps)
+
+        return r
+        
+    def geocode_street(self, street):
         """Geocode an address to a street segment"""
         try: ps = self.parser.parse(street)
         except: ps = False
     
         if not ps:
-            return None
+            return None       
+        
+        return self._geocode_street(ps)
+         
+    def _geocode_segment(self, ps):
+        """Geocode an address to a street segment"""
 
         direction = ps.street_direction
         street = ps.street_name
@@ -65,10 +175,9 @@ class Geocoder(object):
         
         q = """SELECT  * FROM segments WHERE street = ?""";
 
-        by_scode, by_name = self.jur_codes()
 
         # If this fails, the "city" is probably an unincorporated place, which is in the county. 
-        try: in_city = by_name[city]
+        try: in_city = self.by_name[ps.city]
         except: in_city = 'SndSDO'
 
         max_score = 0
@@ -78,9 +187,8 @@ class Geocoder(object):
             
             s= dict(s)
              
-            s['score']  = score = self.rank_street(by_name, s, number,  direction, street_type, in_city)
+            s['score']  = score = self.rank_street(s, number,  direction, street_type, in_city)
 
-      
             if in_city == s['rcity']:
                 s['city'] = s['rcity']   
             elif in_city == s['lcity']:
@@ -88,12 +196,12 @@ class Geocoder(object):
             else:
                 s['city'] = None                 
 
-          
             if not winner or score > max_score:
                 winner = s
                 max_score = score
 
         if winner:
+            
             winner['lat'] = winner['latc']
             winner['lon'] = winner['lonc']
             winner['x'] = winner['xc']
@@ -102,9 +210,8 @@ class Geocoder(object):
             winner['gcquality'] = winner['score']     
             
         return winner
-    
-    
-    def geocode_intersection(self, street1, street2, city):
+
+    def geocode_intersection(self, street1, street2):
 
         try: 
             ps1 = self.parser.parse(street1)
@@ -141,8 +248,8 @@ class Geocoder(object):
           
         return by_scode, by_name
        
-    def rank_street(self, by_name, row, number, direction, street_type, city ):
-        """ Create a score for a street segment based on how well it match es the input"""
+    def rank_street(self, row, number, direction, street_type, city ):
+        """ Create a score for a street segment based on how well it matches the input"""
         
         score = 0
         
@@ -156,10 +263,8 @@ class Geocoder(object):
         if city == row['rcity'] or city == row['lcity']:
             score += 20  
 
-             
-
         if number >= row['lnumber'] and number <=row['hnumber']:
-            score += 17
+            score += 25
         elif number:
             numdist = min( abs(number-row['lnumber']), abs(number-row['hnumber']))
             

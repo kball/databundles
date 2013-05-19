@@ -26,14 +26,18 @@ class Test(TestBase):
         from databundles.geo.geocoder import Geocoder               
         g = Geocoder(self.bundle.library)               
                      
-        max = 10
-                          
-        with open(os.path.join(os.path.dirname(__file__),'test_geocoder_addresses.txt')) as f:
+        filename = "good_segments"
+        f_input =  os.path.join(os.path.dirname(__file__),'support',filename + '.txt')
+        f_output =  os.path.join(os.path.dirname(__file__),'support',filename + '.out.csv')
+                   
+        with open(f_input) as f:
             for line in f:
-                max -= 1
-                if not max:
-                    break;
-                
+                addr = line.strip()
+                r  = g.geocode_address(addr)
+                print "==", addr
+                print "->",r
+                if r:
+                    print "  ", r['coded_address']
 
 
     def write_error_row(self, code, arg, p, w, address, city):

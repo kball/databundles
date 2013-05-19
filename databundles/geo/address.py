@@ -212,7 +212,7 @@ class Scanner(object):
             (r"\s+", None),
             (suite_regex, self.s_suiteintro),
             (r"\d+\s*[\/]\s*\d+", self.s_fractionnumber),
-            (r"[a-zA-Z]*\d+[a-zA-Z]*\s*[\&\-]\s*[a-zA-Z]*\d+[a-zA-Z]*", self.s_multinumber),
+            (r"[a-zA-Z]*\d+[a-zA-Z]*\s*[\&\-]\s*[a-zA-Z]*\d+[a-zA-Z]*(\/\d+)?", self.s_multinumber),
             (r"[a-zA-Z\.\-\'\`]+", self.s_word),
             (r"\d+[a-zA-Z]+", self.s_alphanumber),
             (r"[a-zA-Z]+\d+", self.s_alphanumber),
@@ -270,8 +270,16 @@ class ParserState(object):
         def __str__(self):
 
             a = " ".join([ str(i).title() for i in [self.number, self.street_direction, 
-                                                    self.street_name, self.street_type,
-                                                    self.state, self.zip ] if i ])
+                                                    self.street_name, self.street_type] if i ])
+            
+            if self.city:
+                a += ", "+self.city.title()
+            
+            if self.state:
+                a += ", "+self.state.upper()
+            
+            if self.zip:
+                a += " "+self.zip         
             
             if self.cross_street:
                 return a + " / "+str(self.cross_street)
@@ -525,6 +533,8 @@ class ParserState(object):
             # Comma delimited strings at the end are usually the city
             #
 
+           
+
             if self.has(self.parser.scanner.COMMA):
                 p = self.find(self.parser.scanner.COMMA, reverse = True)
    
@@ -554,7 +564,7 @@ class ParserState(object):
                 self.suite = ' '.join(reversed(suite_names))
 
 
-
+            
             #
             # See if we have a street type as the last item
             #
@@ -566,6 +576,8 @@ class ParserState(object):
                 self.pop()
 
             self.parse_direction() # N, S, E, W
+ 
+            
  
             if self.parse_highway():
                 pass
@@ -662,12 +674,41 @@ class ParserState(object):
                 
             self.street_name = (str(number)+ordinal).title()
 
+            ttype, toks = self.next()
+            if toks in self.parser.street_types:
+                self.street_type = self.parser.street_types[toks.lower()]
+            else:
+                self.unshift(ttype, toks)
+
             return True
         
         def parse_simple_street(self):
 
-            self.street_name = " ".join([ toks.capitalize() for _, toks in self.rest()  ]).title()
             
+
+            o = []
+            i = 0
+            while True:
+                t = self.next()
+                if t[0] == self.parser.scanner.END:
+                    self.unshift(*t)
+                    break
+                
+                elif t[0] != self.parser.scanner.COMMA:
+                    
+                    if t[1].lower() in self.parser.street_types and i != 0:
+                        # i != 0 prevents 'Mission' from being mis interpreted. 
+                        self.street_type = self.parser.street_types[t[1].lower()]
+                        break
+                    else:
+                        o.append(t[1])
+                else:
+                    break
+                
+                i += 1
+                    
+            self.street_name = ' '.join(o).title()
+
             return True
         
  

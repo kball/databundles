@@ -151,7 +151,7 @@ class Schema(object):
         def translate_type(column):
             # Creates a lot of unnecessary objects, but speed is not important here.  
             if column.datatype == Column.DATATYPE_NUMERIC:
-                return sqlalchemy.types.Numeric(column.precision, column.scale)
+                return sqlalchemy.types.Numeric(column.precision, column._scale)
             else:
                 return Column.types[column.datatype][0]
         
