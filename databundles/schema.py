@@ -303,7 +303,7 @@ class Schema(object):
                 continue
             
             row = { k:str(v).decode('utf8', 'ignore').encode('ascii','ignore').strip() for k,v in row.items()}
-            
+
             if  row['table'] and row['table'] != last_table:
                 new_table = True
                 last_table = row['table']
@@ -374,6 +374,7 @@ class Schema(object):
                                    data=data,
                                    sql=row.get('sql',None)
                                    )
+
 
     def as_csv(self, f=None):
         """Return the current schema as a CSV file"""

@@ -125,7 +125,7 @@ class Partition(object):
         
         return self.bundle.schema.table(table_spec)
         
-    def create_with_tables(self, tables=None, clean=True):
+    def create_with_tables(self, tables=None, clean=False):
         '''Create, or re-create,  the partition, possibly copying tables
         from the main bundle
         
@@ -136,6 +136,12 @@ class Partition(object):
             clean. If True, delete the database first. Defaults to true. 
         
         '''
+
+        if not tables: 
+            raise ValueError("'tables' cannot be empty")
+
+        if not isinstance(tables, (list, tuple)):
+            tables = [tables]
 
         if clean:
             self.database.delete()
@@ -155,7 +161,10 @@ class Partition(object):
 
         tables = self.data.get('tables',[])
 
-        self.create_with_tables(tables=tables)
+        if tables:
+            self.create_with_tables(tables=tables)
+        else:
+            self.database.create(copy_tables = False)
 
 
     @property
@@ -187,6 +196,15 @@ class HdfPartition(Partition):
         from .database import HdfDb
 
         self._db_class = HdfDb
+
+    @property
+    def database(self):
+        if self._database is None:
+            source,  name_parts, partition_path = self._path_parts() #@UnusedVariable
+            self._database = self._db_class(self.bundle, self, base_path=self.path)
+            self._database.open()
+          
+        return self._database
 
 
 class GeoPartition(Partition):
@@ -372,21 +390,14 @@ class Partitions(object):
         else:
             raise ValueError("Arg must be a Partition or PartitionNumber")
 
-        if orm_partition.data.get('is_geo'):
-            db_type = 'geo'
-        if orm_partition.data.get('is_hdf'):
-            db_type = 'hdf'
-        elif db_type == 'geo': # The caller signalled that this should be a Geo, but it isn't so set it. 
-            orm_partition.data['is_geo'] = True
+        if orm_partition.data.get('db_type', False):
+            db_type = orm_partition.data.get('db_type')
+        elif db_type:
+            orm_partition.data['db_type'] = db_type
             s = self.bundle.database.session    
             s.merge(orm_partition)
             s.commit()
-        elif db_type == 'hdf':
-            orm_partition.data['is_hdf'] = True
-            s = self.bundle.database.session    
-            s.merge(orm_partition)
-            s.commit()
-      
+
         if db_type == 'geo':
             return GeoPartition(self.bundle, orm_partition)
         elif db_type == 'hdf':
@@ -512,60 +523,51 @@ class Partitions(object):
         
         return [ self.partition(op) for op in ops]
 
+    def _pid_or_args_to_pid(self, bundle,  pid, args):
+        from databundles.identity import Identity, new_identity
+        
+
+        if isinstance(pid, Identity):
+            return pid, None
+        elif isinstance(pid,basestring):
+            return None, pid # pid is actually the name
+        elif args.get('name', False):
+            return None, args.get('name', None)
+        else:
+            return new_identity(args, bundle=bundle), None
+
     
     def find_orm(self, pid=None, **kwargs):
         '''Return a Partition object from the database based on a PartitionId.
         An ORM object is returned, so changes can be persisted. '''
         import sqlalchemy.orm.exc
-        from databundles.identity import Identity
+
+        pid, name = self._pid_or_args_to_pid(self.bundle, pid, kwargs)
         
-        if not pid: 
-            time = kwargs.get('time',None)
-            space = kwargs.get('space', None)
-            table = kwargs.get('table', None)
-            grain = kwargs.get('grain', None)
-            format = kwargs.get('format', None)
-            name = kwargs.get('name', None)
-        elif isinstance(pid, Identity):
-            time = pid.time
-            space = pid.space
-            table = pid.table
-            grain = pid.grain
-            format = pid.format
-            name = None
-        elif isinstance(pid,basestring):
-            time = None
-            space = None
-            table = None
-            grain = None
-            format = None
-            name = pid            
-        
-                
         from databundles.orm import Partition as OrmPartition
         q = self.query
         
         if name is not None:
             q = q.filter(OrmPartition.name==name)
         else:       
-            if time is not None:
-                q = q.filter(OrmPartition.time==time)
+            if pid.time is not None:
+                q = q.filter(OrmPartition.time==pid.time)
     
-            if space is not None:
-                q = q.filter(OrmPartition.space==space)
+            if pid.space is not None:
+                q = q.filter(OrmPartition.space==pid.space)
         
-            if grain is not None:
-                q = q.filter(OrmPartition.grain==grain)
+            if pid.grain is not None:
+                q = q.filter(OrmPartition.grain==pid.grain)
        
             if format is not None:
-                q = q.filter(OrmPartition.format==format)
+                q = q.filter(OrmPartition.format==pid.format)
         
-            if table is not None:
+            if pid.table is not None:
             
-                tr = self.bundle.schema.table(table)
+                tr = self.bundle.schema.table(pid.table)
                 
                 if not tr:
-                    raise ValueError("Didn't find table named {} ".format(table))
+                    raise ValueError("Didn't find table named {} ".format(pid.table))
                 
                 q = q.filter(OrmPartition.t_id==tr.id_)
 
@@ -599,16 +601,24 @@ class Partitions(object):
         data=kwargs.get('data',{})
         
         data['tables'] = tables
+        
+        if kwargs.get('db_type'):
+            data['db_type'] = kwargs.get('db_type')
+        
          
-        op = OrmPartition(name = pid.name,
-             space = pid.space,
-             time = pid.time,
-             grain = pid.grain, 
-             format = pid.format, 
+        d = pid.to_dict()
+        
+        try: del d['table'] # OrmPartition requires t_id instead
+        except: pass
+
+         
+        op = OrmPartition(
              t_id = table.id_ if table else None,
              d_id = self.bundle.identity.id_,
              data=data,
-             state=kwargs.get('state',None),)  
+             state=kwargs.get('state',None),
+             **d
+             )  
 
         return op
 
@@ -620,16 +630,8 @@ class Partitions(object):
         
     def new_partition(self, pid=None, **kwargs):
  
-        if not pid: 
-            time = kwargs.get('time',None)
-            space = kwargs.get('space', None)
-            table = kwargs.get('table', None)
-            grain = kwargs.get('grain', None)
-            format = kwargs.get('format', None)
-            name = kwargs.get('name', None)
-            pid = PartitionIdentity(self.bundle.identity, time=time, space=space, table=table, grain=grain, format=format, name=name)
-            
-            
+        pid, _ = self._pid_or_args_to_pid(self.bundle, pid, kwargs)
+ 
         extant = self.find_orm(pid, **kwargs).all()
         
         for p in extant:
@@ -680,15 +682,7 @@ class Partitions(object):
         else:
             t_srs_opt = ''
             
-        if not pid: 
-            time = kwargs.get('time',None)
-            space = kwargs.get('space', None)
-            table = kwargs.get('table', None)
-            grain = kwargs.get('grain', None)
-            format = kwargs.get('format', None)
-            name = kwargs.get('name', None)
-            pid = PartitionIdentity(self.bundle.identity, time=time, space=space, table=table, grain=grain, format=format, name=name)
-               
+        pid, name = self._pid_or_args_to_pid(self.bundle, pid, kwargs)
         
         try: extant = self.partitions.find(pid)
         except: extant = None # Fails with ValueError because table does not exist. 
@@ -798,7 +792,7 @@ class Partitions(object):
             pid A partition Identity
             tables String or array of tables to copy form the main partition
         '''
-        
+
         try: partition =  self.find(pid, **kwargs)
         except: partition = None
     
@@ -817,7 +811,4 @@ class Partitions(object):
              .filter(OrmPartition.id_==partition.identity.id_))
       
         q.delete()
-  
-    
-              
 

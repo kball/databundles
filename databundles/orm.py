@@ -624,13 +624,14 @@ class Partition(Base):
     sequence_id = SAColumn('p_sequence_id',Integer)
     t_id = SAColumn('p_t_id',Integer,ForeignKey('tables.t_id'))
     d_id = SAColumn('p_d_id',Text,ForeignKey('datasets.d_id'))
-    space = SAColumn('p_space',Text)
     time = SAColumn('p_time',Text)
-    #format = SAColumn('p_format',Text)
+    space = SAColumn('p_space',Text)
+    grain = SAColumn('p_grain',Text)
+    format = SAColumn('p_format',Text)
     state = SAColumn('p_state',Text)
     data = SAColumn('p_data',MutationDict.as_mutable(JSONEncodedDict))
     
-    grain = SAColumn('p_grain',Text)
+
    
     table = relationship('Table', backref='partitions')
     
@@ -640,10 +641,11 @@ class Partition(Base):
         self.t_id = kwargs.get("t_id",None) 
         self.d_id = kwargs.get("d_id",None) 
         self.space = kwargs.get("space",None) 
-        self.time = kwargs.get("time",None) 
+        self.time = kwargs.get("time",None)  
         self.table = kwargs.get("table",None) 
         self.grain = kwargs.get('grain',None)
-        #self.format = kwargs.get('format',None)
+        self.format = kwargs.get('format',None)
+        
         self.data = kwargs.get('data',None)
         
     @property

@@ -17,18 +17,8 @@ class Test(TestBase):
         self.bundle = Bundle()    
         self.bundle_dir = self.bundle.bundle_dir
 
-
-    def tearDown(self):
-        pass
-
     def test_basic(self):
-
-        for p in self.bundle.partitions:
-            print p.name
-            
-            h5 = p.hdf5file
-            
-            print h5._path
+        pass
             
         
 

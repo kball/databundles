@@ -42,6 +42,7 @@ class TestBase(unittest.TestCase):
             if True or not os.path.exists(save_dir):
                 logger.info( "Save dir is missing; re-build bundle. ")
                 bundle.prepare()
+                
                 bundle.build()
                 
                 with open(marker, 'w') as f:

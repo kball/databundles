@@ -444,7 +444,7 @@ class Database(DatabaseInterface):
     '''Represents a Sqlite database'''
 
     BUNDLE_DB_NAME = 'bundle'
-    PROTO_SQL_FILE = 'support/configuration.sql' # Stored in the databundles module. 
+    PROTO_SQL_FILE = 'support/configuration-sqlite.sql' # Stored in the databundles module. 
     EXTENSION = '.db'
 
     def __init__(self, bundle, base_path, post_create=None):   

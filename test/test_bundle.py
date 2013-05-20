@@ -93,6 +93,7 @@ class Test(TestBase):
         
       
     def test_identity(self):
+        from databundles.identity import new_identity
         self.assertEqual('source', self.bundle.identity.source)
         self.assertEqual('dataset', self.bundle.identity.dataset)
         self.assertEqual('subset', self.bundle.identity.subset)
@@ -101,6 +102,25 @@ class Test(TestBase):
         self.assertEqual(1, int(self.bundle.identity.revision))
         self.assertEqual('source-dataset-subset-variation-ca0d', 
                          self.bundle.identity.name)
+
+
+        pid = self.bundle.identity
+        d = pid.to_dict()
+        
+        self.assertEquals('source-dataset-subset-variation-ca0d', str(new_identity(pid.to_dict())))
+        
+        d['id'] = 'foobar'
+        self.assertRaises(ValueError, new_identity, (d))
+        
+        del d['id']
+        
+        self.assertEquals('source-dataset-subset-variation-ca0d',str(new_identity(d)))
+        self.assertEquals('source-dataset-subset-variation-ca0d-grain',str(new_identity( {'grain':'grain'}, bundle=self.bundle)))
+        
+        d['grain'] = 'grain'
+        self.assertEquals('source-dataset-subset-variation-ca0d-grain',str( new_identity(d)))
+        
+   
 
     def test_db_bundle(self):
         
@@ -167,9 +187,9 @@ class Test(TestBase):
       
         self.bundle.database.session.commit()
         
-        self.assertIn('d1DxuZ0701', [c.id_ for c in t.columns])
-        self.assertIn('d1DxuZ0702', [c.id_ for c in t.columns])
-        self.assertIn('d1DxuZ0703', [c.id_ for c in t.columns])
+        self.assertIn('d1DxuZ0901', [c.id_ for c in t.columns])
+        self.assertIn('d1DxuZ0902', [c.id_ for c in t.columns])
+        self.assertIn('d1DxuZ0903', [c.id_ for c in t.columns])
         
     def test_generate_schema(self):
         '''Uses the generateSchema method in the bundle'''
@@ -343,7 +363,7 @@ class Test(TestBase):
         
         # 4 partitions from the build ( defined in meta/geoschema.csv),
         # three we just created. 
-        self.assertEqual(7, len(self.bundle.partitions.all))
+        self.assertEqual(9, len(self.bundle.partitions.all))
         
         p = self.bundle.partitions.new_partition(pid1)   
         self.assertEquals('pid1',p.data['pid'] )

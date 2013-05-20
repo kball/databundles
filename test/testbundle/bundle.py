@@ -27,17 +27,18 @@ class Bundle(BuildBundle):
         self.schema.schema_from_file(open(self.geoheaders_file, 'rbU'))
         self.schema.create_tables()
         self.database.commit()
-             
-        for table in self.schema.tables:       
+     
+        for table in self.schema.tables:   
             pid = PartitionIdentity(self.identity, table=table.name)
-            if not table.name.startswith('geo'):
-                partition = self.partitions.new_partition(pid)   
+            if table.data.get('mandatory', False):
+                partition = self.partitions.new_partition(pid)  
                 partition.create_with_tables(table.name)
-                    
+    
     
     def build(self):
         import random
         from functools import partial
+        import numpy as np
         
         sink = self.database.path
      
@@ -56,12 +57,36 @@ class Bundle(BuildBundle):
         # Now write random data to each of the pable partitions. 
         
         for partition in self.partitions.all:
-            if partition.table.name == 'all':
-                continue;
-            #self.log("Loading "+partition.name)
-            db = partition.database.path
-            table_name = partition.table.name
-            petl.dummytable(30000,fields).tosqlite3(db, table_name, create=False) #@UndefinedVariable
+            if partition.table.name in ('tone','ttwo','tthree'):  
+                #self.log("Loading "+partition.name)
+                db = partition.database.path
+                table_name = partition.table.name
+                petl.dummytable(30000,fields).tosqlite3(db, table_name, create=False) #@UndefinedVariable
+
+
+        # Create other types of partitions. 
+        geot1 = self.partitions.find_or_new_geo(table='geot1')
+        with geot1.database.inserter() as ins:
+            for lat in range(10):
+                for lon in range(10):
+                    ins.insert({'name': str(lon)+';'+str(lat), 'lon':lon, 'lat':lat})
+        
+        # Create other types of partitions. 
+        geot2 = self.partitions.find_or_new_geo(table='geot2')
+        with geot2.database.inserter() as ins:
+            for lat in range(10):
+                for lon in range(10):
+                    ins.insert({'name': str(lon)+';'+str(lat), 'wkt':"POINT({} {})".format(lon,lat)})
+        
+        hdf = self.partitions.find_or_new_hdf(table='hdf5')
+
+        a = np.zeros((10,10))
+        for y in range(10):
+            for x in range(10):
+                a[x,y] = x*y
+ 
+        ds = hdf.database.create_dataset('hdf', data=a, compression=9)
+        hdf.database.close()
 
 
     def install(self):

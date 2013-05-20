@@ -32,3 +32,5 @@
 "geot2","name",,,,"TEXT",,,20,,,,,,
 "geot2","code",,,,"INTEGER",,,,,,,,,
 "geot2","wkt",,,,"BLOB",,,,,,,,,
+,,,,,,,,,,,,,,
+"hdf5","hdf5_id",1,,,"INTEGER",,,,,,,,,

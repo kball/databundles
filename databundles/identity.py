@@ -7,19 +7,26 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 import os.path
 
-def new_identity(d):
+def new_identity(d, bundle=None):
     """Create a new identity from a dict form """
     on = ObjectNumber.parse(d.get('id'))
     
-    if not on: 
-        raise ValueError("parameter was not parsable as an object number: {} ".format(d))
-    
-    if isinstance(on, DatasetNumber):
-        return Identity(**d)
-    elif isinstance(on, PartitionNumber):
+    if  on: 
+        if isinstance(on, DatasetNumber):
+            return Identity(**d)
+        elif isinstance(on, PartitionNumber):
+            return PartitionIdentity(**d)
+        else:
+            raise ValueError("parameter was not  dataset nor partition id: {} ".format(d))
+
+    elif bundle: 
+        return PartitionIdentity(bundle.identity, **d)
+    elif set(['time','space','table','grain', 'format']).intersection(set(d.keys())):
+        
         return PartitionIdentity(**d)
     else:
-        raise ValueError("parameter was not  dataset nor partition id: {} ".format(d))
+        return Identity(**d)
+        
 
 class Identity(object):
 
@@ -87,7 +94,7 @@ class Identity(object):
     @property
     def cache_key(self):
         '''The name is a form suitable for use in a filesystem'''
-        return self.path_str(self)+".db"
+        return self.path_str(self)
     
     @classmethod
     def path_str(cls,o=None):
@@ -157,6 +164,9 @@ class Identity(object):
         import re
         return [re.sub('[^\w\.]','_',s).lower() for s in name_parts]
        
+       
+    def __str__(self):
+        return self.name
        
 
 class PartitionIdentity(Identity):
@@ -254,6 +264,12 @@ class PartitionIdentity(Identity):
         
         return parts
     
+    @property
+    def cache_key(self):
+        '''The name is a form suitable for use in a filesystem'''
+        return self.path_str(self)+".db"
+    
+    
     
     @property
     def as_dataset(self):
@@ -265,7 +281,9 @@ class PartitionIdentity(Identity):
     def convert(arg, bundle=None):
         """Try to convert the argument to a PartitionIdentity"""
         from databundles.orm import Partition
-                
+             
+             
+        raise Exception("Use new_identity instead")   
                 
         if isinstance(arg, Partition):
             identity = PartitionIdentity(**(arg.to_dict()))
