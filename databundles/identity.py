@@ -169,6 +169,7 @@ class PartitionIdentity(Identity):
     space = None
     table = None
     grain = None
+    format = None
     
     def __init__(self, *args, **kwargs):
 
@@ -193,6 +194,7 @@ class PartitionIdentity(Identity):
         self.space = d.get('space',None)
         self.table = d.get('table',None)
         self.grain = d.get('grain',None)
+        self.format = d.get('format',None)
     
         if self.id_ is not None and self.id_[0] != ObjectNumber.TYPE.PARTITION:
             self.id_ = None
@@ -207,6 +209,7 @@ class PartitionIdentity(Identity):
         d['space'] = self.space
         d['table'] = self.table
         d['grain'] = self.grain
+        d['format'] = self.format
 
         return { k:v for k,v in d.items() if v}
     
@@ -221,7 +224,7 @@ class PartitionIdentity(Identity):
         # HACK HACK HACK!
         # The table,space,time,grain order must match up with Partition._path_parts
         partition_parts = [re.sub('[^\w\.]','_',str(s))
-                         for s in filter(None, [o.table, o.space, o.time, o.grain])]
+                         for s in filter(None, [o.table, o.space, o.time, o.grain, o.format])]
     
        
         return  os.path.join(id_path ,  *partition_parts )
@@ -242,7 +245,7 @@ class PartitionIdentity(Identity):
         # HACK HACK HACK!
         # The table,space,time,grain order must match up with Partition._path_parts and self._path_pats
         partition_component = '.'.join([re.sub('[^\w\.]','_',str(s))
-                         for s in filter(None, [o.table, o.space, o.time, o.grain])])
+                         for s in filter(None, [o.table, o.space, o.time, o.grain, o.format])])
         
         parts.append(partition_component)
         

@@ -232,7 +232,7 @@ def library_command(args, rc):
 
                 for id_, p in dsi['partitions'].items():
                     vs = ''
-                    for v in ['time','space','table','grain']:
+                    for v in ['time','space','table','grain','format']:
                         val = p.get(v,False)
                         if val:
                             vs += "{}={} ".format(v, val)

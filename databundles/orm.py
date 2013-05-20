@@ -220,6 +220,7 @@ class Column(Base):
     def schema_type(self):
         return self.types[self.datatype][2]
         
+        
     def __init__(self,**kwargs):
      
         self.id_ = kwargs.get("oid",None) 
@@ -421,6 +422,13 @@ class Table(Base):
         else:
             return  q.one()
     
+    @property
+    def primary_key(self):
+        for c in self.columns:
+            if c.is_primary_key:
+                return c
+        return None
+    
     def get_fixed_regex(self):
             '''Using the size values for the columsn for the table, construct a
             regular expression to  parsing a fixed width file.'''
@@ -618,6 +626,7 @@ class Partition(Base):
     d_id = SAColumn('p_d_id',Text,ForeignKey('datasets.d_id'))
     space = SAColumn('p_space',Text)
     time = SAColumn('p_time',Text)
+    #format = SAColumn('p_format',Text)
     state = SAColumn('p_state',Text)
     data = SAColumn('p_data',MutationDict.as_mutable(JSONEncodedDict))
     
@@ -634,6 +643,7 @@ class Partition(Base):
         self.time = kwargs.get("time",None) 
         self.table = kwargs.get("table",None) 
         self.grain = kwargs.get('grain',None)
+        #self.format = kwargs.get('format',None)
         self.data = kwargs.get('data',None)
         
     @property
@@ -642,6 +652,7 @@ class Partition(Base):
         from sqlalchemy.orm import object_session
         from partition import PartitionIdentity
         
+        #args = {'id': self.id_, 'space':self.space, 'time':self.time, 'grain':self.grain, 'format':self.format}
         args = {'id': self.id_, 'space':self.space, 'time':self.time, 'grain':self.grain}
         
         table = self.table

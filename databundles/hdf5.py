@@ -11,21 +11,20 @@ from numpy import *
 
 class Hdf5File(h5py.File):
     
-    def __init__(self, partition):
+    def __init__(self, path):
 
-        self.partition = partition
-
-        source,  name_parts, partition_path = self.partition._path_parts() #@UnusedVariable
-        
-        self._path = os.path.join(self.partition.bundle.database.base_path, *partition_path)
+        self._path = path
+        self._is_open = False
 
 
     def open(self):
-        dir_ = os.path.dirname(self._path)
-        if not os.path.exists(dir_):
-            os.makedirs(dir_)
-
-        super(Hdf5File, self).__init__(self._path)  
+        if not self._is_open:
+            dir_ = os.path.dirname(self._path)
+            if not os.path.exists(dir_):
+                os.makedirs(dir_)
+    
+            super(Hdf5File, self).__init__(self._path)  
+            self._is_open = True
         
     def exists(self):
         import os.path
@@ -37,8 +36,10 @@ class Hdf5File(h5py.File):
         return self._path
 
     def put_geo(self,name, a, aa):
-        ''''''
+        '''Store an array along with an Analysis Area'''
         import json
+
+        self.open()
 
         group = self.require_group("geo")
         
@@ -56,9 +57,10 @@ class Hdf5File(h5py.File):
             pass
 
     def get_geo(self, name):
+        """Return an array an an associated analysis area"""
         import json
         from databundles.geo.analysisarea import AnalysisArea
-
+        self.open()
         group = self.require_group("geo")
         
         try:
@@ -66,11 +68,13 @@ class Hdf5File(h5py.File):
         except KeyError:
             raise KeyError("Geo group doesn't have dataset named '{}'".format(name))
         
+
         aa = AnalysisArea(**(json.loads(ds.attrs['analysis-area'])))
         
         return ds,aa
 
     def list_geo(self):
+        self.open()
         return self.require_group("geo").keys()
 
     def table(self, table_name, mode='a', expected=None):

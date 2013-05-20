@@ -44,7 +44,7 @@ class Partition(object):
         p = self.identity
         # HACK HACK HACK!
         # The table,space,time,grain order must match up with PartitionIdentity._path_str
-        partition_path = [ str(i) for i in [p.table,p.space,p.time,p.grain] if i is not None]
+        partition_path = [ str(i) for i in [p.table,p.space,p.time,p.grain, p.format] if i is not None]
        
         return source,  name_parts, partition_path 
     
@@ -177,6 +177,16 @@ class Partition(object):
     def __repr__(self):
         return "<partition: {}>".format(self.name)
 
+
+class HdfPartition(Partition):
+    '''A Partition that hosts a Spatialite for geographic data'''
+    
+    def __init__(self, bundle, record):
+        super(HdfPartition, self).__init__(bundle, record)
+        
+        from .database import HdfDb
+
+        self._db_class = HdfDb
 
 
 class GeoPartition(Partition):
@@ -336,7 +346,7 @@ class Partitions(object):
     def __init__(self, bundle):
         self.bundle = bundle
 
-    def partition(self, arg, is_geo=False):
+    def partition(self, arg, db_type=None):
         '''Get a local partition object from either a Partion ORM object, or
         a partition name
         
@@ -363,18 +373,24 @@ class Partitions(object):
             raise ValueError("Arg must be a Partition or PartitionNumber")
 
         if orm_partition.data.get('is_geo'):
-            is_geo = True
-        elif is_geo: # The caller signalled that this should be a Geo, but it isn't so set it. 
+            db_type = 'geo'
+        if orm_partition.data.get('is_hdf'):
+            db_type = 'hdf'
+        elif db_type == 'geo': # The caller signalled that this should be a Geo, but it isn't so set it. 
             orm_partition.data['is_geo'] = True
             s = self.bundle.database.session    
             s.merge(orm_partition)
             s.commit()
-        
-        partition_id = orm_partition.identity #@UnusedVariable
-
-
-        if is_geo:
+        elif db_type == 'hdf':
+            orm_partition.data['is_hdf'] = True
+            s = self.bundle.database.session    
+            s.merge(orm_partition)
+            s.commit()
+      
+        if db_type == 'geo':
             return GeoPartition(self.bundle, orm_partition)
+        elif db_type == 'hdf':
+            return HdfPartition(self.bundle, orm_partition)
         else:
             return Partition(self.bundle, orm_partition)
 
@@ -508,18 +524,21 @@ class Partitions(object):
             space = kwargs.get('space', None)
             table = kwargs.get('table', None)
             grain = kwargs.get('grain', None)
+            format = kwargs.get('format', None)
             name = kwargs.get('name', None)
         elif isinstance(pid, Identity):
             time = pid.time
             space = pid.space
             table = pid.table
             grain = pid.grain
+            format = pid.format
             name = None
         elif isinstance(pid,basestring):
             time = None
             space = None
             table = None
             grain = None
+            format = None
             name = pid            
         
                 
@@ -537,6 +556,9 @@ class Partitions(object):
         
             if grain is not None:
                 q = q.filter(OrmPartition.grain==grain)
+       
+            if format is not None:
+                q = q.filter(OrmPartition.format==format)
         
             if table is not None:
             
@@ -580,8 +602,9 @@ class Partitions(object):
          
         op = OrmPartition(name = pid.name,
              space = pid.space,
-             grain = pid.grain, 
              time = pid.time,
+             grain = pid.grain, 
+             format = pid.format, 
              t_id = table.id_ if table else None,
              d_id = self.bundle.identity.id_,
              data=data,
@@ -602,33 +625,40 @@ class Partitions(object):
             space = kwargs.get('space', None)
             table = kwargs.get('table', None)
             grain = kwargs.get('grain', None)
+            format = kwargs.get('format', None)
             name = kwargs.get('name', None)
-            pid = PartitionIdentity(self.bundle.identity, time=time, space=space, table=table, grain=grain, name=name)
+            pid = PartitionIdentity(self.bundle.identity, time=time, space=space, table=table, grain=grain, format=format, name=name)
             
-
+            
         extant = self.find_orm(pid, **kwargs).all()
         
         for p in extant:
             if p.name == pid.name:
-                return self.partition(p, is_geo=kwargs.get('is_geo',None))
+                return self.partition(p, db_type=kwargs.get('db_type',None))
        
         op = self.new_orm_partition(pid, **kwargs)
         s = self.bundle.database.session
         s.add(op)   
         s.commit()     
         
-        p = self.partition(op, is_geo=kwargs.get('is_geo',None))
+        p = self.partition(op, db_type=kwargs.get('db_type',None))
         return p
 
     def new_geo_partition(self, pid=None, **kwargs):
         
         if kwargs.get('shape_file'):
-            
             return self._new_geo_partition_from_shape( pid, **kwargs)
         else:
-            kwargs['is_geo'] = True
+            kwargs['db_type'] = 'geo'
             return self.new_partition(pid, **kwargs)
         
+    def new_hdf_partition(self, pid=None, **kwargs):
+        
+        if pid:
+            pid.format = 'hdf'
+        
+        kwargs['db_type'] = 'hdf'
+        return self.new_partition(pid, **kwargs)
         
     def _new_geo_partition_from_shape(self, pid=None,  **kwargs):
         """Load a shape file into a partition as a spatialite database. 
@@ -655,8 +685,9 @@ class Partitions(object):
             space = kwargs.get('space', None)
             table = kwargs.get('table', None)
             grain = kwargs.get('grain', None)
+            format = kwargs.get('format', None)
             name = kwargs.get('name', None)
-            pid = PartitionIdentity(self.bundle.identity, time=time, space=space, table=table, grain=grain, name=name)
+            pid = PartitionIdentity(self.bundle.identity, time=time, space=space, table=table, grain=grain, format=format, name=name)
                
         
         try: extant = self.partitions.find(pid)
@@ -689,7 +720,7 @@ class Partitions(object):
         t = self.bundle.schema.add_table(pid.table)
         self.bundle.database.commit()
         
-        partition = self.new_partition(pid, is_geo=True)
+        partition = self.new_partition(pid, db_type='geo')
         
         dir_ = os.path.dirname(partition.database.path)
         if not os.path.exists(dir_):
@@ -757,6 +788,24 @@ class Partitions(object):
             return partition
 
         partition = self.new_geo_partition(pid, **kwargs)
+
+        return partition;
+    
+    def find_or_new_hdf(self, pid=None, **kwargs):
+        '''Find a partition identified by pid, and if it does not exist, create it. 
+        
+        Args:
+            pid A partition Identity
+            tables String or array of tables to copy form the main partition
+        '''
+        
+        try: partition =  self.find(pid, **kwargs)
+        except: partition = None
+    
+        if partition:
+            return partition
+
+        partition = self.new_hdf_partition(pid, **kwargs)
 
         return partition;
     

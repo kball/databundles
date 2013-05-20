@@ -8,6 +8,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 import os.path
 import anydbm
 from databundles.geo.sfschema import TableShapefile
+from .hdf5 import Hdf5File
 
 class FeatureInserter(object):
     def __init__(self, partition, table, dest_srs=4326, source_srs=None):
@@ -400,7 +401,46 @@ class DbmFile(object):
         self._file[str(key)] =  str(val)
     
 
-class Database(object):
+class DatabaseInterface(object):
+    
+    @property
+    def name(self):  
+        raise NotImplementedError() 
+    
+    @property 
+    def path(self):
+        raise NotImplementedError() 
+   
+    def exists(self):
+        raise NotImplementedError() 
+    
+    def create(self):
+        raise NotImplementedError() 
+    
+    def add_post_create(self, f):
+        raise NotImplementedError() 
+    
+    def delete(self):
+        raise NotImplementedError() 
+    
+    def open(self):
+        raise NotImplementedError() 
+    
+    def close(self):
+        raise NotImplementedError() 
+    
+    def inserter(self, table_or_name=None,**kwargs):
+        raise NotImplementedError() 
+
+    def updater(self, table_or_name=None,**kwargs):
+        raise NotImplementedError() 
+
+    def commit(self):
+        raise NotImplementedError() 
+   
+
+
+class Database(DatabaseInterface):
     '''Represents a Sqlite database'''
 
     BUNDLE_DB_NAME = 'bundle'
@@ -567,6 +607,11 @@ class Database(object):
             self._session = Session()
             
         return self._session
+   
+    def open(self):
+        # Fetching the connection objects the database
+        # This isn't necessary for Sqlite databases. 
+        return self.connection
    
     def close(self):
         if self._session:    
@@ -951,9 +996,6 @@ class Database(object):
         raise NotImplemented
 
 
-        
-
-
 class PartitionDb(Database):
     '''a database for a partition file. Partition databases don't have a full schema
     and can load tables as they are referenced, by copying them from the prototype. '''
@@ -1034,12 +1076,39 @@ class GeoDb(PartitionDb):
         
         return FeatureInserter(self.partition,  table, dest_srs, source_srs)
    
+class HdfDb(Hdf5File, DatabaseInterface):
+    
+    EXTENSION = '.hdf5'
+    
+    def __init__(self, bundle, partition, base_path, **kwargs):
+        self.partition = partition
+        self.bundle = partition.bundle
+
+        self.container = self.partition
+
+        source,  name_parts, partition_path = self.partition._path_parts() #@UnusedVariable
+        
+        self._path = os.path.join(self.partition.bundle.database.base_path, *partition_path)
+   
+        super(HdfDb, self).__init__(self.path)  
+   
+    @classmethod
+    def make_path(cls, container):
+        return container.path + cls.EXTENSION
+
+    @property 
+    def path(self):
+        return self.make_path(self.container)
+   
+    def add_post_create(self, f):
+        pass
+   
 class BundleDb(Database):
+    
     '''Represents the database version of a bundle that is installed in a library'''
     def __init__(self, path):
-      
-        super(BundleDb, self).__init__(None, path)  
 
+        super(BundleDb, self).__init__(None, path)  
 def _pragma_on_connect(dbapi_con, con_record):
     '''ISSUE some Sqlite pragmas when the connection is created'''
 

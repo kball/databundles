@@ -576,7 +576,7 @@ class BuildBundle(Bundle):
      
         self.log("Install bundle {}".format(self.identity.name))  
         dest = library.put(self)
-        self.log("Installed to {} ".format(dest[2]))
+        self.log("Installed to {} ".format(dest[1]))
         
         skips = self.config.group('build').get('skipinstall',[])
         
@@ -587,7 +587,7 @@ class BuildBundle(Bundle):
             else:
                 self.log("Install partition {}".format(partition.name))  
                 dest = library.put(partition)
-                self.log("Installed to {} ".format(dest[2]))
+                self.log("Installed to {} ".format(dest[1]))
 
         return True
         

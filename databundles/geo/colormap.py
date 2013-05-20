@@ -74,7 +74,7 @@ def get_colormap(name=None, n_colors=None, reverse=False):
     return cmap
 
 def geometric_breaks(n, min, max):
-    """Produce breaks where each is two time larger than the previous"""
+    """Produce breaks where each is two times larger than the previous"""
 
     n -= 1
 
@@ -97,14 +97,13 @@ def write_colormap(file_name, a, map, break_scheme='even', min_val=None):
 
     header ="# QGIS Generated Color Map Export File\nINTERPOLATION:DISCRETE\n"
     
-    
     min_ = np.min(a) if not min_val else min_val
     max_ = np.max(a)
-    max_ = max_ * 1.01 # Be sure to get all values
-    range = min_-max_
-    delta = range*.001
-    
+
     if break_scheme == 'even':
+        max_ = max_ * 1.001 # Be sure to get all values
+        range = min_-max_
+        delta = range*.001
         r = np.linspace(min_-delta, max_+delta, num=map['n_colors']+1)
     elif break_scheme == 'jenks':
         from databundles.geo import jenks_breaks

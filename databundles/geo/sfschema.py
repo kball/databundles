@@ -211,16 +211,18 @@ class TableShapefile(object):
                 if i not in self.geo_col_pos or c.name in ['x','y','lat','lon']:
                     v = row.get(c.name, False)
                   
-                    if v is not None and  not isinstance(v, (int, float)):
+                    if v is not False and  not isinstance(v, (int, float)):
                         v = str(v)
 
-                    if v is not None:
+                    if v is not False:
                         feature.SetField(str(c.name), v)
+                    elif c.default:
+                        feature.SetField(str(c.name), c.python_type(c.default))
                       
         else:
             for i,v in enumerate(row):
                 if i not in self.geo_col_pos:
-                    feature.SetField(i, row.get(v, None) )
+                    feature.SetField(i, row.get(v, c.python_type(c.default) if c.default else None) )
             
         if self.transform:
             geometry.Transform(self.transform)
@@ -231,6 +233,10 @@ class TableShapefile(object):
         
 
     def _get_srs(self, srs_spec=None, default=4326):
+        
+        # Sometimes the EPSG numbers come from the database as strings
+        try: srs_spec = int(srs_spec)
+        except: pass
         
         srs = ogr.osr.SpatialReference()
         

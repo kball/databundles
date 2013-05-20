@@ -5,7 +5,7 @@
 /* Project name:                                                          */
 /* Author:                                                                */
 /* Script type:           Database creation script                        */
-/* Created on:            2013-05-11 19:32                                */
+/* Created on:            2013-05-19 21:53                                */
 /* ---------------------------------------------------------------------- */
 
 
@@ -127,6 +127,7 @@ CREATE TABLE partitions (
     p_space TEXT,
     p_time TEXT,
     p_grain TEXT,
+    p_format TEXT,
     p_t_id TEXT,
     p_data TEXT,
     p_state TEXT,

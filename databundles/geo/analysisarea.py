@@ -95,8 +95,8 @@ class AnalysisArea(object):
         
         self.srid = srid
         self.srswkt = srswkt
-        self._scale = scale # UTM meters per grid area
-        
+        self.scale = scale # UTM meters per grid area
+
         #Dimensions ust be even by MAJOR_GRID
      
         if  (self.eastmin % self.MAJOR_GRID + self.eastmax % self.MAJOR_GRID +

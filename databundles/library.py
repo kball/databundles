@@ -1023,6 +1023,7 @@ class Library(object):
     
     def _get_partition(self,  dataset, partition):
         from databundles.dbexceptions import NotFoundError
+        
         r = self._get_dataset(dataset)
         
         if not r:
@@ -1089,14 +1090,13 @@ class Library(object):
         return b
 
 
-        
     def put_file(self, identity, file_path, state='new'):
         '''Store a dataset or partition file, without having to open the file
         to determine what it is, by using  seperate identity''' 
         
         if isinstance(identity , dict):
             identity = new_identity(identity)
-        
+
         dst = self.cache.put(file_path,identity.cache_key)
 
         if self.api and self.sync:
