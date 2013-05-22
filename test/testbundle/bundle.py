@@ -19,7 +19,6 @@ class Bundle(BuildBundle):
        
         self.geoheaders_file = self.filesystem.path(bg.geoheaderFile)
 
-    
     def prepare(self):
         from databundles.partition import PartitionIdentity 
         
@@ -30,11 +29,10 @@ class Bundle(BuildBundle):
      
         for table in self.schema.tables:   
             pid = PartitionIdentity(self.identity, table=table.name)
-            if table.data.get('mandatory', False):
+            if table.data.get('make_partition', False):
                 partition = self.partitions.new_partition(pid)  
                 partition.create_with_tables(table.name)
-    
-    
+  
     def build(self):
         import random
         from functools import partial

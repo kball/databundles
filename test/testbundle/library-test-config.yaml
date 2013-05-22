@@ -20,7 +20,7 @@ filesystem:
   root_dir: /tmp/library-test/
   default:
       dir: '{root}/cache-l1'
-      size: 5
+      size: 50
       upstream:
         dir: '{root}/cache-l2'
         options: [compress]

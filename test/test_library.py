@@ -121,7 +121,7 @@ class Test(TestBase):
      
         l.put(self.bundle)
         l.put(self.bundle)
-        
+ 
         r = l.get(self.bundle.identity)
 
         self.assertIsNotNone(r.bundle)
@@ -161,21 +161,22 @@ class Test(TestBase):
         # Find the bundle and partitions in the library. 
     
         r = l.find(QueryCommand().table(name='tone'))
-        self.assertEquals('source-dataset-subset-variation-ca0d',r[0].Dataset.identity.name)  
+     
+        self.assertEquals('source-dataset-subset-variation-ca0d',r[0].dataset.name)  
     
-        r = l.find(QueryCommand().table(name='tone').partition(any=True)).all()
-        self.assertEquals('source-dataset-subset-variation-ca0d-tone',r[0].Partition.identity.name)
+        r = l.find(QueryCommand().table(name='tone').partition(any=True))
+        self.assertEquals('source-dataset-subset-variation-ca0d-tone',r[0].partition.name)
         
-        r = l.find(QueryCommand().table(name='tthree').partition(any=True)).all()
-        self.assertEquals('source-dataset-subset-variation-ca0d-tthree',r[0].Partition.identity.name)
+        r = l.find(QueryCommand().table(name='tthree').partition(any=True))
+        self.assertEquals('source-dataset-subset-variation-ca0d-tthree',r[0].partition.name)
         
         #
         #  Try getting the files 
         # 
         
-        r = l.find(QueryCommand().table(name='tthree').partition(any=True)).one() #@UnusedVariable
+        r = l.find(QueryCommand().table(name='tthree').partition(any=True)) #@UnusedVariable
        
-        bp = l.get(r.Dataset.identity.id_)
+        bp = l.get(r[0].dataset.id_)
         
         self.assertTrue(os.path.exists(bp.bundle.database.path))
         
@@ -183,12 +184,12 @@ class Test(TestBase):
         
         l.remove(self.bundle)
         
-        r = l.find(QueryCommand().table(name='tone').partition(any=True)).all()
+        r = l.find(QueryCommand().table(name='tone').partition(any=True))
         self.assertEquals(0, len(r))      
         
         l.put(self.bundle)
     
-        r = l.find(QueryCommand().table(name='tone').partition(any=True)).all()
+        r = l.find(QueryCommand().table(name='tone').partition(any=True))
         self.assertEquals(1, len(r))
        
         ds_names = [ds.identity.name for ds in l.datasets]

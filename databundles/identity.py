@@ -94,7 +94,7 @@ class Identity(object):
     @property
     def cache_key(self):
         '''The name is a form suitable for use in a filesystem'''
-        return self.path_str(self)
+        return self.path_str(self)+".db"
     
     @classmethod
     def path_str(cls,o=None):
@@ -315,7 +315,14 @@ class PartitionIdentity(Identity):
 
         return identity
 
-    
+   
+class GeoPartitionIdentity(PartitionIdentity):
+    pass
+  
+class HdfPartitionIdentity(PartitionIdentity):
+    pass
+
+   
 class ObjectNumber(object):
     '''
     Static class for holding constants and static methods related 

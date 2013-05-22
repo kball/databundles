@@ -134,7 +134,7 @@ class LibraryDb(object):
    
     DBCI = {
             'postgres':Dbci(dsn_template='postgresql+psycopg2://{user}:{password}@{server}/{name}',sql='support/configuration-pg.sql'), # Stored in the databundles module. 
-            'sqlite':Dbci(dsn_template='sqlite:///{name}',sql='support/configuration.sql')
+            'sqlite':Dbci(dsn_template='sqlite:///{name}',sql='support/configuration-sqlite.sql')
             }
     
     def __init__(self,  driver=None, server=None, dbname = None, username=None, password=None):
@@ -610,6 +610,7 @@ class LibraryDb(object):
         
     def add_file(self,path, group, ref, state='new'):
         from databundles.orm import  File
+        
         stat = os.stat(path)
       
         s = self.session
@@ -848,9 +849,7 @@ class Library(object):
             
     def get_ref(self,bp_id):
         from databundles.identity import ObjectNumber, DatasetNumber, PartitionNumber, Identity, PartitionIdentity
-                
-        #import pdb; pdb.set_trace()
-                
+
         if isinstance(bp_id, Identity):
             if bp_id.id_:
                 bp_id = bp_id.id_
@@ -900,7 +899,6 @@ class Library(object):
 
         # No luck so far, so now try to get it from the remote library
         if not dataset and self.api:
-            from databundles.identity import Identity, PartitionIdentity
             import socket
          
             try:
@@ -920,8 +918,9 @@ class Library(object):
             except socket.error:
                 self.logger.error("Connection to remote {} failed".format(self.remote))
         elif dataset:
+            from identity import new_identity
             dataset = Identity(**dataset.to_dict())
-            partition = PartitionIdentity(**partition.to_dict()) if partition else None
+            partition = new_identity(partition.to_dict()) if partition else None
             
  
         if not dataset:
@@ -1028,7 +1027,7 @@ class Library(object):
         
         if not r:
             return False
-        
+
         p =  r.bundle.partitions.partition(partition)
         
         if not p:
@@ -1097,7 +1096,11 @@ class Library(object):
         if isinstance(identity , dict):
             identity = new_identity(identity)
 
+        
         dst = self.cache.put(file_path,identity.cache_key)
+
+        if not os.path.exists(dst):
+            raise Exception("cache put() didn't return an existent path. got: {}".format(dst))
 
         if self.api and self.sync:
             self.api.put(file_path)

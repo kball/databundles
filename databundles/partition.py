@@ -559,8 +559,8 @@ class Partitions(object):
             if pid.grain is not None:
                 q = q.filter(OrmPartition.grain==pid.grain)
        
-            if format is not None:
-                q = q.filter(OrmPartition.format==pid.format)
+            #if format is not None:
+            #    q = q.filter(OrmPartition.format==pid.format)
         
             if pid.table is not None:
             

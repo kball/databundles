@@ -187,9 +187,9 @@ class Test(TestBase):
       
         self.bundle.database.session.commit()
         
-        self.assertIn('d1DxuZ0901', [c.id_ for c in t.columns])
-        self.assertIn('d1DxuZ0902', [c.id_ for c in t.columns])
-        self.assertIn('d1DxuZ0903', [c.id_ for c in t.columns])
+        self.assertIn('d1DxuZ0a01', [c.id_ for c in t.columns])
+        self.assertIn('d1DxuZ0a02', [c.id_ for c in t.columns])
+        self.assertIn('d1DxuZ0a03', [c.id_ for c in t.columns])
         
     def test_generate_schema(self):
         '''Uses the generateSchema method in the bundle'''
@@ -363,7 +363,8 @@ class Test(TestBase):
         
         # 4 partitions from the build ( defined in meta/geoschema.csv),
         # three we just created. 
-        self.assertEqual(9, len(self.bundle.partitions.all))
+
+        self.assertEqual(10, len(self.bundle.partitions.all))
         
         p = self.bundle.partitions.new_partition(pid1)   
         self.assertEquals('pid1',p.data['pid'] )

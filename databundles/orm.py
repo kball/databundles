@@ -627,7 +627,7 @@ class Partition(Base):
     time = SAColumn('p_time',Text)
     space = SAColumn('p_space',Text)
     grain = SAColumn('p_grain',Text)
-    format = SAColumn('p_format',Text)
+    #format = SAColumn('p_format',Text)
     state = SAColumn('p_state',Text)
     data = SAColumn('p_data',MutationDict.as_mutable(JSONEncodedDict))
     
@@ -644,7 +644,7 @@ class Partition(Base):
         self.time = kwargs.get("time",None)  
         self.table = kwargs.get("table",None) 
         self.grain = kwargs.get('grain',None)
-        self.format = kwargs.get('format',None)
+        #self.format = kwargs.get('format',None)
         
         self.data = kwargs.get('data',None)
         
@@ -652,7 +652,7 @@ class Partition(Base):
     def identity(self):
         '''Return this partition information as a PartitionId'''
         from sqlalchemy.orm import object_session
-        from partition import PartitionIdentity
+        from identity import PartitionIdentity, GeoPartitionIdentity, HdfPartitionIdentity
         
         #args = {'id': self.id_, 'space':self.space, 'time':self.time, 'grain':self.grain, 'format':self.format}
         args = {'id': self.id_, 'space':self.space, 'time':self.time, 'grain':self.grain}
@@ -670,8 +670,13 @@ class Partition(Base):
             id_ = ds.identity
         else:
             id_ = self.dataset.identity
-
-        return PartitionIdentity(id_, **args)
+            
+        if self.data.get('db_type') == 'geo':
+            return GeoPartitionIdentity(id_, **args)
+        elif self.data.get('db_type') == 'hdf':
+            return HdfPartitionIdentity(id_, **args)
+        else:
+            return PartitionIdentity(id_, **args)
 
     def to_dict(self):
         return self.identity.to_dict()

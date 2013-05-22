@@ -163,7 +163,7 @@ class Geocoder(object):
         if not ps:
             return None       
         
-        return self._geocode_street(ps)
+        return self._geocode_segment(ps)
          
     def _geocode_segment(self, ps):
         """Geocode an address to a street segment"""

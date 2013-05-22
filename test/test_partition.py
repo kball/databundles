@@ -18,8 +18,14 @@ class Test(TestBase):
         self.bundle_dir = self.bundle.bundle_dir
 
     def test_basic(self):
-        pass
+
+        for p in self.bundle.partitions:
+            print type(p.identity),  p.identity.name
             
+            
+        p = self.bundle.partitions.find_or_new_geo(table='geot1', space='all')
+        p.create()
+        print p.database.path
         
 
 if __name__ == "__main__":

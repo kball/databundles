@@ -66,7 +66,7 @@ class TableShapefile(object):
 
         self.layer = None
 
-        self.name = basename.split('/')[-1]
+        self.name = str(self.table.name)
       
     def __enter__(self):
         return self
