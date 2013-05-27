@@ -151,7 +151,11 @@ class Geocoder(object):
 
         r['x'] = x
         r['y'] = y
-        r['codedaddress'] = str(ps)
+        
+        if str(ps):
+            r['codedaddress'] = str(ps)
+        else:
+            r['codedaddress'] = None
 
         return r
         

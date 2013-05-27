@@ -15,21 +15,17 @@ class Hdf5File(h5py.File):
 
         self._path = path
         self._is_open = False
+        super(Hdf5File, self).__init__(self._path)  
 
 
-    def open(self):
-        if not self._is_open:
-            dir_ = os.path.dirname(self._path)
-            if not os.path.exists(dir_):
-                os.makedirs(dir_)
-    
-            super(Hdf5File, self).__init__(self._path)  
-            self._is_open = True
         
     def exists(self):
         import os.path
         
         return os.path.exists(self._path)
+        
+    def open(self):
+        pass
         
     @property
     def path(self):
@@ -38,8 +34,6 @@ class Hdf5File(h5py.File):
     def put_geo(self,name, a, aa):
         '''Store an array along with an Analysis Area'''
         import json
-
-        self.open()
 
         group = self.require_group("geo")
         
@@ -60,13 +54,14 @@ class Hdf5File(h5py.File):
         """Return an array an an associated analysis area"""
         import json
         from databundles.geo.analysisarea import AnalysisArea
-        self.open()
+
         group = self.require_group("geo")
+
         
         try:
             ds = group[name]
         except KeyError:
-            raise KeyError("Geo group doesn't have dataset named '{}'".format(name))
+            raise KeyError("Geo group in {} doesn't have dataset named '{}'".format(self.path,name))
         
 
         aa = AnalysisArea(**(json.loads(ds.attrs['analysis-area'])))
@@ -74,7 +69,7 @@ class Hdf5File(h5py.File):
         return ds,aa
 
     def list_geo(self):
-        self.open()
+
         return self.require_group("geo").keys()
 
     def table(self, table_name, mode='a', expected=None):

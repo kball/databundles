@@ -199,10 +199,9 @@ class HdfPartition(Partition):
 
     @property
     def database(self):
+        from .database import HdfDb
         if self._database is None:
-            source,  name_parts, partition_path = self._path_parts() #@UnusedVariable
-            self._database = self._db_class(self.bundle, self, base_path=self.path)
-            self._database.open()
+            self._database = HdfDb(self)
           
         return self._database
 
@@ -221,9 +220,12 @@ class GeoPartition(Partition):
         #
         # !! Assumes only one layer!
         
-        q ="select srs_wkt from geometry_columns, spatial_ref_sys where spatial_ref_sys.srid == geometry_columns.srid;"
-        
-        return self.database.query(q).first()[0]
+        try:
+            q ="select srs_wkt from geometry_columns, spatial_ref_sys where spatial_ref_sys.srid == geometry_columns.srid;"
+            return self.database.query(q).first()[0]
+        except:
+            q ="select srtext from geometry_columns, spatial_ref_sys where spatial_ref_sys.srid == geometry_columns.srid;"
+            return self.database.query(q).first()[0]
 
     def get_srs(self):
         import ogr 
@@ -231,6 +233,10 @@ class GeoPartition(Partition):
         srs = ogr.osr.SpatialReference()
         srs.ImportFromWkt(self.get_srs_wkt())
         return srs
+
+    @property
+    def srs(self):
+        return self.get_srs()
 
     def get_transform(self, dest_srs=4326):
         """Get an ogr transform object to convert from the SRS of this partition 

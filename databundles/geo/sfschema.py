@@ -66,7 +66,10 @@ class TableShapefile(object):
 
         self.layer = None
 
-        self.name = str(self.table.name)
+        if name:
+            self.name = str(name)
+        else:
+            self.name = str(self.table.name)
       
     def __enter__(self):
         return self
@@ -95,6 +98,7 @@ class TableShapefile(object):
                 typ = c.datatype
                 geo_col_names[0] = c.name
                 geo_col_pos[0] = i
+                
                 return typ ,  geo_col_names,    geo_col_pos 
      
         vals = 0 
@@ -112,7 +116,7 @@ class TableShapefile(object):
                 
             if vals == 2:
                 break
-          
+
         return typ ,  geo_col_names,    geo_col_pos 
                 
         
@@ -120,7 +124,7 @@ class TableShapefile(object):
         """Create fields definitions in the layer"""
         for c in self.table.columns:
             
-            if c.name in ('wkt','wkb','geometry'):
+            if c.name.lower() in ('wkt','wkb','geometry'):
                 continue
             
             dt = c.datatype

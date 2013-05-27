@@ -381,6 +381,11 @@ class Test(TestBase):
             self.assertIsNotNone(r)
             self.assertEquals(partition.identity.id_, r.partition.identity.id_)
         
+        
+        _,hdf = l.get('source-dataset-subset-variation-ca0d-hdf5')
+        
+        print hdf.database.path
+        
     def test_s3(self):
 
         #databundles.util.get_logger('databundles.filesystem').setLevel(logging.DEBUG) 

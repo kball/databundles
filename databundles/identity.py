@@ -320,7 +320,10 @@ class GeoPartitionIdentity(PartitionIdentity):
     pass
   
 class HdfPartitionIdentity(PartitionIdentity):
-    pass
+    @property
+    def cache_key(self):
+        '''The name is a form suitable for use in a filesystem'''
+        return self.path_str(self)+".hdf5"
 
    
 class ObjectNumber(object):

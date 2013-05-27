@@ -147,9 +147,15 @@ class Kernel(object):
 class ConstantKernel(Kernel):
     """A Kernel for a constant value"""
     
-    def __init__(self, size=1, value =1 ):
+    def __init__(self, size=1, value = None ):
         self.value  = value
-        self.matrix = ones((size, size))*value
+        
+        if value:
+            self.matrix = ones((size, size))*value
+        else:
+            self.matrix = ones((size, size))
+            self.matrix /= sum(self.matrix) # Normalize the sum of all cells in the matrix to 1
+            
         self.offset = (self.matrix.shape[0] - 1) / 2 
         
         if size > 1:
@@ -168,9 +174,6 @@ class GaussianKernel(Kernel):
          
         m = self.makeGaussian(size, fwhm)
 
-        m /= sum(m) # Normalize the sum of all cells in the matrix to 1
-        
-
         self.offset = (m.shape[0] - 1) / 2 
         self.matrix = m
 
@@ -182,16 +185,16 @@ class GaussianKernel(Kernel):
         fwhm is full-width-half-maximum, which
         can be thought of as an effective radius.
         """
-    
+        import numpy as np
+        
         x = arange(0, size, 1, float32)
         y = x[:,newaxis]
         x0 = y0 = size // 2
-        m =  ma.masked_array(exp(-4*log(2) * ((x-x0)**2 + (y-y0)**2) / fwhm**2))
-        
-        for (y,x), value in ndenumerate(m):
-            if value < 1./1000:
-                m[y, x] = 0
-        
+        ar = np.array(exp(-4*log(2) * ((x-x0)**2 + (y-y0)**2) / fwhm**2))
+        m =  ma.masked_less(ar, ar[0,x0+1]).filled(0) #mask less than the value at the edge to make it round. 
+
+        m /= sum(m) # Normalize the sum of all cells in the matrix to 1
+      
         return m
            
 class DistanceKernel(Kernel):
@@ -199,7 +202,7 @@ class DistanceKernel(Kernel):
     def __init__(self, size): 
         import math
         if size%2 == 0:
-            raise ValueError("Aray size must be odd")
+            raise ValueError("Array size must be odd")
         
         self.inverted = False
         

@@ -34,6 +34,10 @@ def get_analysis_area(library, **kwargs):
     county_code = kwargs.get('county', False)
     place_code = kwargs.get('place', False)
 
+    for kw in ('state','county','place'):
+        if kwargs.get(kw, False):
+            del kwargs[kw]
+
     if place_code:
         code = place_code
         place = US(library).place(place_code)
@@ -43,7 +47,7 @@ def get_analysis_area(library, **kwargs):
     if not place:
         raise Exception("Failed to get analysis area record for geoid: {}".format(code))
 
-    return AnalysisArea(**json.loads(place['aa']))
+    return place.aa(**kwargs)
 
 
 def draw_edges(a):
@@ -67,8 +71,12 @@ def draw_edges(a):
 
 class AnalysisArea(object):
     
-    SCALE = 20
-    MAJOR_GRID = 100 # All domensions must be even moduloo this. 
+    SCALE = 10 # Default cell size
+    MAJOR_GRID = 100 # All boundary dimensions must be even moduloo this. 
+    
+    MAX_CELLS = 75 * 1000 * 1000
+    
+    DEFAULT_D_TYPE = GDT_Float32
     
     def __init__(self, name, geoid,
                  eastmin, eastmax, northmin, northmax, 
@@ -95,7 +103,12 @@ class AnalysisArea(object):
         
         self.srid = srid
         self.srswkt = srswkt
-        self.scale = scale # UTM meters per grid area
+
+        if kwargs.get("_scale"): # appears when called from from_json()
+            
+            self.scale = kwargs.get("_scale") 
+        else:
+            self.scale = scale # UTM meters per grid area
 
         #Dimensions ust be even by MAJOR_GRID
      
@@ -105,9 +118,18 @@ class AnalysisArea(object):
                             .format(self.MAJOR_GRID))
                                  
 
+    def _too_big(self):
+        if self.size_x * self.size_y > self.MAX_CELLS:
+            raise Exception("Too big for scale {}: {} * {} = {}M cells"
+                            .format(self._scale,self.size_x, self.size_y, self.size_x * self.size_y / 1000000))
 
-    def new_array(self, dtype=float):
+
+    def new_array(self, dtype=float, mask=None):
+
+        self._too_big()
+
         return zeros((self.size_y, self.size_x), dtype = dtype)
+            
 
     @property
     def scale(self):
@@ -115,7 +137,7 @@ class AnalysisArea(object):
     
     @scale.setter
     def scale(self, scale):
-        
+
         self._scale = scale
         
         if  self.MAJOR_GRID % self._scale != 0:
@@ -125,10 +147,11 @@ class AnalysisArea(object):
         self.size_x = (self.eastmax - self.eastmin) / self._scale
         self.size_y = (self.northmax - self.northmin) / self._scale        
 
-
-    def new_masked_array(self, dtype=float, nodata=0):
+        self._too_big()
         
-        return ma.masked_array(self.new_array(dtype=dtype),nodata)  
+    def new_masked_array(self, dtype=float, nodata=0, mask=None):
+        
+        return ma.masked_array(self.new_array(dtype=dtype),nodata=nodata, mask=mask)  
         
     @property 
     def state(self):
@@ -150,13 +173,14 @@ class AnalysisArea(object):
     
     @property
     def pixel_size(self):
-        return self.SCALE
+        return self._scale
 
     @property
     def srs(self):
 
         return self._get_srs(self.srid)
       
+
     def _get_srs(self, srs_spec=None, default=4326):
         
         srs = ogr.osr.SpatialReference()
@@ -195,8 +219,8 @@ class AnalysisArea(object):
         def _transformer(x,y):
             xp,yp,z =  trans.TransformPoint(x,y)
             return Point(
-                         int(round((xp-self.eastmin)/self._scale)),
-                         int(round((yp-self.northmin)/self._scale))
+                         int((xp-self.eastmin)/self._scale),
+                         int((yp-self.northmin)/self._scale)
                     )
         
         return _transformer
@@ -284,16 +308,27 @@ class AnalysisArea(object):
         feature.Destroy()
         datasource.Destroy()
 
-    def get_geotiff(self, file_,  bands=1, over_sample=1, data_type=GDT_Int16, nodata=0):
+    def get_geotiff(self, file_,  bands=1, over_sample=1, data_type=DEFAULT_D_TYPE, nodata=0):
+        return self._get_image(file_, bands, over_sample, data_type, nodata, 'GTiff')
+
+    def get_memimage(self,  bands=1, over_sample=1, data_type=DEFAULT_D_TYPE, nodata=0):
+        return self._get_image('/tmp/foo.mem', bands, over_sample, data_type, nodata, 'MEM')
+
+    def _get_image(self, file_,  bands=1, over_sample=1, data_type=DEFAULT_D_TYPE, nodata=0, driver='GTiff'):
         from osgeo import gdal
     
-        driver = gdal.GetDriverByName('GTiff') 
+        if driver in ('GTiff'):
+            options = [ 'COMPRESS=LZW' ]
+        else:
+            options =  []
+    
+        driver = gdal.GetDriverByName(driver) 
  
         out = driver.Create(file_, 
                             int(self.size_x*over_sample), int(self.size_y*over_sample),
                             bands, 
                             data_type, 
-                            options = [ 'COMPRESS=LZW' ])  
+                            options = options)  
         
         # Note that Y pixel height is negative to account for increasing
         # Y going down the image, rather than up. 
@@ -304,9 +339,9 @@ class AnalysisArea(object):
                      0 ,     # rotation, 0 if image is "north up"
                      -self.pixel_size/over_sample # Pixel Height
                      ]
-    
-    
+
         out.SetGeoTransform(transform)  
+        
         for i in range(bands):
             out.GetRasterBand(i+1).SetNoDataValue(nodata)
             
@@ -316,7 +351,7 @@ class AnalysisArea(object):
 
     
     
-    def write_geotiff(self, file_,  a, data_type=GDT_Float32, nodata=0):
+    def write_geotiff(self, file_,  a, data_type=DEFAULT_D_TYPE, nodata=0):
         """
         Args:
             file_: Name of file to write to

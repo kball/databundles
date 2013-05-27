@@ -255,6 +255,7 @@ class Ckan(object):
             name = self.translate_name(name)
         
         group_names = kwargs.get('group_names',[])
+        group_names.append('extracts')
        
         for group_name in bundle.config.group('about').get('groups',[]):
             group_names.append(group_name)

@@ -1080,16 +1080,16 @@ class HdfDb(Hdf5File, DatabaseInterface):
     
     EXTENSION = '.hdf5'
     
-    def __init__(self, bundle, partition, base_path, **kwargs):
+    def __init__(self,  partition):
         self.partition = partition
         self.bundle = partition.bundle
 
         self.container = self.partition
 
-        source,  name_parts, partition_path = self.partition._path_parts() #@UnusedVariable
-        
-        self._path = os.path.join(self.partition.bundle.database.base_path, *partition_path)
-   
+        dir_ = os.path.dirname(self.path)
+        if not os.path.exists(dir_):
+            os.makedirs(dir_)
+
         super(HdfDb, self).__init__(self.path)  
    
     @classmethod

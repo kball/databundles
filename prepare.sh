@@ -2,6 +2,12 @@
 
 echo "--- Installing base packages. May need to ask for root password"
 
+#
+# INstall scikit, scipy, numpy and others, on Mac OS X
+#  curl -o install_superpack.sh https://raw.github.com/fonnesbeck/ScipySuperpack/master/install_superpack.sh
+#  sh install_superpack.sh
+#
+
 command -v apt-get >/dev/null 2>&1; has_aptget=$?
 command -v brew >/dev/null 2>&1; has_brew=$?
 

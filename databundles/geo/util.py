@@ -497,14 +497,16 @@ def get_shapefile_geometry_types(shape_file):
     
         return types, type_
     
-def segment_points(areas, query, where_template=None):
+def segment_points(areas,table_name=None,  query_template=None, places_query=None, bb_clause=None, bb_type='ll'):
     """A generator that yields information that can be used to classify
     points into areas
     
     :param areas: A `Bundle`or `partition` object with access to the places database
     :param query: A Query to return places. Must return,  for each row,  fields names 'id' ,'name'
     and 'wkt'
+    :param bb_type: Either 'll' to use lon/lat for the bounding box query, or 'xy' to use x/y for the query
     :rtype: a `LibraryDb` object
+    
     
     The 'wkt' field returned by the query is the Well Know Text representation of the area
     geometry
@@ -520,17 +522,29 @@ def segment_points(areas, query, where_template=None):
 
     transform = osr.CoordinateTransformation(source_srs, dest_srs)
     
-    if where_template is None:
-        where_template = "lon BETWEEN {x1} AND {x2} AND lat BETWEEN {y1} and {y2}"
+    if query_template is None:
+        query_template =  "SELECT * FROM {table_name} WHERE {bb_clause} AND ({target_col} IS NULL OR {target_col} = 'NONE') "
     
-    for area in areas.query(query):
+    if places_query is None:
+        places_query = "SELECT *, AsText(geometry) AS wkt FROM {} ORDER BY area ASC".format(areas.identity.table)
+    
+    if bb_clause is None:
+        if bb_type == 'll':
+            bb_clause = "lon BETWEEN {x1} AND {x2} AND lat BETWEEN {y1} and {y2}"
+        elif bb_type == 'xy':
+            bb_clause = "x BETWEEN {x1} AND {x2} AND y BETWEEN {y1} and {y2}"
+        else:
+            raise ValueError("Must use 'll' or 'xy' for bb_type. got: {}".format(bb_type))
+    
+    for area in areas.query(places_query):
      
         g = ogr.CreateGeometryFromWkt(area['wkt'])
         g.Transform(transform)
         
         e = g.GetEnvelope()
-                
-        where = (where_template.format(x1=e[0], x2=e[1], y1=e[2], y2=e[3]))       
+
+        bb = bb_clause.format(x1=e[0], x2=e[1], y1=e[2], y2=e[3])
+        query = query_template.format(bb_clause=bb, table_name = table_name, target_col=area['type'])      
         
         def is_in(x, y):
             p = ogr.Geometry(ogr.wkbPoint)
@@ -543,7 +557,7 @@ def segment_points(areas, query, where_template=None):
         
         area = dict(area)
 
-        yield area, where, is_in
+        yield area, query, is_in
 
     
     

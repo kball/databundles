@@ -818,6 +818,8 @@ class Library(object):
         self.api = None
         self.bundle = None # Set externally in bundle.library()
 
+        self.dependencies = None
+
         if not self.cache:
             raise ConfigurationError("Must specify library.cache for the library in bundles.yaml")
 
@@ -1058,12 +1060,20 @@ class Library(object):
         return self.cache.path(rel_path)
         
         
-    def dep(self,name):
-        """"Bundle version of get(), which uses a key in the 
-        bundles configuration group 'dependencies' to resolve to a name"""
+    def add_dependency(self, key, name):
         
+        if not self.dependencies:
+            self.dependencies = {}
+        
+        self.dependencies[key] = name
+        
+    def _add_dependencies(self):
+
         if not self.bundle:
             raise ConfigurationError("Can't use the dep() method for a library that is not attached to a bundle");
+
+        if not self.dependencies:
+            self.dependencies = {}
 
         group = self.bundle.config.group('build')
         
@@ -1075,7 +1085,18 @@ class Library(object):
         if not deps:
             raise ConfigurationError("Configuration has no 'dependencies' group")
         
-        bundle_name = deps.get(name, False)
+        for k,v in deps.items():
+            self.dependencies[k] = v
+                
+    def dep(self,name):
+        """"Bundle version of get(), which uses a key in the 
+        bundles configuration group 'dependencies' to resolve to a name"""
+        
+        if not self.dependencies:
+            self._add_dependencies()
+        
+
+        bundle_name = self.dependencies.get(name, False)
         
         if not bundle_name:
             raise ConfigurationError("No dependency names '{}'".format(name))
@@ -1096,7 +1117,6 @@ class Library(object):
         if isinstance(identity , dict):
             identity = new_identity(identity)
 
-        
         dst = self.cache.put(file_path,identity.cache_key)
 
         if not os.path.exists(dst):

@@ -359,6 +359,7 @@ class Repository(object):
         data['title'] = data.get('title','').format(**data)
         data['description'] = data.get('description','').format(**data)
         data['name'] = data.get('name','').format(**data)
+        data['layer_name'] = data.get('layer_name','').format(**data)
         data['path'] = self.bundle.filesystem.path('extracts',format(data['name']))
         data['done_if'] = data.get('done_if','').format(**data)
         
