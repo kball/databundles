@@ -29,7 +29,6 @@ import logging.handlers #@Unus gedImport
 class NullHandler(logging.Handler):
     def emit(self, record):
         pass
-
     
 def get_database(config=None,name='library'):
     """Return a new `LibraryDb`, constructed from a configuration
@@ -1047,6 +1046,8 @@ class Library(object):
                                .format(r.bundle.identity.name, p.identity.id_,p.identity.name,
                                        p.database.path, rp))
         p.library = self   
+
+        r.bundle.partition = p
 
         return self.Return(r.bundle, p)
 
