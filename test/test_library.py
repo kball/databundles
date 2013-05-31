@@ -65,7 +65,7 @@ class Test(TestBase):
 
         r = l.get(self.bundle.identity.name)
         self.assertTrue(r is not False)
-        self.assertEquals(self.bundle.identity.name, r.bundle.identity.name)
+        self.assertEquals(self.bundle.identity.name, r.identity.name)
 
         r = l.get('gibberish')
         self.assertFalse(r)
@@ -78,13 +78,13 @@ class Test(TestBase):
             r = l.get(partition.identity.name)
             self.assertTrue(r is not False)
             self.assertEquals(partition.identity.name, r.partition.identity.name)
-            self.assertEquals(self.bundle.identity.name, r.bundle.identity.name)
+            self.assertEquals(self.bundle.identity.name, r.identity.name)
             
             # Get the partition with an id
             r = l.get(partition.identity.id_)
             self.assertTrue(r is not False)
             self.assertEquals(partition.identity.name, r.partition.identity.name)
-            self.assertEquals(self.bundle.identity.name, r.bundle.identity.name)            
+            self.assertEquals(self.bundle.identity.name, r.identity.name)            
 
             
     def test_public_url(self):
@@ -124,11 +124,11 @@ class Test(TestBase):
  
         r = l.get(self.bundle.identity)
 
-        self.assertIsNotNone(r.bundle)
-        self.assertTrue(r.bundle is not False)
-        self.assertEquals(self.bundle.identity.id_, r.bundle.identity.id_)
+        self.assertIsNotNone(r)
+        self.assertTrue(r is not False)
+        self.assertEquals(r.identity.id_, r.identity.id_)
         
-        print "Stored: ",  r.bundle.identity.name
+        print "Stored: ",  r.identity.name
         
         # Install the partition, then check that we can fetch it
         # a few different ways. 
@@ -162,13 +162,13 @@ class Test(TestBase):
     
         r = l.find(QueryCommand().table(name='tone'))
      
-        self.assertEquals('source-dataset-subset-variation-ca0d',r[0].dataset.name)  
+        self.assertEquals('source-dataset-subset-variation-ca0d',r[0].name)  
     
         r = l.find(QueryCommand().table(name='tone').partition(any=True))
-        self.assertEquals('source-dataset-subset-variation-ca0d-tone',r[0].partition.name)
+        self.assertEquals('source-dataset-subset-variation-ca0d-tone',r[0].name)
         
         r = l.find(QueryCommand().table(name='tthree').partition(any=True))
-        self.assertEquals('source-dataset-subset-variation-ca0d-tthree',r[0].partition.name)
+        self.assertEquals('source-dataset-subset-variation-ca0d-tthree',r[0].name)
         
         #
         #  Try getting the files 
@@ -176,9 +176,9 @@ class Test(TestBase):
         
         r = l.find(QueryCommand().table(name='tthree').partition(any=True)) #@UnusedVariable
        
-        bp = l.get(r[0].dataset.id_)
+        bp = l.get(r[0].id_)
         
-        self.assertTrue(os.path.exists(bp.bundle.database.path))
+        self.assertTrue(os.path.exists(bp.database.path))
         
         # Put the bundle with remove to check that the partitions are reset
         
@@ -382,9 +382,10 @@ class Test(TestBase):
             self.assertEquals(partition.identity.id_, r.partition.identity.id_)
         
         
-        _,hdf = l.get('source-dataset-subset-variation-ca0d-hdf5')
+        hdf = l.get('source-dataset-subset-variation-ca0d-hdf5')
         
         print hdf.database.path
+        print hdf.partition.database.path
         
     def test_s3(self):
 

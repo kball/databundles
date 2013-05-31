@@ -470,6 +470,7 @@ class LibraryDb(object):
             return None, None
             #raise ResultCountError("Failed to find dataset or partition for: {}".format(str(bp_id)))
         
+
         return dataset, partition
         
     def find(self, query_command):
@@ -479,14 +480,9 @@ class LibraryDb(object):
             query_command. QueryCommand or Identity
             
         returns:
-            An SqlAlchemy query that will either return rows with:
-            
-                ( dataset, dataset_id)
-            or
-                ( dataset, partition, dataset_id)
-                
-            The partition for is returned when the QueryCommand includes
-            a 'partition' component
+            A list of identities, either Identity, for datasets, or PartitionIdentity
+            for partitions. 
+
             
         '''
       
@@ -547,11 +543,10 @@ class LibraryDb(object):
         out = []
         for r in query.all():
             if has_partition:
-                partition = r.Partition.identity
+                out.append(r.Partition.identity)
             else:
-                partition = None
-                
-            out.append(Library.ReturnDs(r.Dataset.identity, partition))
+                out.append(r.Dataset.identity)
+
             
         return out
         
@@ -882,10 +877,8 @@ class Library(object):
                 r = r.pop()
             
             if r:
-                dataset, partition  = self._get_bundle_path_from_id(r[0].id_) 
+                dataset, partition  = self._get_bundle_path_from_id(r.id_) 
                 
-
-
         # Try the name as a partition name
         if not dataset:
             q = self.find(QueryCommand().partition(name = bp_id) )
@@ -893,10 +886,9 @@ class Library(object):
             if not q:
                 return False, False
        
-            r = q.pop()
+            r = q.pop(0)
             if r:
-                dataset, partition  = self._get_bundle_path_from_id(r[1].id_)         
-
+                dataset, partition  = self._get_bundle_path_from_id(r.id_)         
 
         # No luck so far, so now try to get it from the remote library
         if not dataset and self.api:
@@ -1019,7 +1011,7 @@ class Library(object):
             
         bundle.library = self
 
-        return self.Return(bundle, None)
+        return bundle
     
     def _get_partition(self,  dataset, partition):
         from databundles.dbexceptions import NotFoundError
@@ -1029,11 +1021,11 @@ class Library(object):
         if not r:
             return False
 
-        p =  r.bundle.partitions.partition(partition)
+        p =  r.partitions.partition(partition)
         
         if not p:
             raise NotFoundError(" Partition '{}' not in bundle  '{}' "
-                                .format(partition, r.bundle.identity.name ))
+                                .format(partition, r.identity.name ))
         
         rp = self.cache.get(p.identity.cache_key)
     
@@ -1043,13 +1035,13 @@ class Library(object):
             else:
                 raise NotFoundError("""Didn't get partition in {} for id {} {}. 
                                     Partition found, but path {} ({}?) not in local library and api not set. """
-                               .format(r.bundle.identity.name, p.identity.id_,p.identity.name,
+                               .format(r.identity.name, p.identity.id_,p.identity.name,
                                        p.database.path, rp))
         p.library = self   
 
-        r.bundle.partition = p
+        r.partition = p
 
-        return self.Return(r.bundle, p)
+        return r
 
         
     def find(self, query_command):
