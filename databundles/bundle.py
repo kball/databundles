@@ -370,10 +370,19 @@ class BuildBundle(Bundle):
 
     def update_configuration(self):
 
+        # Re-writes the undle.yaml file, with updates to the identity and partitions
+        # sections. 
         self.config.rewrite(
                          identity=self.identity.to_dict(),
                          partitions=[p.identity.name for p in self.partitions]
                          )
+        
+        # Reload some of the values from bundle.yaml into the database configuration
+
+        if self.config.build.get('dependencies'):
+            dbc = self.db_config
+            for k,v in self.config.build.get('dependencies').items():
+                dbc.set_value('dependencies', k, v)
         
     @classmethod
     def rm_rf(cls, d):
@@ -398,7 +407,6 @@ class BuildBundle(Bundle):
         if not self.config.group('build').get('sources',None): 
             raise ConfigurationError("Configuration does not have 'build.sources' group")
             
-        
         return self.config.build.sources
         
     def source(self,name):
@@ -540,6 +548,7 @@ class BuildBundle(Bundle):
     
     def post_prepare(self):
         self.db_config.set_value('process','prepared',True)
+        self.update_configuration()
         return True
    
 
@@ -558,6 +567,10 @@ class BuildBundle(Bundle):
         return True
     
     def post_build(self):
+        import time
+        
+        self.db_config.set_value('build', 'completed', time.gmtime())
+        
         return True
     
         
