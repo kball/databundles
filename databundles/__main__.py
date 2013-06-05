@@ -127,7 +127,10 @@ def library_command(args, rc):
             print "-- Pushing to {}".format(l.remote)
             for f in files_:
                 print "Pushing: {}".format(f.path)
-                l.push(f)
+                try:
+                    l.push(f)
+                except Exception as e:
+                    print "Failed: {}".format(e)
 
     elif args.subcommand == 'files':
 
@@ -277,12 +280,15 @@ def ckan_command(args,rc):
         else:
             import yaml
             yaml.dump(args, indent=4, default_flow_style=False)
-        
-        
-        
+
     else:
         print 'Testing'
         print args
+ 
+
+def code_command(args,rc):
+    
+    print "CODE {}".format(args)
 
 def test_command(args,rc):
     
@@ -416,7 +422,18 @@ def main():
     sp.add_argument('-f', '--force',  default=False, action='store_true', help="Force using the default config; don't re-use the xisting config")
     sp.add_argument('-r', '--root',  default=None,  help="Set the root dir")
     sp.add_argument('-R', '--remote',  default=None,  help="Url of remote library")
+
+    #
+    # Code Command
+    #
+    lib_p = cmd.add_parser('code', help='Find and clone code bundles')
+    lib_p.set_defaults(command='code')
+    asp = lib_p.add_subparsers(title='code', help='Find and clone code bundles')
     
+    sp = asp.add_parser('clone', help='Find a code bundle in a configured repository and clone it')
+    sp.set_defaults(subcommand='clone')
+    sp.add_argument('name', type=str,help='Name of the bundle')
+
                        
     #
     # Test Command
@@ -447,7 +464,8 @@ def main():
         'library':library_command,
         'test':test_command,
         'install':install_command,
-        'ckan':ckan_command
+        'ckan':ckan_command,
+        'code': code_command
     }
         
     f = funcs.get(args.command, False)

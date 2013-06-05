@@ -68,6 +68,10 @@ class Rest(object):
         return
         
         '''
+        
+        try: id_or_name = id_or_name.id_ # check if it is actualy an Identity object
+        except: pass
+        
         response  = self.api.datasets(id_or_name).get()
   
         if response.status == 404:
@@ -138,7 +142,7 @@ class Rest(object):
             # Read the damn thing yourself ... 
             return response
                     
-    def _put(self, id_,source):
+    def _put(self, identity ,source):
         '''Put the source to the remote, creating a compressed version if
         it is not originally compressed'''
         
@@ -146,6 +150,8 @@ class Rest(object):
         import gzip
         import os, tempfile, uuid
         from databundles.identity import ObjectNumber, DatasetNumber, PartitionNumber
+        
+        id_ = identity.id_
         
         on = ObjectNumber.parse(id_)
  
@@ -157,7 +163,7 @@ class Rest(object):
  
         type_ = bundle_file_type(source)
 
-        if  type_ == 'sqlite':
+        if  type_ == 'sqlite' or type_ == 'hdf':
             # If it is a plain sqlite file, compress it before sending it. 
             try:
                 cf = os.path.join(tempfile.gettempdir(),str(uuid.uuid4()))
@@ -184,7 +190,7 @@ class Rest(object):
                 response =  self.api.datasets(str(on.dataset)).partitions(str(on)).put(source)
             
         else:
-            raise Exception("Bad file got type: {} ".format(type_))
+            raise Exception("Bad file for id {}  got type: {} ".format(id_, type_))
 
 
         raise_for_status(response)
@@ -192,9 +198,10 @@ class Rest(object):
         return response
         
 
-    def put(self,id_,source):
+    def put(self,identity,source):
         '''Put the bundle in source to the remote library 
         Args:
+            identity. An identity object that identifies the bundle or partition
             source. Either the name of the bundle file, or a file-like opbject
         '''
         from sqlalchemy.exc import IntegrityError
@@ -202,12 +209,12 @@ class Rest(object):
         try:
             # a Filename
             with open(source) as flo:
-                r =  self._put(id_,flo)
+                r =  self._put(identity,flo)
         except IntegrityError as e:
             raise e
         except Exception as e:
             # an already open file
-            r =  self._put(id_,source)
+            r =  self._put(identity,source)
             
         raise_for_status(r)
         
@@ -220,7 +227,7 @@ class Rest(object):
     def find(self, query):
         '''Find datasets, given a QueryCommand object'''
         from databundles.library import QueryCommand
-        from databundles.identity import Identity, PartitionIdentity
+        from databundles.identity import Identity, PartitionIdentity, new_identity
         
 
         if isinstance(query, basestring):
@@ -252,8 +259,7 @@ class Rest(object):
         Ref1= namedtuple('Ref1','Dataset Partition')
         Ref2= namedtuple('Ref2','Dataset')
 
-        return [ (Ref1(Identity(**i['dataset']) ,PartitionIdentity(**i['partition'])) if i['partition'] 
-                else  Ref2(Identity(**i['dataset']))) for i in r  if i is not False]
+        return [ new_identity(i) for i in r  if i is not False]
     
     
     def list(self):

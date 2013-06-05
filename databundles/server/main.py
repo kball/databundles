@@ -74,7 +74,6 @@ def _CaptureException(f, *args, **kwargs):
         r =  f(*args, **kwargs)
     except Exception as e:
         r = make_exception_response(e)
-     
 
     return r
 
@@ -136,10 +135,12 @@ def get_datasets_find(term):
     if dataset is False:
         return False
      
-    return   {
-             'dataset' : dataset.to_dict(),
-             'partition' : partition.to_dict() if partition else None,
-             }
+     
+    if partition:
+        return partition.to_dict() 
+    else:
+        return dataset.to_dict()
+  
 
     
 @post('/datasets/find')
@@ -150,23 +151,14 @@ def post_datasets_find():
     q = request.json
    
     bq = QueryCommand(q)
-    db_query = get_library().find(bq)
-    results = db_query.all() #@UnusedVariable
-  
+    results = get_library().find(bq)
+
     out = []
     for r in results:
-        if isinstance(r, tuple):
-            e = { 'dataset':  r.Dataset.identity.to_dict(),
-                  'partition': r.Partition.identity.to_dict() if hasattr(r,'Partition') else None
-                 }
-        else:
-            e = { 'dataset': {'id_': r.Dataset.id_, 'name': r.Dataset.name},
-                  'partition': None
-                 }
-  
-        out.append(e)
+
+        out.append(r.to_dict())
         
-        return out
+    return out
   
 
 
@@ -184,16 +176,15 @@ def _get_dataset_partition_record(did, pid):
     if str(pon.dataset) != str(don):
         raise exc.BadRequest('Partition number {} does not belong to datset {}'.format(pid, did))
     
-    gr =  get_library().get(did)
+    bundle =  get_library().get(did)
     
     # Need to read the file early, otherwise exceptions here
     # will result in the cilent's ocket disconnecting. 
 
-    if not gr:
+    if not bundle:
         raise exc.NotFound('No dataset for id: {}'.format(did))
 
-    bundle =  gr.bundle
-
+   
     partition = bundle.partitions.get(pid)
 
     return bundle,partition
@@ -326,11 +317,14 @@ def get_dataset_bundle(did):
     bp = get_library().get(did)
 
     if bp is False:
-        raise Exception("Didn't find dataset for id: {} ".format(did))
+        raise Exception("Didn't find dataset for id: {}, library = {}  ".format(did, get_library().database.path))
 
-    return static_file(bp.bundle.database.path, root='/', mimetype="application/octet-stream")    
-
+    f = bp.database.path
     
+    if not os.path.exists(f):
+        raise exc.NotFound("No file {} for id {}".format(f, did))
+    
+    return static_file(f, root='/', mimetype="application/octet-stream")
 
 @get('/datasets/:did/info')
 def get_dataset_info(did):
@@ -342,16 +336,12 @@ def get_dataset_info(did):
     if not gr:
         raise exc.NotFound("Failed to find dataset for {}".format(did))
     
-    
     d = {'dataset' : gr.bundle.identity.to_dict(), 'partitions' : {}}
          
-    
     for partition in  gr.bundle.partitions:
         d['partitions'][partition.identity.id_] = partition.identity.to_dict()
     
-
     return d
-
 
 @get('/datasets/<did>/partitions')
 @CaptureException
@@ -378,10 +368,14 @@ def get_dataset_partitions(did, pid):
     
     dataset, partition = _get_dataset_partition_record(did, pid)
 
+    logger.info("------ HERE ---- ")
+
     if not dataset:
+        logger.info("Didn't find dataset")
         raise NotFound("Didn't find dataset associated with id {}".format(did))
         
     if not partition:
+        logger.info("Didn't find partition")
         raise NotFound("Didn't find partition associated with id {}".format(pid))
     
     try:
@@ -409,10 +403,16 @@ def put_datasets_partitions(did, pid):
         dataset, partition = _get_dataset_partition_record(did, pid) #@UnusedVariable
       
         library_path, rel_path, url = get_library().put_file(partition.identity, payload_file) #@UnusedVariable
-      
+        
+        logger.info("Put partition {} {} to {}".format(partition.identity.id_,  partition.identity.name, library_path))
+
     finally:
         if os.path.exists(payload_file):
             os.remove(payload_file)
+
+
+    if not os.path.exists(library_path):
+        raise Exception("Can't find {} after put".format(library_path))
 
     r = partition.identity.to_dict()
     r['url'] = url

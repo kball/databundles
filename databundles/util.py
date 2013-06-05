@@ -95,16 +95,21 @@ def bundle_file_type(path_or_file):
         except:
             d = None
             
+            
     if not d:
         if path_or_file.endswith('.db'):
             return 'sqlite'
         elif path_or_file.endswith('.gz'):
             return 'gzip'
         else:
-            raise Exception("Can'y figure out file type")
+            raise Exception("Can't figure out file type")
+    
+    d = d.strip()
     
     if d == 'SQLite format 3':
         return 'sqlite'
+    elif d[1:4] == 'HDF':
+        return 'hdf'
     elif hex(struct.unpack('!H',d[0:2])[0]) == '0x1f8b':
         return 'gzip'
     else:

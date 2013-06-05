@@ -14,7 +14,7 @@ database:
 filesystem:  
     server:
         dir: '/tmp/server/cache-l1'
-        size: 5
+        size: 5000
         upstream:
           dir: '/tmp/server//cache-l2'
           options: [compress]

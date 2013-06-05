@@ -541,6 +541,7 @@ class LibraryDb(object):
                 query = query.filter(  getattr(Table, k) == v )
 
         out = []
+
         for r in query.all():
             if has_partition:
                 out.append(r.Partition.identity)
@@ -804,6 +805,7 @@ class Library(object):
         
         '''
         from  databundles.client.rest import Rest 
+        from  databundles.client.S3 import S3 
         
         self.cache = cache
         self._database = database
@@ -818,7 +820,11 @@ class Library(object):
             raise ConfigurationError("Must specify library.cache for the library in bundles.yaml")
 
         if self.remote:
-            self.api =  Rest(self.remote)
+            if isinstance(self.remote, basestring) and self.remote.startswith('http'):
+                self.api =  Rest(self.remote)
+            elif self.remote.get('bucket'):
+                self.api = S3(self.remote)
+                
 
         self.logger = logging.getLogger(__name__)
 
@@ -883,12 +889,10 @@ class Library(object):
         if not dataset:
             q = self.find(QueryCommand().partition(name = bp_id) )
        
-            if not q:
-                return False, False
-       
-            r = q.pop(0)
-            if r:
-                dataset, partition  = self._get_bundle_path_from_id(r.id_)         
+            if q:
+                r = q.pop(0)
+                if r:
+                    dataset, partition  = self._get_bundle_path_from_id(r.id_)         
 
         # No luck so far, so now try to get it from the remote library
         if not dataset and self.api:
@@ -899,15 +903,14 @@ class Library(object):
 
                 if r:
                     r = r[0]
-    
-                    if hasattr(r, 'Partition') and r.Partition is not None:
-                        dataset = r.Dataset
-                        partition = r.Partition
                     
+                    if r.is_partition:
+                        dataset = r.as_dataset
+                        partition = r
                     else:
-                        dataset = r.Dataset
+                        dataset = r
                         partition = None
-               
+
             except socket.error:
                 self.logger.error("Connection to remote {} failed".format(self.remote))
         elif dataset:
@@ -915,7 +918,6 @@ class Library(object):
             dataset = Identity(**dataset.to_dict())
             partition = new_identity(partition.to_dict()) if partition else None
             
- 
         if not dataset:
             return False, False
    
@@ -930,6 +932,9 @@ class Library(object):
             identity = Identity(**(dataset._asdict()))        
 
         r = self.api.get(identity.id_)
+        
+        if not r:
+            return False
         
         # Store it in the local cache. 
         
@@ -948,9 +953,9 @@ class Library(object):
       
     def _get_remote_partition(self, bundle, partition):
         
-        from databundles.identity import  PartitionIdentity 
+        from databundles.identity import  PartitionIdentity, new_identity 
 
-        identity = PartitionIdentity.convert(partition, bundle = bundle)
+        identity = new_identity(partition.to_dict(), bundle=bundle) 
 
             
 
@@ -1031,7 +1036,7 @@ class Library(object):
     
         if not os.path.exists(p.database.path):
             if self.api:
-                self._get_remote_partition(r.bundle,partition)
+                self._get_remote_partition(r,partition)
             else:
                 raise NotFoundError("""Didn't get partition in {} for id {} {}. 
                                     Partition found, but path {} ({}?) not in local library and api not set. """
@@ -1113,10 +1118,10 @@ class Library(object):
         dst = self.cache.put(file_path,identity.cache_key)
 
         if not os.path.exists(dst):
-            raise Exception("cache put() didn't return an existent path. got: {}".format(dst))
+            raise Exception("cache {}.put() didn't return an existent path. got: {}".format(type(self.cache), dst))
 
         if self.api and self.sync:
-            self.api.put(file_path)
+            self.api.put(identity, file_path)
 
         self.database.add_file(dst, self.cache.repo_id, identity.id_,  state)
 
@@ -1219,10 +1224,7 @@ class Library(object):
    
         for nf in new_files:
             yield nf
-        
-  
-    
-  
+
     def push(self, file_=None):
         """Push any files marked 'new' to the remote
         
@@ -1235,7 +1237,15 @@ class Library(object):
             raise Exception("Can't push() without defining a remote. ")
  
         if file_ is not None:
-            self.api.put(file_.ref, file_.path)
+            
+            dataset, partition = self.database.get(file_.ref)
+            
+            if partition:
+                identity = partition.identity
+            else:
+                identity = dataset.identity
+            
+            self.api.put(identity, file_.path)
             file_.state = 'pushed'
             self.database.commit()
         else:

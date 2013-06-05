@@ -22,10 +22,16 @@ def new_identity(d, bundle=None):
     elif bundle: 
         return PartitionIdentity(bundle.identity, **d)
     elif set(['time','space','table','grain', 'format']).intersection(set(d.keys())):
-        
-        return PartitionIdentity(**d)
+
+        try : return PartitionIdentity(**d)
+        except Exception as e:
+            raise Exception("Failed for {}: {}".format(d, e))
+    
     else:
         return Identity(**d)
+        try : return Identity(**d)
+        except Exception as e:
+            raise Exception("Failed for {}: {}".format(d, e))
         
 
 class Identity(object):
@@ -125,7 +131,7 @@ class Identity(object):
                 raise ConfigurationError('Source is None ')  
             name_parts.append(o.source)
         except Exception as e:
-            raise ConfigurationError('Missing identity.source: '+str(e))  
+            raise ConfigurationError('Missing identity.source for {},  {} '.format(o.__dict__, e))  
   
         try: 
             if o.dataset is None:
@@ -274,7 +280,12 @@ class PartitionIdentity(Identity):
     @property
     def as_dataset(self):
         """Convert this identity to the identity of the correcsponding dataset. """
-        return  Identity(**self.to_dict())
+        
+        on = ObjectNumber.parse(self.id_)
+        d = self.to_dict()
+        d['id'] = str(on.dataset)
+        
+        return  Identity(**d)
     
     
     @staticmethod

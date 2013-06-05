@@ -46,7 +46,7 @@ class Test(TestBase):
           
         api = Rest(self.server_url)
 
-        r =  api.put(self.bundle.identity.id_, self.bundle.database.path)
+        r =  api.put(self.bundle.identity, self.bundle.database.path)
       
         self.assertEquals(self.bundle.identity.name,r.object.get('name',''))
   
@@ -55,26 +55,25 @@ class Test(TestBase):
         self.assertTrue(os.path.exists(r))
         os.remove(r)
 
-
         for partition in self.bundle.partitions:
-            r =  api.put(partition.identity.id_,partition.database.path)
+            r =  api.put(partition.identity,partition.database.path)
             self.assertEquals(partition.identity.name,r.object.get('name',''))
             
-            r = api.get(partition.identity.name, file_path = True )
+            r = api.get(partition.identity, file_path = True )
 
             self.assertTrue(os.path.exists(r))
             os.remove(r)
   
         # Try variants of find. 
         r = api.find(self.bundle.identity.name)
-        self.assertEquals(self.bundle.identity.name, r[0].Dataset.name)
+        self.assertEquals(self.bundle.identity.name, r[0].name)
         
         r = api.find(QueryCommand().identity(name = self.bundle.identity.name))
-        self.assertEquals(self.bundle.identity.name, r[0].Dataset.name)
+        self.assertEquals(self.bundle.identity.name, r[0].name)
 
         for partition in self.bundle.partitions:
             r = api.find((QueryCommand().partition(name = partition.identity.name)).to_dict())
-            self.assertEquals(partition.identity.name, r[0].Partition.name)
+            self.assertEquals(partition.identity.name, r[0].name)
   
     def test_remote_library(self):
    
@@ -95,7 +94,7 @@ class Test(TestBase):
         r = l.put(self.bundle)
 
         r = l.get(self.bundle.identity.name)
-        self.assertEquals(self.bundle.identity.name, r.bundle.identity.name)
+        self.assertEquals(self.bundle.identity.name, r.identity.name)
 
         for partition in self.bundle.partitions:
             r = l.put(partition)
@@ -104,13 +103,13 @@ class Test(TestBase):
             r = l.get(partition.identity.name)
             self.assertTrue(bool(r))
             self.assertEquals(partition.identity.name, r.partition.identity.name)
-            self.assertEquals(self.bundle.identity.name, r.bundle.identity.name)
+            self.assertEquals(self.bundle.identity.name, r.identity.name)
             
             # Get the partition with an id
             r = l.get(partition.identity.id_)
             self.assertTrue(bool(r))
             self.assertEquals(partition.identity.name, r.partition.identity.name)
-            self.assertEquals(self.bundle.identity.name, r.bundle.identity.name)            
+            self.assertEquals(self.bundle.identity.name, r.identity.name)            
 
         #
         # Now start with a different, clean library with the same remote
@@ -122,26 +121,29 @@ class Test(TestBase):
         self.assertTrue(not b)
         
         # Copy all of the newly added files to the server. 
+        print "Start Push"
         l.push()
+        print "End Push"
    
         l2 = self.get_library('clean')
+
         r = l2.get(self.bundle.identity.name)
+
         self.assertTrue(bool(r))
 
-        r = l2.get(r.bundle.partitions.all[0].identity.id_)
+        r = l2.get(r.partitions.all[0].identity.id_)
 
         self.assertTrue(bool(r))
         self.assertTrue(os.path.exists(r.partition.database.path))
    
     def test_remote_library_partitions(self):
-        
 
         l = self.get_library()
      
         r = l.put(self.bundle)
 
         r = l.get(self.bundle.identity.name)
-        self.assertEquals(self.bundle.identity.name, r.bundle.identity.name)
+        self.assertEquals(self.bundle.identity.name, r.identity.name)
 
         for partition in self.bundle.partitions:
             r = l.put(partition)
@@ -150,7 +152,7 @@ class Test(TestBase):
             r = l.get(partition.identity.name)
             self.assertTrue(r is not False)
             self.assertEquals(partition.identity.name, r.partition.identity.name)
-            self.assertEquals(self.bundle.identity.name, r.bundle.identity.name)
+            self.assertEquals(self.bundle.identity.name, r.identity.name)
 
         # Copy all of the newly added files to the server. 
         l.push()
@@ -159,7 +161,12 @@ class Test(TestBase):
         l2.purge()
         
         r = l2.get('b1DxuZ001')
+     
         self.assertTrue(r is not None and r is not False)
+        
+        print r
+        
+        self.assertTrue(r.partition is not None and r.partition is not False)
         self.assertEquals(r.partition.identity.id_,'b1DxuZ001' )
         
         self.assertTrue(os.path.exists(r.partition.database.path))
@@ -202,19 +209,19 @@ class Test(TestBase):
         bf = self.bundle.database.path
 
         # With an FLO
-        response =  r.put(self.bundle.identity.id_, open(bf))
+        response =  r.put(self.bundle.identity, open(bf))
         self.assertEquals(self.bundle.identity.id_, response.object.get('id'))
       
         # with a path
-        response =  r.put(self.bundle.identity.id_, bf)
+        response =  r.put(self.bundle.identity, bf)
         self.assertEquals(self.bundle.identity.id_, response.object.get('id'))
 
         for p in self.bundle.partitions.all:
-            response =  r.put(p.identity.id_, open(p.database.path))
+            response =  r.put(p.identity, open(p.database.path))
             self.assertEquals(p.identity.id_, response.object.get('id'))
 
         # Now get the bundles
-        bundle_file = r.get(self.bundle.identity.id_,'/tmp/foo.db')
+        bundle_file = r.get(self.bundle.identity,'/tmp/foo.db')
         bundle = DbBundle(bundle_file)
 
         self.assertIsNot(bundle, None)
@@ -228,8 +235,8 @@ class Test(TestBase):
     
         o = r.find(QueryCommand().table(name='tone').partition(any=True))
       
-        self.assertTrue( 'b1DxuZ001' in [i.Partition.id_ for i in o])
-        self.assertTrue( 'a1DxuZ' in [i.Dataset.id_ for i in o])
+        self.assertTrue( 'b1DxuZ001' in [i.id_ for i in o])
+        self.assertTrue( 'a1DxuZ' in [i.as_dataset.id_ for i in o])
       
     def test_put_errors(self):
         pass

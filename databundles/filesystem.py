@@ -13,10 +13,13 @@ import zipfile
 import gzip
 import urllib
 import databundles.util
+import logging
 
 logger = databundles.util.get_logger(__name__)
 
 
+logger.setLevel(logging.DEBUG) 
+        
 ##makedirs
 ## Monkey Patch!
 ## Need to patch zipfile.testzip b/c it doesn't close file descriptors in 2.7.3
@@ -714,7 +717,7 @@ class FsCache(object):
         '''
         import shutil
 
-        logger.debug("{} get {}".format(self.repo_id,rel_path)) 
+        logger.debug("FC {} get looking for {}".format(self.repo_id,rel_path)) 
                
         path = os.path.join(self.cache_dir, rel_path)
       
@@ -724,7 +727,7 @@ class FsCache(object):
             if not os.path.isfile(path):
                 raise ValueError("Path does not point to a file")
             
-            logger.debug("{} get {} found ".format(self.repo_id, path))
+            logger.debug("FC {} get {} found ".format(self.repo_id, path))
             return path
             
         if not self.upstream:
@@ -734,7 +737,7 @@ class FsCache(object):
         stream = self.upstream.get_stream(rel_path)
         
         if not stream:
-            logger.debug("{} get not found in upstream ()".format(self.repo_id,rel_path)) 
+            logger.debug("FC {} get not found in upstream ()".format(self.repo_id,rel_path)) 
             return None
         
         # Got a stream from upstream, so put the file in this cache. 
@@ -750,7 +753,7 @@ class FsCache(object):
         if not os.path.exists(path):
             raise Exception("Failed to copy upstream data to {} ".format(path))
         
-        logger.debug("{} get return from upstream {}".format(self.repo_id,rel_path)) 
+        logger.debug("FC {} got return from upstream {}".format(self.repo_id,rel_path)) 
         return path
     
 
@@ -927,34 +930,37 @@ class FsLimitedCache(FsCache):
             size = 0
     
         return size
+
+    def _free_up_space(self, size, this_rel_path=None):
+        '''If there are not size bytes of space left, delete files
+        until there is 
         
-    def _delete_to_size(self, size):
-        '''Delete records, from oldest to newest, to free up space ''' 
-      
-        if size <= 0:
+        Args:
+            size: size of the current file
+            this_rel_path: rel_pat to the current file, so we don't delete it. 
+        
+        ''' 
+        
+        space = self.size + size - self.maxsize # Amount of space we are over ( bytes ) for next put
+        
+        if space <= 0:
             return
 
         removes = []
 
         for row in self.database.execute("SELECT path, size, time FROM files ORDER BY time ASC"):
 
-            if size > 0:
+            if space > 0:
                 removes.append(row[0])
-                size -= row[1]
+                space -= row[1]
             else:
                 break
   
-        for row in removes:
-            self.remove(row)
-
-    def _free_up_space(self, size):
-        '''If there are not size bytes of space left, delete files
-        until there is ''' 
-        
-        space = self.size + size - self.maxsize # Amount of space we are over ( bytes ) for next put
-        
-        self._delete_to_size(space)
-
+        for rel_path in removes:
+            if rel_path != this_rel_path:
+                logger.debug("Deleting {}".format(rel_path)) 
+                self.remove(rel_path)
+            
     def add_record(self, rel_path, size):
         import time
         c = self.database.cursor()
@@ -1024,18 +1030,17 @@ class FsLimitedCache(FsCache):
         '''
         import shutil
 
-        logger.debug("{} get {}".format(self.repo_id,rel_path)) 
+        logger.debug("LC {} get looking for {}".format(self.repo_id,rel_path)) 
                
         path = os.path.join(self.cache_dir, rel_path)
 
-      
         # If is already exists in the repo, just return it. 
         if  os.path.exists(path):
             
             if not os.path.isfile(path):
                 raise ValueError("Path does not point to a file")
             
-            logger.debug("{} get {} found ".format(self.repo_id, path))
+            logger.debug("LC {} get {} found ".format(self.repo_id, path))
             return path
             
         if not self.upstream:
@@ -1045,7 +1050,7 @@ class FsLimitedCache(FsCache):
         stream = self.upstream.get_stream(rel_path)
         
         if not stream:
-            logger.debug("{} get not found in upstream ()".format(self.repo_id,rel_path)) 
+            logger.debug("LC {} get not found in upstream ()".format(self.repo_id,rel_path)) 
             return None
         
         # Got a stream from upstream, so put the file in this cache. 
@@ -1053,12 +1058,13 @@ class FsLimitedCache(FsCache):
         if not os.path.isdir(dirname):
             os.makedirs(dirname)
         
+        # Copy the file from the lower cache into this cache. 
         with open(path,'w') as f:
             shutil.copyfileobj(stream, f)
         
         # Since we've added a file, must keep track of the sizes. 
         size = os.path.getsize(path)
-        self._free_up_space(size)
+        self._free_up_space(size, this_rel_path=rel_path)
         self.add_record(rel_path, size)
         
         stream.close()
@@ -1066,7 +1072,7 @@ class FsLimitedCache(FsCache):
         if not os.path.exists(path):
             raise Exception("Failed to copy upstream data to {} ".format(path))
         
-        logger.debug("{} get return from upstream {}".format(self.repo_id,rel_path)) 
+        logger.debug("LC {} got return from upstream {} -> {} ".format(self.repo_id,rel_path, path)) 
         return path
 
 
@@ -1125,7 +1131,7 @@ class FsLimitedCache(FsCache):
                     
                     upstream.put(repo_path, rel_path) 
                     # Only delete if there is an upstream 
-                    this._free_up_space(size)
+                    this._free_up_space(size, this_rel_path=rel_path)
                     
         return flo()
     

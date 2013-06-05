@@ -238,22 +238,6 @@ class BuildBundle(Bundle):
     
         cmd = parser.add_subparsers(title='commands', help='command help')
         
-        #
-        # Example Command
-        #
-#        command_p = cmd.add_parser('example', help='Example for the code for a complete command')
-#        command_p.set_defaults(command='example')   
-#        
-#        command_p.add_argument('-a','--aaa', help='First example argument') 
-#        command_p.add_argument('-b','--bbb', help='Second example argument') 
-#       
-#        asp = command_p.add_subparsers(title='example sub-commands', help='Commands for exampling examples')
-#    
-#        sp = asp.add_parser('subcommand', help='Example subcommand')
-#        sp.set_defaults(subcommand='subcommand')
-#     
-#        sp.add_argument('-a','--aaa', help='First sub-example argument') 
-#        sp.add_argument('-b','--bbb', help='Second sub-example argument') 
        
  
         command_p = cmd.add_parser('config', help='Operations on the bundle configuration file')
@@ -347,7 +331,8 @@ class BuildBundle(Bundle):
         command_p.set_defaults(command='info')               
         command_p.add_argument('-s','--schema',  default=False,action="store_true",
                                help='Dump the schema as a CSV. The bundle must have been prepared')
-                   
+         
+
         return parser
 
     @property
