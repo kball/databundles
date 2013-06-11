@@ -21,7 +21,7 @@ class Geocoder(object):
         
         
         try:
-            _ , self.addresses = library.dep(addressesds)
+            self.addresses = library.dep(addressesds).partition
          
         except ConfigurationError:
             raise ConfigurationError(("MISSING DEPENDENCY: To get addresses or codes, the configuration  "+
@@ -179,10 +179,10 @@ class Geocoder(object):
         
         q = """SELECT  * FROM segments WHERE street = ?""";
 
-
         # If this fails, the "city" is probably an unincorporated place, which is in the county. 
-        try: in_city = self.by_name[ps.city]
-        except: in_city = 'SndSDO'
+        try: in_city = self.by_name[ps.city.title()]
+        except: in_city = self.by_name['NONE']
+           
 
         max_score = 0
         winner = None
@@ -249,6 +249,7 @@ class Geocoder(object):
           
         by_name['County Unincorporated'] = 'SndSDO'
         by_name['Unincorporated'] = 'SndSDO'
+        by_name['NONE'] = 'SndSDO'
           
         return by_scode, by_name
        
@@ -264,6 +265,8 @@ class Geocoder(object):
         if row['street_type'] == street_type:
             score += 10    
 
+
+        #print "Rank Street", city, row['rcity'], row['lcity']
         if city == row['rcity'] or city == row['lcity']:
             score += 20  
 

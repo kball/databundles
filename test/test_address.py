@@ -108,6 +108,7 @@ class TestBase(unittest.TestCase):
 
 
         self.addresses = OrderedDict([
+             ('1000 S  BLOCK CLEVELAND STREET,  Oceanside CA',(1000,'Cleveland','st','Oceanside')),                                      
              ('400 F Street , CHULA VISTA, CA 91910',(400,'F','st','CHULA VISTA')),
              ('1900 Camto De La Cruz, CHULA VISTA, CA 91913',(1900,'Camto De La Cruz',None,'CHULA VISTA')),
              ('13400 I - 8 Business, LAKESIDE, CA 92040',(13400,'Interstate 8','highway','LAKESIDE')),
@@ -143,12 +144,10 @@ class TestBase(unittest.TestCase):
 
         parser = Parser()
     
-
-    
         success = 0
         failure = 0
         total = 0
-        filename = "bad_license_addresses"
+        filename = "crime_addresses"
         f_input =  os.path.join(os.path.dirname(__file__),'support',filename + '.txt')
         f_output =  os.path.join(os.path.dirname(__file__),'support',filename + '.out.csv')
         with open(f_output, 'w') as out:
@@ -176,14 +175,12 @@ class TestBase(unittest.TestCase):
                     d['input'] = line.strip()
                     d['output'] = str(ps)
                     writer.writerow(d)
-                    
-                    print d
-                    print ps
-                    print
-                        
-                        
+
                     if not ps.city:
                         failure += 1
+                        print d
+                        print ps
+                        print
                     else:
  
                         success += 1
@@ -191,22 +188,6 @@ class TestBase(unittest.TestCase):
             print 
             print "total={} success={} failure={} rate={}".format(total, success, failure, round((float(failure)/float(total)*100), 3))
 
-    def x_test_altparser(self):
-        from databundles.geo.address import ParserState
-     
-        for street, check in self.streets.items():
-        
-            ps = ParserState("100 "+street)
-         
-            ps.parse()
-            
-            #print street, ps.as_dict()
-
-            if check[0]: self.assertEquals(check[0],ps.street_direction) 
-            self.assertEquals(check[1],ps.street_name)
-            self.assertEquals(check[2],ps.street_type)
-            
-        
         
     def x_test_errors(self):
         from databundles.geo.address import Parser

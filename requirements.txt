@@ -11,3 +11,4 @@ boto
 python-dateutil
 fuzzy
 paste
+bottle

@@ -89,6 +89,12 @@ class Response(object):
         if self.status >= 500:
             self.exception = ServerError('Server error. See server log for details')    
        
+    def get_header(self, key):
+        for h in self.headers: 
+            if h[0].lower() == key.lower():
+                return h[1]        
+
+       
     def handle_exception(self): 
         '''If self.object has an exception, re-construct the exception and 
         return it, to be raised later'''  
@@ -114,8 +120,13 @@ class Response(object):
             args[0] = pre_message + str(args[0])
 
         # Add the trace
-        args[0] = args[0] + "\n---- Server Trace --- \n" + self.object['exception']['trace']
-    
+        try:
+            if args:
+                args[0] = args[0] + "\n---- Server Trace --- \n" + self.object['exception']['trace']
+            else:
+                args.append("\n---- Server Trace --- \n" + self.object['exception']['trace'])
+        except:
+            print "Failed to augment exception. {}, {}".format(args, self.object)
         return  class_(*args)       
     
     def read(self, count):
@@ -142,8 +153,12 @@ class Response(object):
         return o
     
     def handle_xml_object(self, resp):
-        raise Exception('application/xml not supported yet!')
-    
+        from xml.dom import minidom
+        o = minidom.parse(resp)
+        resp.close()
+       
+        return o
+       
     def handle_html_object(self, resp):
         o = resp.read()
         resp.close()
@@ -165,7 +180,7 @@ class Response(object):
             raise Exception('Empty content-location from server')
 
         status_uri = urlparse(status_url).path
-        status, st_resp  = Resource(uri=status_uri, api=self.api).get()
+        status, st_resp  = Resource(uri=status_uri, remote=self.remote).get()
         retries = 0
         MAX_RETRIES = 3
         resp_status = st_resp.status
@@ -179,7 +194,7 @@ class Response(object):
             raise Exception('Max retries limit reached without success')
         
         location = status.conn.getresponse().getheader('location')
-        resource = Resource(uri=urlparse(location).path, api=self.api).get()
+        resource = Resource(uri=urlparse(location).path, remote=self.remote).get()
         return resource, None
 
 class Resource(object):
@@ -189,9 +204,9 @@ class Resource(object):
     # and minimize collitions with resource attributes
     def __init__(self, uri, api):
         #logging.info("init.uri: %s" % uri)
-        self.api = api
+        self.remote = api
         self.uri = uri
-        self.scheme, self.host, self.url, z1, z2 = httplib.urlsplit(self.api.base_url + self.uri) #@UnusedVariable
+        self.scheme, self.host, self.url, z1, z2 = httplib.urlsplit(self.remote.base_url + self.uri) #@UnusedVariable
         self.id = None
         self.conn = None
         self.headers = {'User-Agent': USER_AGENT}
@@ -209,10 +224,14 @@ class Resource(object):
             return self.attrs.get(name)
         #logging.info("self.url: %s" % self.url)
         # Inner resoruces for stuff like: GET /users/{id}/applications
-        key = self.uri + '/' + name
-        self.api.resources[key] = Resource(uri=key,
-                                           api=self.api)
-        return self.api.resources[key]
+        
+        if name == 'root':
+            key = self.uri
+        else:
+            key = self.uri + '/' + name
+        self.remote.resources[key] = Resource(uri=key,
+                                           api=self.remote)
+        return self.remote.resources[key]
 
     def __call__(self, id_=None):
         #logging.info("call.id_: %s" % id_)
@@ -221,9 +240,9 @@ class Resource(object):
             return self
         self.id = str(id_)
         key = self.uri + '/' + self.id
-        self.api.resources[key] = Resource(uri=key,
-                                           api=self.api)
-        return self.api.resources[key]
+        self.remote.resources[key] = Resource(uri=key,
+                                           api=self.remote)
+        return self.remote.resources[key]
 
     # Set the "Accept" request header.
     # +info about request headers:
@@ -269,8 +288,8 @@ class Resource(object):
         
 
     def _request(self, method, url, body={}, headers={}, meta={}):
-        if self.api.auth:
-            headers.update(self.api.auth.make_headers())
+        if self.remote.auth:
+            headers.update(self.remote.auth.make_headers())
         
         if self.conn != None:
             self.conn.close()

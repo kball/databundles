@@ -54,7 +54,7 @@ class TestBase(unittest.TestCase):
         logger.info(  "Copying bundle from {}".format(save_dir))
         os.system("rm -rf {0}; rsync -arv {1} {0}  > /dev/null ".format(build_dir, save_dir))
         
-    def start_server(self, rc, name):
+    def start_server(self, rc=None, name='default'):
         '''Run the Bottle server as a thread'''
         from databundles.client.siesta import  API
         import databundles.server.main
@@ -62,9 +62,12 @@ class TestBase(unittest.TestCase):
         import time
         from functools import  partial
     
+        if not rc:
+            rc = self.server_rc
+    
         sub_rc = rc.library.get(name)
     
-        self.server_url = sub_rc.remote
+        self.server_url = "http://localhost:{}".format(sub_rc.port)
         logger.info("Checking server at: {}".format(self.server_url))
         a = API(self.server_url)
 
@@ -115,6 +118,9 @@ class TestBase(unittest.TestCase):
         import time
         import databundles.client.exceptions as exc
         
+        if not self.server_url:
+            return
+        
         a = API(self.server_url)
        
         is_debug = a.test.isdebug.get().object
@@ -137,6 +143,8 @@ class TestBase(unittest.TestCase):
             except Exception as e:
                 logger.error("Got an exception while stopping: {}".format(e))
                 break   
+            
+        time.sleep(2) # Let the socket clear
             
         
             

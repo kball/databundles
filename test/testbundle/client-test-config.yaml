@@ -40,7 +40,34 @@ filesystem:
         upstream:
           dir: '/tmp/server//cache-l2'
           options: [compress]
+          
+    remote:
+      bucket: devtest.clarinova.net
+      prefix: test
+      access_key: AKIAIOKK4KSYYGYXWQJQ
+      secret: 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
 
+    cache1:
+      dir: '/tmp/cache-test/cache1'
+      
+    cache2:
+      dir: '/tmp/cache-test/cache1' 
+      upstream:
+        dir: '/tmp/cache-test/cache2' 
+        options: [compress]    
+        
+    cache3:
+      dir: '/tmp/cache-test/cache1' 
+      upstream:
+        dir: '/tmp/cache-test/cache2' 
+        options: [compress]         
+        upstream:
+          bucket: devtest.clarinova.net
+          prefix: cache-test/cache3
+          access_key: AKIAIOKK4KSYYGYXWQJQ
+          secret: 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               
+      
+      
 
 downloads:
     dir: '{root}/downloads'

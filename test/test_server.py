@@ -30,8 +30,6 @@ class Test(TestBase):
        
         self.bundle = Bundle()  
         self.bundle_dir = self.bundle.bundle_dir
-        
-        self.start_server(self.server_rc, "default")
 
     def tearDown(self):
         self.stop_server()
@@ -43,6 +41,8 @@ class Test(TestBase):
     
     def test_simple_install(self):
         from databundles.library import QueryCommand
+        
+        self.start_server()
           
         api = Rest(self.server_url)
 
@@ -58,6 +58,7 @@ class Test(TestBase):
         for partition in self.bundle.partitions:
             r =  api.put(partition.identity,partition.database.path)
             self.assertEquals(partition.identity.name,r.object.get('name',''))
+            
             
             r = api.get(partition.identity, file_path = True )
 
@@ -85,6 +86,8 @@ class Test(TestBase):
         #
         # First store the files in the local library
         #
+        
+        self.start_server()
         
         self.get_library('server').purge()
         self.get_library('clean').purge()
@@ -121,9 +124,7 @@ class Test(TestBase):
         self.assertTrue(not b)
         
         # Copy all of the newly added files to the server. 
-        print "Start Push"
         l.push()
-        print "End Push"
    
         l2 = self.get_library('clean')
 
@@ -137,6 +138,8 @@ class Test(TestBase):
         self.assertTrue(os.path.exists(r.partition.database.path))
    
     def test_remote_library_partitions(self):
+
+        self.start_server()
 
         l = self.get_library()
      
@@ -173,6 +176,9 @@ class Test(TestBase):
    
     def test_test(self):
         from databundles.client.siesta import  API
+        
+        self.start_server()
+        
         a = API(self.server_url)
         
         # Test echo for get. 
@@ -200,11 +206,13 @@ class Test(TestBase):
         with self.assertRaises(Exception):
             r = a.test.exception.get()
 
-    def test_put_bundle(self):
+    def _test_put_bundle(self, name, remote_config=None):
         from databundles.bundle import DbBundle
         from databundles.library import QueryCommand
         
-        r = Rest(self.server_url)
+        self.start_server(name=name)
+        
+        r = Rest(self.server_url, remote_config)
         
         bf = self.bundle.database.path
 
@@ -237,10 +245,102 @@ class Test(TestBase):
       
         self.assertTrue( 'b1DxuZ001' in [i.id_ for i in o])
         self.assertTrue( 'a1DxuZ' in [i.as_dataset.id_ for i in o])
-      
-    def test_put_errors(self):
-        pass
 
+    def test_put_bundle_noremote(self):
+        return self._test_put_bundle('default')
+
+    def test_put_bundle_remote(self):
+        return self._test_put_bundle('default-remote', self.rc.filesystem.remote)
+
+
+    def test_caches(self):
+        from functools import partial
+        from databundles.util import rm_rf
+        
+        fn = '/tmp/1mbfile'
+        
+        get_cache = partial(self.bundle.filesystem._get_cache, self.rc.filesystem)
+        
+        with open(fn, 'wb') as f:
+            f.write('.'*(1024))
+            
+        #get_cache('cache1').put(fn,'cache1')
+        #get_cache('cache2').put(fn,'cache2') 
+          
+        get_cache('cache3').put(fn,'cache3')
+
+        rm_rf(get_cache('cache3').cache_dir)
+
+        path = get_cache('cache3').get('cache3')
+
+    
+    def test_put_redirect(self):
+        from databundles.bundle import DbBundle
+        from databundles.library import QueryCommand
+        from databundles.util import md5_for_file, rm_rf, bundle_file_type
+
+        #
+        # Simple out and retrieve
+        # 
+        cache = self.bundle.filesystem._get_cache(self.server_rc.filesystem, 'direct-remote')
+        cache2 = self.bundle.filesystem._get_cache(self.server_rc.filesystem, 'direct-remote-2')
+
+        rm_rf(os.path.dirname(cache.cache_dir))
+        rm_rf(os.path.dirname(cache2.cache_dir))
+        
+        cache.put( self.bundle.database.path, 'direct')
+
+        path = cache2.get('direct')
+
+        self.assertEquals('sqlite',bundle_file_type(path))
+
+        cache.remove('direct', propagate = True)
+
+        #
+        #  Connect through server. 
+        #
+
+        self.start_server(name='default-remote')
+        
+        api = Rest(self.server_url, self.rc.filesystem.remote)  
+
+        # Upload directly, then download via the cache. 
+        
+        cache.remove(self.bundle.identity.cache_key, propagate = True)
+        
+        r = api.upload_file(self.bundle.identity, self.bundle.database.path, force=True )
+
+        path = cache.get(self.bundle.identity.cache_key)
+        
+        b = DbBundle(path)
+
+        self.assertEquals("source-dataset-subset-variation-ca0d",b.identity.name )
+      
+        #
+        # Full service
+        #
+
+        p  = self.bundle.partitions.all[0]
+
+        cache.remove(self.bundle.identity.cache_key, propagate = True)
+        cache.remove(p.identity.cache_key, propagate = True)
+
+        
+
+        r = api.put(self.bundle.identity, self.bundle.database.path )
+        print "Put {}".format(r.object)
+        r = api.put(p.identity, p.database.path )
+        print "Put {}".format(r.object)
+        
+        r = api.put(p.identity, p.database.path )
+        
+        r = api.get(p.identity,'/tmp/foo.db')
+        print "Get {}".format(r)        
+
+        b = DbBundle(r)
+
+        self.assertEquals("source-dataset-subset-variation-ca0d",b.identity.name )
+        
 def suite():
     suite = unittest.TestSuite()
     suite.addTest(unittest.makeSuite(Test))

@@ -571,7 +571,7 @@ class ParserState(object):
 
             ttype, last_toks = self.peek(self.LAST)
            
-            if last_toks.lower() in self.parser.street_types:
+            if last_toks and last_toks.lower() in self.parser.street_types:
                 self.street_type = self.parser.street_types[last_toks.lower()]
                 self.pop()
 

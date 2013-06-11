@@ -63,6 +63,7 @@ def get_database(config=None,name='library'):
 
 
 def _get_library(config=None, name='default'):
+    from databundles.filesystem import Filesystem
     
     if name is None:
         name = 'default'
@@ -80,8 +81,20 @@ def _get_library(config=None, name='default'):
     
     database = get_database(config, name=sc.database)
     
-    remote = sc.get('remote',None)
-    
+    remote_name = sc.get('remote',None)
+
+    if remote_name:
+        if remote_name.startswith('http'):
+            # It is a URL
+            from  databundles.client.rest import Rest
+            remote =  Rest(remote_name)
+        else:
+            # It is a name of a filesystem configuration
+            
+            remote = Filesystem._get_cache(config.filesystem, remote_name )
+    else:
+        remote = None
+
     l =  Library(cache = cache, database = database, remote = remote)
     
     return l
@@ -622,6 +635,35 @@ class LibraryDb(object):
         s.add(file_)
         s.commit()
 
+    def add_ticket(self, identity, ticket):
+        from databundles.orm import  File
+        import time
+        path = identity.cache_key
+        group = ticket
+        ref = identity.id_
+        state = 'ticketed'
+                
+        s = self.session
+      
+        s.query(File).filter(File.path == path and File.state == state).delete()
+      
+        file_ = File(path=path, 
+                     group=group, 
+                     ref=ref,
+                     modified=time.time(),
+                     state = state,
+                     size=0)
+    
+        s.add(file_)
+        s.commit()       
+        
+    def get_ticket(self, ticket):
+        from databundles.orm import  File
+        s = self.session
+        
+        return s.query(File).filter(File.group == ticket).one()
+        
+
     def get_file_by_state(self, state):
         """Return all files in the database with the given state"""
         from databundles.orm import  File
@@ -804,27 +846,18 @@ class Library(object):
    
         
         '''
-        from  databundles.client.rest import Rest 
-        from  databundles.client.S3 import S3 
-        
+ 
+
         self.cache = cache
         self._database = database
         self.remote = remote
         self.sync = sync
-        self.api = None
         self.bundle = None # Set externally in bundle.library()
 
         self.dependencies = None
 
         if not self.cache:
             raise ConfigurationError("Must specify library.cache for the library in bundles.yaml")
-
-        if self.remote:
-            if isinstance(self.remote, basestring) and self.remote.startswith('http'):
-                self.api =  Rest(self.remote)
-            elif self.remote.get('bucket'):
-                self.api = S3(self.remote)
-                
 
         self.logger = logging.getLogger(__name__)
 
@@ -895,11 +928,11 @@ class Library(object):
                     dataset, partition  = self._get_bundle_path_from_id(r.id_)         
 
         # No luck so far, so now try to get it from the remote library
-        if not dataset and self.api:
+        if not dataset and self.remote:
             import socket
          
             try:
-                r = self.api.find(bp_id)
+                r = self.remote.find(bp_id)
 
                 if r:
                     r = r[0]
@@ -912,7 +945,7 @@ class Library(object):
                         partition = None
 
             except socket.error:
-                self.logger.error("Connection to remote {} failed".format(self.remote))
+                self.logger.error("Connection to remote ")
         elif dataset:
             from identity import new_identity
             dataset = Identity(**dataset.to_dict())
@@ -931,7 +964,7 @@ class Library(object):
         except:# Tuples
             identity = Identity(**(dataset._asdict()))        
 
-        r = self.api.get(identity.id_)
+        r = self.remote.get(identity.id_)
         
         if not r:
             return False
@@ -968,7 +1001,7 @@ class Library(object):
         
         p_database_path = p.database.path
       
-        r = self.api.get_partition(bundle.identity.id_, p.identity.id_)
+        r = self.remote.get_partition(bundle.identity.id_, p.identity.id_)
         # Store it in the local cache. 
         p_abs_path = self.cache.put(r,p.identity.cache_key)
 
@@ -1006,7 +1039,7 @@ class Library(object):
         # Not in the cache, try to get it from the remote library, 
         # if a remote was set. 
 
-        if not abs_path and self.api:
+        if not abs_path and self.remote:
             abs_path = self._get_remote_dataset(dataset)
             
         if not abs_path or not os.path.exists(abs_path):
@@ -1035,11 +1068,11 @@ class Library(object):
         rp = self.cache.get(p.identity.cache_key)
     
         if not os.path.exists(p.database.path):
-            if self.api:
+            if self.remote:
                 self._get_remote_partition(r,partition)
             else:
                 raise NotFoundError("""Didn't get partition in {} for id {} {}. 
-                                    Partition found, but path {} ({}?) not in local library and api not set. """
+                                    Partition found, but path {} ({}?) not in local library and remote not set. """
                                .format(r.identity.name, p.identity.id_,p.identity.name,
                                        p.database.path, rp))
         p.library = self   
@@ -1108,6 +1141,12 @@ class Library(object):
         return b
 
 
+    def put_remote_ref(self,identity):
+        '''Store a reference to a partition that has been uploaded directly to the remote'''
+        pass
+        
+        
+
     def put_file(self, identity, file_path, state='new'):
         '''Store a dataset or partition file, without having to open the file
         to determine what it is, by using  seperate identity''' 
@@ -1120,8 +1159,8 @@ class Library(object):
         if not os.path.exists(dst):
             raise Exception("cache {}.put() didn't return an existent path. got: {}".format(type(self.cache), dst))
 
-        if self.api and self.sync:
-            self.api.put(identity, file_path)
+        if self.remote and self.sync:
+            self.remote.put(identity, file_path)
 
         self.database.add_file(dst, self.cache.repo_id, identity.id_,  state)
 
@@ -1233,7 +1272,7 @@ class Library(object):
         
         """
         
-        if not self.api:
+        if not self.remote:
             raise Exception("Can't push() without defining a remote. ")
  
         if file_ is not None:
@@ -1245,7 +1284,7 @@ class Library(object):
             else:
                 identity = dataset.identity
             
-            self.api.put(identity, file_.path)
+            self.remote.put(identity, file_.path)
             file_.state = 'pushed'
             self.database.commit()
         else:

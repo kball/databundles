@@ -22,29 +22,66 @@ def raise_for_status(response):
     if e:
         raise e(response.message)
     
-
 class Rest(object):
     '''Interface class for the Databundles Library REST API
     '''
 
-    def __init__(self, url):
+    def __init__(self, url,  object_store_config=None):
         '''
         '''
         
         self.url = url
+        self.object_store_config = object_store_config
         
     @property
-    def api(self):
-        # It would make sense to cache self.api = API)(, but siesta saves the id
-        # ( calls like api.datasets(id).post() ), so we have to either alter siesta, 
+    def remote(self):
+        # It would make sense to cache self.remote = API)(, but siesta saves the id
+        # ( calls like remote.datasets(id).post() ), so we have to either alter siesta, 
         # or re-create it every call. 
         return API(self.url)
+        
+    @property
+    def connection_info(self):
+        '''Return  reference to this remote, excluding the connection secret'''
+        return {'service':'remote', 'url':self.url}
+        
+    def upload_file(self, identity, path, ci=None, force=False):
+        '''Upload  file to the object_store_config's object store'''
+        from databundles.util import md5_for_file
+        
+        if ci is None:
+            ci = self.remote.info().objectstore().get().object
+        
+        if ci['service'] == 's3':
+            from databundles.filesystem import S3Cache, FsCompressionCache
+            
+            if  ci['access_key'] != self.object_store_config.access_key:
+                from databundles.dbexceptions import ConfigurationError
+                raise ConfigurationError("Remote config does not have access_key = {}".format(ci['access_key']))
+            
+            ci['secret'] = self.object_store_config.secret
+            
+            del ci['service']
+            fs = FsCompressionCache(S3Cache(**ci))
+            #fs = S3Cache(**ci)
+        else:
+            raise NotImplementedError("No handler for service: {} ".format(ci))
+
+        md5 = md5_for_file(path)
+        
+        if  fs.has(identity.cache_key, md5) and not force:
+            return identity.cache_key
+        else:
+            
+            metadata = {'id':identity.id_, 'name':identity.name, 'md5':md5}
+
+            return fs.put(path, identity.cache_key,  metadata=metadata)
         
     def get_ref(self, id_or_name):
         '''Return a tuple of (rel_path, dataset_identity, partition_identity)
         for an id or name'''
 
-        response  = self.api.datasets.find(id_or_name).get()
+        response  = self.remote.datasets.find(id_or_name).get()
   
         if response.status == 404:
             raise NotFound("Didn't find a file for {}".format(id_or_name))
@@ -53,8 +90,7 @@ class Rest(object):
         
         return response.object
   
-          
-    def get(self, id_or_name, file_path=None):
+    def get(self, id_or_name, file_path=None, uncompress=False):
         '''Get a bundle by name or id and either return a file object, or
         store it in the given file object
         
@@ -68,32 +104,68 @@ class Rest(object):
         return
         
         '''
-        
+        from databundles.util import bundle_file_type
+        from io  import BufferedReader
         try: id_or_name = id_or_name.id_ # check if it is actualy an Identity object
         except: pass
+
         
-        response  = self.api.datasets(id_or_name).get()
+        response  = self.remote.datasets(id_or_name).get()
   
         if response.status == 404:
             raise NotFound("Didn't find a file for {}".format(id_or_name))
+        if response.status == 303 or response == 302:
+            import requests
+
+            location = response.get_header('location')
+            
+            r = requests.get(location, verify=False, stream=True)
+
+            if r.status_code != 200:
+                from xml.dom import minidom
+                o = minidom.parse(r.raw)
+
+                # Assuming the response is in XML because we are usually cal
+                raise RestError("{} Error from server after redirect to {} : XML={}"
+                                .format(r.status_code,location,  o.toprettyxml()))
+                
+            uncompress =  r.headers['content-encoding'] == 'gzip'
+              
+            response = r.raw
+            
         elif response.status != 200:
             raise RestError("Error from server: {} {}".format(response.status, response.reason))
   
         if file_path:
             
             if file_path is True:
-                    import uuid,tempfile,os
-            
-                    file_path = os.path.join(tempfile.gettempdir(),'rest-downloads',str(uuid.uuid4()))
-                    if not os.path.exists(os.path.dirname(file_path)):
-                        os.makedirs(os.path.dirname(file_path))  
+                import uuid,tempfile,os
+        
+                file_path = os.path.join(tempfile.gettempdir(),'rest-downloads',str(uuid.uuid4()))
+                if not os.path.exists(os.path.dirname(file_path)):
+                    os.makedirs(os.path.dirname(file_path))  
                
+            chunksize = 8192  
             with open(file_path,'w') as file_:
-                chunksize = 8192
+                
                 chunk =  response.read(chunksize) #@UndefinedVariable
                 while chunk:
                     file_.write(chunk)
                     chunk =  response.read(chunksize) #@UndefinedVariable
+    
+            if uncompress:
+                # Would like to use gzip as a filter, but the response only has read(), 
+                # and gzip requires tell() and seek()
+                import gzip
+                import os
+                with gzip.open(file_path) as zf, open(file_path+'_', 'wb') as of:
+                    chunk = zf.read(chunksize)
+                    while chunk:
+                        of.write(chunk)
+                        chunk = zf.read(chunksize)
+
+                os.rename(file_path+'_', file_path)
+
     
             return file_path
         else:
@@ -114,7 +186,7 @@ class Rest(object):
         return
         
         '''
-        response  = self.api.datasets(d_id_or_name).partitions(p_id_or_name).get()
+        response  = self.remote.datasets(d_id_or_name).partitions(p_id_or_name).get()
   
         if response.status == 404:
             raise NotFound("Didn't find a file for {} / {}".format(d_id_or_name, p_id_or_name))
@@ -142,7 +214,7 @@ class Rest(object):
             # Read the damn thing yourself ... 
             return response
                     
-    def _put(self, identity ,source):
+    def _put(self, identity, source):
         '''Put the source to the remote, creating a compressed version if
         it is not originally compressed'''
         
@@ -173,9 +245,9 @@ class Rest(object):
              
                 with open(cf) as sf_:
                     if isinstance(on,DatasetNumber ):
-                        response =  self.api.datasets(id_).put(sf_)
+                        response =  self.remote.datasets(id_).put(sf_)
                     else:
-                        response =  self.api.datasets(str(on.dataset)).partitions(str(on)).put(sf_)
+                        response =  self.remote.datasets(str(on.dataset)).partitions(str(on)).put(sf_)
 
             finally:
                 if os.path.exists(cf):
@@ -185,27 +257,30 @@ class Rest(object):
             # the file is already gziped, so nothing to do. 
 
             if isinstance(on,DatasetNumber ):
-                response =  self.api.datasets(id_).put(source)
+                response =  self.remote.datasets(id_).put(source)
             else:
-                response =  self.api.datasets(str(on.dataset)).partitions(str(on)).put(source)
+                response =  self.remote.datasets(str(on.dataset)).partitions(str(on)).put(source)
             
         else:
             raise Exception("Bad file for id {}  got type: {} ".format(id_, type_))
 
-
         raise_for_status(response)
         
         return response
-        
 
-    def put(self,identity,source):
+
+    def put_to_api(self,identity,source):
         '''Put the bundle in source to the remote library 
         Args:
             identity. An identity object that identifies the bundle or partition
             source. Either the name of the bundle file, or a file-like opbject
+            
+        This writes to the remote. The preferred method is to save to the object store first
+            
         '''
         from sqlalchemy.exc import IntegrityError
-        
+
+         
         try:
             # a Filename
             with open(source) as flo:
@@ -215,14 +290,30 @@ class Rest(object):
         except Exception as e:
             # an already open file
             r =  self._put(identity,source)
-            
-        raise_for_status(r)
-        
+
         if isinstance(r.object, list):
             r.object = r.object[0]
 
         return r
+       
+    def put(self,identity,source):
             
+        ci = self.remote.info().objectstore().get().object
+          
+        if ci['service'] != 'here':
+                
+            # Upload to the remote first, then kick the API to get it from the remote
+                
+            # Upload the file to the object store, outside of the API
+            self.upload_file( identity, source, ci=ci)
+            
+            # Tell the API to check the file. 
+            return self.remote.load().post(identity.to_dict())
+            
+        else:
+            
+            # Upload directly to the remote. 
+            return self.put_to_api(identity,source)
    
     def find(self, query):
         '''Find datasets, given a QueryCommand object'''
@@ -231,18 +322,18 @@ class Rest(object):
         
 
         if isinstance(query, basestring):
-            response =  self.api.datasets.find(query).get()
+            response =  self.remote.datasets.find(query).get()
             raise_for_status(response)
             r = [response.object]
             
         elif isinstance(query, dict):
             # Dict form of  QueryCOmmand
-            response =  self.api.datasets.find.post(query)
+            response =  self.remote.datasets.find.post(query)
             raise_for_status(response)
             r = response.object
             
         elif isinstance(query, QueryCommand):
-            response =  self.api.datasets.find.post(query.to_dict())
+            response =  self.remote.datasets.find.post(query.to_dict())
             raise_for_status(response)
             r = response.object
             
@@ -264,7 +355,7 @@ class Rest(object):
     
     def list(self):
         '''Return a list of all of the datasets in the library'''
-        response =   self.api.datasets.get()
+        response =   self.remote.datasets.get()
         raise_for_status(response)
         return response.object
             
@@ -277,14 +368,14 @@ class Rest(object):
         
         id =  ref['dataset']['id']
         
-        response =   self.api.datasets(id).info().get()
+        response =   self.remote.datasets(id).info().get()
         raise_for_status(response)
         return response.object
         
             
     def close(self):
         '''Close the server. Only used in testing. '''
-        response =   self.api.test.closeget()
+        response =   self.remote.test.closeget()
         raise_for_status(response)
         return response.object
 

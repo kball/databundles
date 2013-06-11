@@ -149,16 +149,16 @@ def library_command(args, rc):
         else:
             print "--- Dataset ---"
             print "Dataset   : ",dataset.id_, dataset.name
-            print "Is Local: ",l.cache.exists(dataset.cache_key) is not False
+            print "Is Local: ",l.cache.has(dataset.cache_key) is not False
             print "Rel Path  : ",dataset.cache_key
-            print "Abs Path  : ",l.cache.exists(dataset.cache_key)   
+            print "Abs Path  : ",l.cache.has(dataset.cache_key)   
               
             if partition:
                 print "--- Partition ---"
                 print "Partition : ",(partition.id_, partition.name ) if partition else ''
-                print "Is Local: ",(l.cache.exists(partition.cache_key) is not False) if partition else ''
+                print "Is Local: ",(l.cache.has(partition.cache_key) is not False) if partition else ''
                 print "Rel Path  : ",partition.cache_key
-                print "Abs Path  : ",l.cache.exists(partition.cache_key)
+                print "Abs Path  : ",l.cache.has(partition.cache_key)
 
            
             
@@ -174,17 +174,17 @@ def library_command(args, rc):
             print "{}: Not found".format(args.term)
         elif not args.schema:
             print "--- Dataset ---"
-            print "Dataset   : ",r.bundle.identity.id_, r.bundle.identity.name
-            print "Is Local: ",l.cache.exists(r.bundle.identity.cache_key) is not False
-            print "Rel Path  : ",r.bundle.identity.cache_key
-            print "Abs Path  : ",l.cache.exists(r.bundle.identity.cache_key)
+            print "Dataset   : ",r.identity.id_, r.identity.name
+            print "Is Local: ",l.cache.has(r.identity.cache_key) is not False
+            print "Rel Path  : ",r.identity.cache_key
+            print "Abs Path  : ",l.cache.has(r.identity.cache_key)
             
             if r.partition:
                 print "--- Partition ---"
                 print "Partition : ",r.partition.identity.id_, r.partition.name
-                print "Is Local: ",(l.cache.exists(r.partition.identity.cache_key) is not False) if r.partition else ''
+                print "Is Local: ",(l.cache.has(r.partition.identity.cache_key) is not False) if r.partition else ''
                 print "Rel Path  : ",r.partition.identity.cache_key
-                print "Abs Path  : ",l.cache.exists(r.partition.identity.cache_key)
+                print "Abs Path  : ",l.cache.has(r.partition.identity.cache_key)
 
         if r and args.open:
             
@@ -229,7 +229,7 @@ def library_command(args, rc):
         
         if args.datasets:
             for ds in args.datasets:
-                dsi = l.api.dataset(ds)
+                dsi = l.remote.dataset(ds)
 
                 print "dataset {0:11s} {1}".format(dsi['dataset']['id'],dsi['dataset']['name'])
 
@@ -243,7 +243,7 @@ def library_command(args, rc):
                 
         else:
         
-            datasets = l.api.list()
+            datasets = l.remote.list()
             
             for id_, data in datasets.items():
                 print "{0:11s} {1:4s} {2}".format(id_,'remote',data['name'])

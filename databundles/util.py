@@ -82,10 +82,12 @@ def bundle_file_type(path_or_file):
     import struct
 
     try:
-        loc = path_or_file.tell()
+        try: loc = path_or_file.tell()
+        except: loc = 0
+        path_or_file.seek(0)
         d = path_or_file.read(15)
         path_or_file.seek(loc)
-    except:
+    except Exception as e:
         d = None
         
     if not d:
@@ -531,17 +533,24 @@ def zip_dir(dir, file_):
     return dir
     
     
-def md5_for_file(file_name, block_size=2**20):
+def md5_for_file(f, block_size=2**20):
     """Generate an MD5 has for a possibly large file by breaking it into chunks"""
     import hashlib
-    with open(file_name) as f:
-        md5 = hashlib.md5()
+    
+    md5 = hashlib.md5()
+    try:
         while True:
             data = f.read(block_size)
             if not data:
                 break
             md5.update(data)
-    return md5.hexdigest()    
+            return md5.hexdigest()  
+    except AttributeError:     
+        file_name = f
+        with open(file_name) as f:
+            return md5_for_file(f, block_size)
+
+  
 
 def rd(v, n=100.0):
     """Round down, to the nearest even 100"""

@@ -17,7 +17,7 @@ class US:
     @property 
     def usgeo(self):
         try:
-            usgeo, _ = self.library.dep('usgeo')
+            usgeo = self.library.dep('usgeo')
         except ConfigurationError:
             raise ConfigurationError("MISSING DEPENDENCY: "+"To use the US geo datasets, the bundle ( or library  ) must specify a"+
                " dependency with a set named 'usgeo', in build.dependencies.usgeo")      
@@ -26,7 +26,7 @@ class US:
    
     def _places(self):
         try:
-            _, places = self.library.dep('places')
+           places = self.library.dep('places').partition
         except ConfigurationError:
             raise ConfigurationError("MISSING DEPENDENCY: "+"To use the US county datasets, the bundle ( or library  ) must specify a"+
                " dependency with a set named 'places', in build.dependencies.places. "+

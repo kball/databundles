@@ -95,8 +95,8 @@ class Test(TestBase):
         cache = self.bundle.filesystem.get_cache('test2')
         print cache.public_url_f()('file')    
         
-        cache = self.bundle.filesystem.get_cache('s3')
-        print cache.public_url_f()('file')      
+        #cache = self.bundle.filesystem.get_cache('s3')
+        #print cache.public_url_f()('file')      
             
     def test_resolve(self):
         """Test the resolve_id() function"""

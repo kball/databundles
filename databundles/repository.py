@@ -24,7 +24,7 @@ class Repository(object):
         self._api = None
    
     @property
-    def api(self):
+    def remote(self):
         if not self._api:
             self.set_api()
             
@@ -58,7 +58,7 @@ class Repository(object):
             self.filestore = None
         
         
-        return self.api
+        return self.remote
         
    
     def _validate_for_expr(self, astr,debug=False):
@@ -214,24 +214,22 @@ class Repository(object):
         # If the filestore exists, write to S3 first, the upload the URL
         if self.filestore:
             from databundles.util import md5_for_file
-            urlf = self.filestore.public_url_f()
+            urlf = self.filestore.public_url_f(public=True)
             path = self.bundle.identity.path+'/'+name
 
             # Don't upload if  S3 has the file of the same key and md5
             md5 =  md5_for_file(file_)
             if not self.filestore.has(path, md5=md5):
-                self.filestore.put(file_, path, public=True, md5=md5)
+                self.filestore.put(file_, path, metadata={'public':True, 'md5':md5})
          
-            r = self.api.add_url_resource(package, urlf(path), name,
+            r = self.remote.add_url_resource(package, urlf(path), name,
                     description=extract_data['description'],
                     content_type = content_type, 
                     format=format,
                     hash=md5
                     )
-            
         else:
-            
-            r = self.api.add_file_resource(package, file_, 
+            r = self.remote.add_file_resource(package, file_, 
                                 name=name,
                                 description=extract_data['description'],
                                 content_type = content_type, 
@@ -453,7 +451,7 @@ class Repository(object):
 
         id =  re.sub('[\W_]+', '-',config['title'])
         
-        r = self.api.add_url_resource(package, 
+        r = self.remote.add_url_resource(package, 
                                         config['url'], 
                                         config['title'],
                                         description=config['description'])
@@ -486,11 +484,11 @@ class Repository(object):
         
         from os.path import  basename
     
-        ckb = self.api.update_or_new_bundle_extract(self.bundle)
+        ckb = self.remote.update_or_new_bundle_extract(self.bundle)
         
         sent = set()
     
-        self.api.put_package(ckb)
+        self.remote.put_package(ckb)
         
         for doc in self.bundle.config.group('about').get('documents',[]):
             self.store_document(ckb, doc)

@@ -2,9 +2,10 @@
 REST Server For DataBundle Libraries. 
 '''
 
-from bottle import  get, put, post, request, response #@UnresolvedImport
-from bottle import HTTPResponse, static_file, install #@UnresolvedImport
-from bottle import ServerAdapter, server_names #@UnresolvedImport
+from bottle import  error, get, put, post, request, response, redirect #@UnresolvedImport
+from bottle import HTTPResponse, static_file, install, url #@UnresolvedImport
+from bottle import ServerAdapter, server_names, Bottle  #@UnresolvedImport
+from bottle import run, debug #@UnresolvedImport
 
 from decorator import  decorator #@UnresolvedImport
 import databundles.library 
@@ -13,6 +14,7 @@ import databundles.util
 from databundles.bundle import DbBundle
 import logging
 import os
+from sqlalchemy.orm.exc import NoResultFound
 
 import databundles.client.exceptions as exc
 
@@ -21,7 +23,8 @@ run_config = databundles.run.RunConfig()
 library_name = 'default'
 
 logger = databundles.util.get_logger(__name__)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
+    
     
 def get_library_config(name=None):
     global library_name
@@ -43,7 +46,7 @@ def get_library(name=None):
     global library_name
     # Originally, we were caching the library, but the library
     # holds open a sqlite database, and that isn't multi-threaded, so then
-    # we can use a multi-threaded server. 
+    # we can't use a multi-threaded server. 
     # Of course, then you have concurrency problems with sqlite .... 
     if name is not None:
         library_name = name
@@ -51,7 +54,7 @@ def get_library(name=None):
     return databundles.library._get_library(run_config, library_name)
  
 
-def make_exception_response(e):
+def capture_return_exception(e):
     
     import sys
     import traceback
@@ -72,8 +75,10 @@ def _CaptureException(f, *args, **kwargs):
 
     try:
         r =  f(*args, **kwargs)
+    except HTTPResponse:
+        raise # redirect() uses exceptions
     except Exception as e:
-        r = make_exception_response(e)
+        r = capture_return_exception(e)
 
     return r
 
@@ -83,7 +88,6 @@ def CaptureException(f, *args, **kwargs):
 
     return decorator(_CaptureException, f) # Preserves signature
 
-
 class AllJSONPlugin(object):
     '''A copy of the bottle JSONPlugin, but this one tries to convert
     all objects to json ''' 
@@ -91,7 +95,7 @@ class AllJSONPlugin(object):
     from json import dumps as json_dumps
     
     name = 'json'
-    api  = 2
+    remote  = 2
 
     def __init__(self, json_dumps=json_dumps):
         self.json_dumps = json_dumps
@@ -110,7 +114,7 @@ class AllJSONPlugin(object):
             try:
                 json_response = dumps(rv)
             except Exception as e:
-                r =  make_exception_response(e)
+                r =  capture_return_exception(e)
                 json_response = dumps(r)
                 
             #Set content type only if serialization succesful
@@ -119,6 +123,15 @@ class AllJSONPlugin(object):
         return wrapper
 
 install(AllJSONPlugin())
+
+@error(404)
+@CaptureException
+def error404(error):
+    raise exc.NotFound("For url: {}".format(repr(request.url)))
+
+@error(500)
+def error500(error):
+    raise exc.InternalError("For Url: {}".format(repr(request.url)))
 
 @get('/datasets')
 def get_datasets():
@@ -135,14 +148,11 @@ def get_datasets_find(term):
     if dataset is False:
         return False
      
-     
     if partition:
         return partition.to_dict() 
     else:
         return dataset.to_dict()
   
-
-    
 @post('/datasets/find')
 def post_datasets_find():
     '''Post a QueryCommand to search the library. '''
@@ -159,10 +169,10 @@ def post_datasets_find():
         out.append(r.to_dict())
         
     return out
-  
-
 
 def _get_dataset_partition_record(did, pid):
+    """Get the reference information for a partition from the bundle database"""
+    
     from databundles.identity import ObjectNumber, DatasetNumber, PartitionNumber
     
     don = ObjectNumber.parse(did)
@@ -184,7 +194,6 @@ def _get_dataset_partition_record(did, pid):
     if not bundle:
         raise exc.NotFound('No dataset for id: {}'.format(did))
 
-   
     partition = bundle.partitions.get(pid)
 
     return bundle,partition
@@ -230,7 +239,7 @@ def _read_body(request):
     return file_
 
 @put('/datasets/<did>')
-#@CaptureException
+@CaptureException
 def put_dataset(did): 
     '''Store a bundle, calling put() on the bundle file in the Library.
     
@@ -248,7 +257,6 @@ def put_dataset(did):
     '''
     from databundles.identity import ObjectNumber, DatasetNumber
     import stat
-
 
     try:
         cf = _read_body(request)
@@ -302,6 +310,31 @@ def put_dataset(did):
     r['url'] = url
     return r
   
+@post('/load')
+@CaptureException
+def post_load(): 
+    '''Ask the libary to check its object store for the  given dataset. We only need to do this for
+    datasets, which are referenced by the interface. 
+
+    '''
+    from databundles.identity import new_identity
+    
+    identity = new_identity(request.json)
+    
+    if identity.is_bundle:
+        
+        l = get_library()
+        
+        # This will pull the file into the local cache from the remote, 
+        # As long as the remote is listed as an upstream for the library. 
+        path = l.cache.get(identity.cache_key)
+        
+        l.database.install_bundle_file(identity, path)
+        
+        if not l.cache.has(identity.cache_key):
+            raise exc.Gone("Failed to get object {} from upstream ".format(identity.cache_key))
+
+    return identity.to_dict()
 
 @get('/datasets/<did>') 
 @CaptureException   
@@ -311,20 +344,31 @@ def get_dataset_bundle(did):
     Args:
         id    The Name or id of the dataset bundle. 
               May be for a bundle or partition
-    
     '''
 
-    bp = get_library().get(did)
-
-    if bp is False:
-        raise Exception("Didn't find dataset for id: {}, library = {}  ".format(did, get_library().database.path))
-
-    f = bp.database.path
+    l = get_library()
     
-    if not os.path.exists(f):
-        raise exc.NotFound("No file {} for id {}".format(f, did))
+    # We can get the dataset file to the local storage because we need to reference it in the interface. 
+    # which is not necessary for partitions. 
+    bp = l.get(did)
+
+    if not bp:
+        raise Exception("Didn't find dataset for id: {}, library = {}  ".format(did, get_library().database.dsn))
+
+    if l.remote:
+        url = l.remote.public_url_f()(bp.identity.cache_key)
+        logger.debug("Redirect bundle, {}".format(url))
+        redirect(url)
+    else:
+        
+        f = bp.database.path
     
-    return static_file(f, root='/', mimetype="application/octet-stream")
+        if not os.path.exists(f):
+            raise exc.NotFound("No file {} for id {}".format(f, did))
+        
+        logger.debug("Returning bundle directly")
+        
+        return static_file(f, root='/', mimetype="application/octet-stream")
 
 @get('/datasets/:did/info')
 def get_dataset_info(did):
@@ -368,8 +412,6 @@ def get_dataset_partitions(did, pid):
     
     dataset, partition = _get_dataset_partition_record(did, pid)
 
-    logger.info("------ HERE ---- ")
-
     if not dataset:
         logger.info("Didn't find dataset")
         raise NotFound("Didn't find dataset associated with id {}".format(did))
@@ -387,24 +429,40 @@ def get_dataset_partitions(did, pid):
         
     return static_file(r.partition.database.path, root='/', mimetype="application/octet-stream")    
 
+@get('/info/objectstore')
+@CaptureException
+def get_info_objectstore():
+    """Return information about where to upload files"""
+
+    l = get_library()
+    
+    if l.remote:
+        # Send it directly to the upstream API
+        r = l.remote.connection_info
+    else:
+        # Send it here
+        r = {'service':'here'}
+       
+    # import uuid
+    # r['ticket'] = str(uuid.uuid4())  
+    
+    return r
+  
+
 @put('/datasets/<did>/partitions/<pid>')
 @CaptureException
 def put_datasets_partitions(did, pid):
-    '''Return a partition for a dataset
+    '''Upload a partition database file'''
     
-    :param did: a `RunConfig` object
-    :rtype: a `LibraryDb` object
-    
-    '''
+    payload_file = _read_body(request)
     
     try:
-        payload_file = _read_body(request)
-      
+        
         dataset, partition = _get_dataset_partition_record(did, pid) #@UnusedVariable
-      
+        
         library_path, rel_path, url = get_library().put_file(partition.identity, payload_file) #@UnusedVariable
         
-        logger.info("Put partition {} {} to {}".format(partition.identity.id_,  partition.identity.name, library_path))
+        logger.info("Put partition {} {} to {}".format(partition.identity.id_,  partition.identity.name, library_path))   
 
     finally:
         if os.path.exists(payload_file):
@@ -418,6 +476,9 @@ def put_datasets_partitions(did, pid):
     r['url'] = url
     
     return r 
+
+
+
 
 #### Test Code
 
@@ -464,7 +525,7 @@ def get_test_close():
     '''Close the server'''
     global stoppable_wsgi_server_run
     if stoppable_wsgi_server_run is not None:
-        print "SERVER CLOSING"
+        logger.debug("SERVER CLOSING")
         stoppable_wsgi_server_run = False
         return True
     
@@ -493,7 +554,7 @@ server_names['stoppable'] = StoppableWSGIRefServer
 
 def test_run(config=None, library_name=None):
     '''Run method to be called from unit tests'''
-    from bottle import run, debug
+    from bottle import run, debug #@UnresolvedImport
   
     # Reset the library  with a  different configuration. This is the module
     # level library, defined at the top of the module. 
@@ -513,8 +574,6 @@ def test_run(config=None, library_name=None):
     return run(host=host, port=port, reloader=False, server='stoppable')
 
 def local_run(config=None, name='default', reloader=True):
-    from bottle import run
-    from bottle import run, debug
  
     global stoppable_wsgi_server_run
     stoppable_wsgi_server_run = None
@@ -536,7 +595,6 @@ def local_run(config=None, name='default', reloader=True):
     return run(host=host, port=port, reloader=reloader)
     
 def local_debug_run(name='default'):
-    from bottle import run, debug
 
     debug()
     l = get_library()  #@UnusedVariable
@@ -546,7 +604,6 @@ def local_debug_run(name='default'):
     return run(host=host, port=port, reloader=True)
 
 def production_run(config=None, name='default', reloader=True):
-    from bottle import run
 
     if config:
         global run_config

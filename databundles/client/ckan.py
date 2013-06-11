@@ -395,6 +395,8 @@ class Ckan(object):
         import os
         import mimetypes
 
+
+
         r = requests.head(url)
         size = r.headers.get('content-length',None)
         content_type = r.headers.get('content-type',None)
