@@ -2,13 +2,17 @@
 
 library:
   default:
+    # Remote is the URL of an off-site upstream library. Like a cache, files 
+    # can be read from the remote, but won't be written to it unlessed pushed.
     remote: http://localhost:7979
     filesystem: client
     database: client
+    
   clean: # Clean library to test downloading from remove
     remote: http://localhost:7979
     filesystem: clean
     database: clean
+    
   server:
     port: 7979
     remote: http://localhost:7979

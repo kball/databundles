@@ -14,10 +14,11 @@ import gzip
 import urllib
 import databundles.util
 import logging
+from databundles.identity import Identity
 
 logger = databundles.util.get_logger(__name__)
 
-#logger.setLevel(logging.DEBUG) 
+logger.setLevel(logging.DEBUG) 
         
 ##makedirs
 ## Monkey Patch!
@@ -244,7 +245,6 @@ class BundleFilesystem(Filesystem):
      
         if len(args) == 0:
             raise ValueError("must supply at least one argument")
-        
         
         args = (self.root_directory,) +args
             
@@ -779,6 +779,9 @@ class FsCache(object):
         
         '''
 
+        if isinstance(rel_path, Identity):
+            rel_path = rel_path.cache_key
+
         sink = self.put_stream(rel_path, metadata=metadata)
         
         copy_file_or_flo(source, sink)
@@ -791,6 +794,9 @@ class FsCache(object):
         """return a file object to write into the cache. The caller
         is responsibile for closing the stream
         """
+        
+        if isinstance(rel_path, Identity):
+            rel_path = rel_path.cache_key
         
         repo_path = os.path.join(self.cache_dir, rel_path)
       
@@ -891,6 +897,8 @@ class FsLimitedCache(FsCache):
         self.cache_dir = cache_dir
         self.maxsize = int(maxsize * 1048578)  # size in MB
         self.upstream = upstream
+        self.readonly = False
+        self.usreadonly = False
         self._database = None
         
         self.use_db = True
@@ -1099,7 +1107,9 @@ class FsLimitedCache(FsCache):
             rel_path: path relative to the root of the repository
         
         '''
-            
+        if isinstance(rel_path, Identity):
+            rel_path = rel_path.cache_key
+
 
         sink = self.put_stream(rel_path, metadata=metadata)
         
@@ -1114,6 +1124,9 @@ class FsLimitedCache(FsCache):
         is responsibile for closing the stream. Bad things happen
         if you dont close the stream
         """
+        
+        if isinstance(rel_path, Identity):
+            rel_path = rel_path.cache_key
         
         repo_path = os.path.join(self.cache_dir, rel_path)
       
@@ -1240,6 +1253,9 @@ class FsCompressionCache(FsCache):
 
         # Pass through if the file is already compressed
     
+        if isinstance(rel_path, Identity):
+            rel_path = rel_path.cache_key
+    
         if not metadata:
             metadata = {}
     
@@ -1260,6 +1276,8 @@ class FsCompressionCache(FsCache):
         if not metadata:
             metadata = {}
     
+        if isinstance(rel_path, Identity):
+            rel_path = rel_path.cache_key
 
         metadata['Content-Encoding'] = 'gzip'
         
@@ -1327,7 +1345,7 @@ class S3Cache(object):
         self.bucket_name = bucket
         self.prefix = prefix
         self.upstream = None
-        self.conn = S3Connection(self.access_key, secret)
+        self.conn = S3Connection(self.access_key, secret, is_secure = False )
         self.bucket = self.conn.get_bucket(self.bucket_name)
   
   
@@ -1416,6 +1434,12 @@ class S3Cache(object):
   
     def put(self, source, rel_path,  metadata=None):  
         
+        if isinstance(rel_path, Identity):
+            rel_path = rel_path.cache_key
+        
+        if isinstance(rel_path, Identity):
+            rel_path = rel_path.cache_key
+        
         rel_path = self._rename(rel_path)
         
         sink = self.put_stream(rel_path, metadata = metadata)
@@ -1434,6 +1458,10 @@ class S3Cache(object):
             rel_path: path relative to the root of the repository
         
         '''
+
+        if isinstance(rel_path, Identity):
+            rel_path = rel_path.cache_key
+        
         from boto.s3.key import Key
 
         rel_path = self._rename(rel_path)
@@ -1459,8 +1487,11 @@ class S3Cache(object):
         being sent in its own thread '''
 
         import Queue
-        
+        import time
         import threading
+        
+        if isinstance(rel_path, Identity):
+            rel_path = rel_path.cache_key
         
         md5 = metadata.get('md5',None) if metadata else None
         public = metadata.get('public',False) if metadata else None
@@ -1483,11 +1514,17 @@ class S3Cache(object):
                         self.queue.task_done()
                         return
                     logger.debug("put_stream: Thread {}: processing part: {}".format(self.n, part_number))
-                    mp.upload_part_from_file(buf,part_number  )
+                    t1 = time.time()
+                    try:
+                        mp.upload_part_from_file(buf,part_number  )
+                    finally:
+                        self.queue.task_done()
+                        t2 = time.time()
+                        logger.debug("put_stream: Thread {}, part {}. time = {} rate =  {}b/s"
+                                     .format(self.n, part_number, round(t2-t1,3), round((float(buf.tell())/(t2-t1)), 2)))
                     
-                    self.queue.task_done()
+                        
             
-        
         if self.prefix is not None:
             rel_path = self.prefix+"/"+rel_path
 
@@ -1499,9 +1536,9 @@ class S3Cache(object):
             
         this = self
         
-        buffer_size = 5*1024*1024 # Min part size is 5MB
+        buffer_size = 50*1024*1024 # Min part size is 5MB
         num_threads = 4
-        thread_upload_queue = Queue.Queue(maxsize=50)
+        thread_upload_queue = Queue.Queue(maxsize=100)
 
         for i in range(num_threads):
             t = ThreadUploader(i, thread_upload_queue)
@@ -1517,11 +1554,12 @@ class S3Cache(object):
                 self.mp = this.bucket.initiate_multipart_upload(rel_path, metadata=metadata)
                 self.part_number = 1;
                 self.buffer = io.BytesIO()
+                self.total_size = 0
      
             def _send_buffer(self):
                 '''Schedules a buffer to be sent in a thread by queuing it'''
-                logger.debug("put_stream: sending part {} to thread pool size: {}"
-                             .format(self.part_number, self.buffer.tell()))
+                logger.debug("_send_buffer: sending part {} to thread pool size: {}, total_size = {}"
+                             .format(self.part_number, self.buffer.tell(), self.total_size))
                 self.buffer.seek(0)
                 thread_upload_queue.put( (self.mp, self.part_number, self.buffer) )
 
@@ -1529,10 +1567,11 @@ class S3Cache(object):
             def write(self, d):
               
                 self.buffer.write(d) # Load the requested data into a buffer
-
+                self.total_size += len(d)
                 # After the buffer is large enough, send it, then create a new buffer. 
                 if self.buffer.tell() > buffer_size:
                     self._send_buffer() 
+                    
                     self.part_number += 1;
                     self.buffer = io.BytesIO()
 

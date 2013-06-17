@@ -517,6 +517,8 @@ class Database(DatabaseInterface):
         from sqlalchemy import MetaData   
         metadata = MetaData(bind=self.engine)
        
+       
+       
         return metadata
     
     @property

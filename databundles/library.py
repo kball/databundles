@@ -84,10 +84,17 @@ def _get_library(config=None, name='default'):
     remote_name = sc.get('remote',None)
 
     if remote_name:
-        if remote_name.startswith('http'):
-            # It is a URL
-            from  databundles.client.rest import Rest
-            remote =  Rest(remote_name)
+        from  databundles.client.rest import Rest
+        if isinstance(remote_name, dict):
+            # it is an API that uses an object store. 
+            config = remote_name
+            url = config['url']
+            remote =  Rest(url, config)
+        elif remote_name.startswith('http'):
+            # It is a URL, and it points to an api that wil be used directly. 
+            
+            url = remote_name
+            remote =  Rest(url)
         else:
             # It is a name of a filesystem configuration
             
@@ -95,7 +102,9 @@ def _get_library(config=None, name='default'):
     else:
         remote = None
 
-    l =  Library(cache = cache, database = database, remote = remote)
+    require_upload = sc.get('require-upload', False)
+
+    l =  Library(cache = cache, database = database, remote = remote, require_upload = require_upload)
     
     return l
     
@@ -162,7 +171,8 @@ class LibraryDb(object):
         
         self._session = None
         self._engine = None
-        
+        self._connection  = None
+                
         self.logger = databundles.util.get_logger(__name__)
         import logging
         self.logger.setLevel(logging.INFO) 
@@ -186,6 +196,25 @@ class LibraryDb(object):
         return self._engine
 
     @property
+    def connection(self):
+        '''Return an SqlAlchemy connection'''
+        if not self._connection:
+            self._connection = self.engine.connect()
+            
+        return self._connection
+
+    @property
+    def metadata(self):
+        '''Return an SqlAlchemy MetaData object, bound to the engine'''
+        
+        from sqlalchemy import MetaData   
+        metadata = MetaData(bind=self.engine)
+
+        metadata.reflect(self.engine)
+
+        return metadata
+
+    @property
     def inspector(self):
         from sqlalchemy.engine.reflection import Inspector
 
@@ -202,8 +231,61 @@ class LibraryDb(object):
             
         return self._session
    
+    def set_config_value(self, group, key, value):
+        '''Set a configuration value in the database'''
+        from databundles.orm import Config as SAConfig
+
+        s = self.session
+
+        s.query(SAConfig).filter(SAConfig.group == group,
+                                 SAConfig.key == key,
+                                 SAConfig.d_id == 'none').delete()
+        
+        o = SAConfig(group=group,
+                     key=key,d_id='none',value = value)
+        s.add(o)
+        s.commit()  
+   
+    def get_config_value(self, group, key):
+        
+        from databundles.orm import Config as SAConfig
+
+        s = self.session        
+        
+        try:
+            c = s.query(SAConfig).filter(SAConfig.group == group,
+                                     SAConfig.key == key,
+                                     SAConfig.d_id == 'none').first()
+       
+            return c
+        except:
+            return None
+   
+    @property
+    def config_values(self):
+        
+        from databundles.orm import Config as SAConfig
+
+        s = self.session        
+        
+        d = {}
+        
+        for config in s.query(SAConfig).filter(SAConfig.d_id == 'none').all():
+            d[(str(config.group),str(config.key))] = config.value
+            
+        return d
+        
+   
+    def _mark_update(self):
+        from databundles.orm import Config
+        
+        import datetime
+        
+        self.set_config_value('activity','change', datetime.datetime.utcnow())
+        
+   
     def close(self):
-        raise Exception()
+
         if self._session:    
             self._session.bind.dispose()
             self.Session.close_all()
@@ -259,15 +341,17 @@ class LibraryDb(object):
         
         return False
     
-    def drop(self):
-        s = self.session
-      
+    def _drop(self, s):
         s.execute("DROP TABLE IF EXISTS files")
         s.execute("DROP TABLE IF EXISTS columns")
         s.execute("DROP TABLE IF EXISTS partitions")
         s.execute("DROP TABLE IF EXISTS tables")
         s.execute("DROP TABLE IF EXISTS config")
         s.execute("DROP TABLE IF EXISTS datasets")
+    
+    def drop(self):
+        s = self.session
+        self._drop(s)
         s.commit()
 
 
@@ -286,12 +370,7 @@ class LibraryDb(object):
          
             cur = conn.cursor()
           
-            cur.execute('DROP TABLE IF EXISTS columns')
-            cur.execute('DROP TABLE IF EXISTS partitions')
-            cur.execute('DROP TABLE IF EXISTS tables')
-            cur.execute('DROP TABLE IF EXISTS config')
-            cur.execute('DROP TABLE IF EXISTS datasets')
-            cur.execute('DROP TABLE IF EXISTS files')
+            self._drop(cur)
             
             cur.execute("COMMIT")
             cur.execute(sql_text) 
@@ -318,13 +397,8 @@ class LibraryDb(object):
                 self.logger.error("Failed to open Sqlite database: {}".format(self.dbname))
                 raise
                 
-            conn.execute('DROP TABLE IF EXISTS columns')
-            conn.execute('DROP TABLE IF EXISTS partitions')
-            conn.execute('DROP TABLE IF EXISTS tables')
-            conn.execute('DROP TABLE IF EXISTS config')
-            conn.execute('DROP TABLE IF EXISTS datasets')
-            conn.execute('DROP TABLE IF EXISTS files')
-            
+            self._drop(conn)
+
             conn.commit()
             conn.executescript(sql_text)  
         
@@ -333,12 +407,64 @@ class LibraryDb(object):
         else:
             raise RuntimeError("Unknown database driver: {} ".format(self.driver))
         
+    def _copy_db(self, src, dst):
+        
+        for name, table in self.metadata.tables.items():
+            rows = src.session.execute(table.select()).fetchall()
+            for row in rows:
+                dst.session.execute(table.insert(), row)
+                        
+            dst.session.commit()
+                        
+    def dump(self, path):
+        '''Copy the database to a new Sqlite file, as a backup. '''
+        import datetime
+
+        dst = LibraryDb(driver='sqlite', dbname=path)
+
+        dst.create()
+        
+        self.set_config_value('activity','dump', datetime.datetime.utcnow())
+        
+        self._copy_db(self, dst)
+
+
+    def needs_dump(self):
+        '''Return true if the last dump date is after the last change date, and
+        the last change date is more than 10s in the past'''
+        import datetime
+        
+        configs = self.config_values
+        
+        td = datetime.timedelta(seconds=10)
+        
+        changed =  configs.get(('activity','change'),datetime.datetime.fromtimestamp(0))
+        dumped = configs.get(('activity','dump'),datetime.datetime.fromtimestamp(0))
+        dumped_past = dumped + td
+        now = datetime.datetime.utcnow()
+
+        if ( changed > dumped and now > dumped_past): 
+            return True
+        else:
+            return False
+    
+
+    def restore(self, path):
+        '''Restore a sqlite database dump'''
+        import datetime
+        
+        self.create()
+        
+        src = LibraryDb(driver='sqlite', dbname=path)
+        
+        self._copy_db(src, self)
+
+        self.set_config_value('activity','restore', datetime.datetime.utcnow())
 
     def install_bundle_file(self, identity, bundle_file):
         """Install a bundle in the database, starting from a file that may
         be a partition or a bundle"""
 
-        
         if isinstance(identity , dict):
             identity = new_identity(identity)
             
@@ -354,6 +480,8 @@ class LibraryDb(object):
         '''
         from databundles.orm import Dataset
         from databundles.bundle import Bundle
+            
+        self._mark_update()
                 
         self.remove_bundle(bundle)
                 
@@ -832,7 +960,7 @@ class Library(object):
     # Return value for earches
     ReturnDs = collections.namedtuple('ReturnDs',['dataset','partition'])
     
-    def __init__(self, cache,database, remote=None, sync=False):
+    def __init__(self, cache,database, remote=None, sync=False, require_upload = False):
         '''
         Libraries are constructed on the root cache name for the library. 
         If the cache does not exist, it will be created. 
@@ -853,6 +981,8 @@ class Library(object):
         self.remote = remote
         self.sync = sync
         self.bundle = None # Set externally in bundle.library()
+
+        self.require_upload = require_upload
 
         self.dependencies = None
 
@@ -1210,6 +1340,11 @@ class Library(object):
         self.cache.clean()
         
         
+    def run_dumper_thread(self, queue, cb):
+        '''Run a thread that will check the database and call the callback when the database should be
+        backed up after a change. '''
+        pass
+  
   
     @property
     def datasets(self):
@@ -1284,13 +1419,27 @@ class Library(object):
             else:
                 identity = dataset.identity
             
-            self.remote.put(identity, file_.path)
+            self.remote.put(file_.path, identity)
             file_.state = 'pushed'
             self.database.commit()
         else:
             for file_ in self.new_files:
                 self.push(file_)
     
+    def backup(self):
+        '''Backup the database to the remote'''
+        from databundles.util import temp_file_name
+        import os
+
+        backup_file = temp_file_name()+".db"
+    
+        self.database.dump(backup_file)
+    
+        path = self.remote.put(backup_file,'library.db')
+       
+        os.remove(backup_file)   
+        
+        return path
 
 def _pragma_on_connect(dbapi_con, con_record):
     '''ISSUE some Sqlite pragmas when the connection is created'''

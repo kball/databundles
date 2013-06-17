@@ -125,12 +125,19 @@ def library_command(args, rc):
         files_ = l.database.get_file_by_state(state)
         if len(files_):
             print "-- Pushing to {}".format(l.remote)
-            for f in files_:
+            for i, f in enumerate(files_):
                 print "Pushing: {}".format(f.path)
                 try:
                     l.push(f)
                 except Exception as e:
                     print "Failed: {}".format(e)
+                    raise
+                
+                if i%5 == 0:
+                    print "Backup database";
+                    l.remote.backup()
+
+            l.remote.backup()
 
     elif args.subcommand == 'files':
 

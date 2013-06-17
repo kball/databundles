@@ -2,13 +2,14 @@ library:
     default:
         port: 7979
         filesystem: server
-        database: server      
+        database: server     
 
     default-remote:
         port: 7979
         remote: remote
         filesystem: server-remote
-        database: server      
+        database: server  
+        require-upload: true    
         
 database:
     server:

@@ -636,5 +636,16 @@ def make_acro(past, prefix, s):
     print past
     raise Exception("Could not get acronym")
 
-
+def temp_file_name():
+    '''Create a path to a file in the temp directory'''
+    
+    import tempfile
+    
+    f = tempfile.NamedTemporaryFile(delete=False)
+    f.close()
+    
+    return f.name
+    
+    
+    
 

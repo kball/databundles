@@ -567,14 +567,17 @@ class BuildBundle(Bundle):
         
         return True
     
-    def install(self, library_name='default'):  
+    def install(self, library_name=None):  
         '''Install the bundle and all partitions in the default library'''
      
         import databundles.library
-     
+
+        if library_name is None:
+            library_name = vars(self.run_args).get('library', 'default')
+
         library = databundles.library.get_library(name=library_name)
      
-        self.log("Install bundle {}".format(self.identity.name))  
+        self.log("Install bundle {} to  library {}".format(self.identity.name, library_name))  
         dest = library.put(self)
         self.log("Installed to {} ".format(dest[1]))
         

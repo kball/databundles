@@ -584,7 +584,7 @@ class Config(Base):
         self.source = kwargs.get("source",None) 
 
     def __repr__(self):
-        return "<config: {}>".format(self.oid)
+        return "<config: {},{},{} = {}>".format(self.d_id, self.group, self.key, self.value)
      
 
 class File(Base, SavableMixin):

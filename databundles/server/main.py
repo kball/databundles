@@ -259,6 +259,13 @@ def put_dataset(did):
     import stat
 
     try:
+        
+
+        l = get_library()
+        
+        if l.require_upload:
+            raise exc.NotAuthorized("This libraray uses an objct store for uploads.")
+        
         cf = _read_body(request)
      
         size = os.stat(cf).st_size
@@ -297,7 +304,7 @@ def put_dataset(did):
             raise exc.BadRequest("""Bad request. Dataset id of URL doesn't
             match payload. {} != {}""".format(did,tb.identity.id_))
     
-        library_path, rel_path, url = get_library().put(tb) #@UnusedVariable
+        library_path, rel_path, url = l.put(tb) #@UnusedVariable
 
         identity = tb.identity
         
@@ -329,12 +336,27 @@ def post_load():
         # As long as the remote is listed as an upstream for the library. 
         path = l.cache.get(identity.cache_key)
         
+        if not path or not os.path.exists(path):
+            raise exc.Gone("Failed to get object {} from upstream; path '{}' does not exist".format(identity.cache_key, path))
+        
         l.database.install_bundle_file(identity, path)
         
         if not l.cache.has(identity.cache_key):
-            raise exc.Gone("Failed to get object {} from upstream ".format(identity.cache_key))
+            raise exc.Gone("Failed to get object {} from upstream; cache doesn't have key as after install ".format(identity.cache_key))
 
     return identity.to_dict()
+
+@get('/backup')
+@CaptureException
+def post_backup():
+    '''Write a backup of the library to the remote. Makes a backup of this library and stores the
+    file at the remote at 'library.db'  ''' 
+    from databundles.util import temp_file_name
+    from databundles.filesystem import S3Cache, FsCompressionCache
+    import os
+    
+    return get_library().backup()
+
 
 @get('/datasets/<did>') 
 @CaptureException   
@@ -435,7 +457,7 @@ def get_info_objectstore():
     """Return information about where to upload files"""
 
     l = get_library()
-    
+
     if l.remote:
         # Send it directly to the upstream API
         r = l.remote.connection_info
@@ -456,11 +478,16 @@ def put_datasets_partitions(did, pid):
     
     payload_file = _read_body(request)
     
+    l =  get_library()
+    
+    if l.require_upload:
+        raise exc.NotAuthorized("This libraray uses an objct store for uploads.")
+    
     try:
         
         dataset, partition = _get_dataset_partition_record(did, pid) #@UnusedVariable
         
-        library_path, rel_path, url = get_library().put_file(partition.identity, payload_file) #@UnusedVariable
+        library_path, rel_path, url =l.put_file(partition.identity, payload_file) #@UnusedVariable
         
         logger.info("Put partition {} {} to {}".format(partition.identity.id_,  partition.identity.name, library_path))   
 

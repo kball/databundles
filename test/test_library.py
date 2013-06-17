@@ -57,7 +57,9 @@ class Test(TestBase):
 
     def test_simple_install(self):
         from databundles.library import QueryCommand
+        from databundles.util import temp_file_name
         import pprint
+        import os
         
         l = self.get_library()
      
@@ -86,7 +88,38 @@ class Test(TestBase):
             self.assertEquals(partition.identity.name, r.partition.identity.name)
             self.assertEquals(self.bundle.identity.name, r.identity.name)            
 
-            
+        self.assertTrue(l.database.needs_dump())
+
+        backup_file = temp_file_name()+".db"
+        
+        l.database.dump(backup_file)
+        
+        l.database.close()
+        os.remove(l.database.dbname)
+        l.database.create()
+
+        r = l.get(self.bundle.identity.name)
+    
+        self.assertTrue(not r)
+        
+        l.database.restore(backup_file)
+        
+        r = l.get(self.bundle.identity.name)
+        self.assertTrue(r is not False)
+        self.assertEquals(self.bundle.identity.name, r.identity.name)
+
+        os.remove(backup_file)
+
+        # An extra change so the following tests work
+        l.put(self.bundle)
+        
+        self.assertFalse(l.database.needs_dump())
+
+        import time; time.sleep(10)
+
+        self.assertTrue(l.database.needs_dump())
+      
+
     def test_public_url(self):
         '''Check that the public_url_f works'''
         cache = self.bundle.filesystem.get_cache('test')

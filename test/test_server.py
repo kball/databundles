@@ -136,6 +136,9 @@ class Test(TestBase):
 
         self.assertTrue(bool(r))
         self.assertTrue(os.path.exists(r.partition.database.path))
+        
+        
+        
    
     def test_remote_library_partitions(self):
 
@@ -326,7 +329,6 @@ class Test(TestBase):
         cache.remove(p.identity.cache_key, propagate = True)
 
         
-
         r = api.put(self.bundle.identity, self.bundle.database.path )
         print "Put {}".format(r.object)
         r = api.put(p.identity, p.database.path )
@@ -340,6 +342,13 @@ class Test(TestBase):
         b = DbBundle(r)
 
         self.assertEquals("source-dataset-subset-variation-ca0d",b.identity.name )
+        
+        
+        #
+        # backup the library
+        #
+        
+        r = api.backup()
         
 def suite():
     suite = unittest.TestSuite()

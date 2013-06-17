@@ -48,15 +48,19 @@ class Rest(object):
     def upload_file(self, identity, path, ci=None, force=False):
         '''Upload  file to the object_store_config's object store'''
         from databundles.util import md5_for_file
-        
+        from databundles.dbexceptions import ConfigurationError
+
         if ci is None:
             ci = self.remote.info().objectstore().get().object
-        
+
         if ci['service'] == 's3':
             from databundles.filesystem import S3Cache, FsCompressionCache
             
+            if not self.object_store_config:
+                raise ConfigurationError("Remote requires S3 upload, but no object_store_config is set for this api")
+            
             if  ci['access_key'] != self.object_store_config.access_key:
-                from databundles.dbexceptions import ConfigurationError
+                
                 raise ConfigurationError("Remote config does not have access_key = {}".format(ci['access_key']))
             
             ci['secret'] = self.object_store_config.secret
@@ -214,7 +218,7 @@ class Rest(object):
             # Read the damn thing yourself ... 
             return response
                     
-    def _put(self, identity, source):
+    def _put(self, source, identity):
         '''Put the source to the remote, creating a compressed version if
         it is not originally compressed'''
         
@@ -269,7 +273,7 @@ class Rest(object):
         return response
 
 
-    def put_to_api(self,identity,source):
+    def put_to_api(self,source, identity):
         '''Put the bundle in source to the remote library 
         Args:
             identity. An identity object that identifies the bundle or partition
@@ -284,24 +288,29 @@ class Rest(object):
         try:
             # a Filename
             with open(source) as flo:
-                r =  self._put(identity,flo)
+                r =  self._put(flo, identity)
         except IntegrityError as e:
             raise e
         except Exception as e:
             # an already open file
-            r =  self._put(identity,source)
+            r =  self._put(source, identity)
 
         if isinstance(r.object, list):
             r.object = r.object[0]
 
         return r
        
-    def put(self,identity,source):
+    def put(self,source, identity):
             
         ci = self.remote.info().objectstore().get().object
           
-        if ci['service'] != 'here':
+        if ci['service'] == 'here':
                 
+            # Upload directly to the remote. 
+            return self.put_to_api(source,identity)
+            
+        else:
+              
             # Upload to the remote first, then kick the API to get it from the remote
                 
             # Upload the file to the object store, outside of the API
@@ -309,11 +318,7 @@ class Rest(object):
             
             # Tell the API to check the file. 
             return self.remote.load().post(identity.to_dict())
-            
-        else:
-            
-            # Upload directly to the remote. 
-            return self.put_to_api(identity,source)
+
    
     def find(self, query):
         '''Find datasets, given a QueryCommand object'''
@@ -375,10 +380,16 @@ class Rest(object):
             
     def close(self):
         '''Close the server. Only used in testing. '''
-        response =   self.remote.test.closeget()
+        response =   self.remote.test.close.get()
         raise_for_status(response)
         return response.object
 
+    
+    def backup(self):
+        '''Tell the server to backup its library to the remote'''
+        response =   self.remote.backup.get()
+        raise_for_status(response)
+        return response.object
     
     
 

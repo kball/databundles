@@ -231,7 +231,7 @@ def _no_sandbox(function):
             return function(*args, **kw)
         finally:
             if patched:
-                DirectorySandbox._violation = DirectorySandbox._old
+                DirectorySandbox._violation = DirectorySandbox._old #@UndefinedVariable
                 del DirectorySandbox._old
 
     return __no_sandbox
