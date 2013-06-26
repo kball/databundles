@@ -240,12 +240,18 @@ class Rest(object):
         type_ = bundle_file_type(source)
 
         if  type_ == 'sqlite' or type_ == 'hdf':
+            import shutil
             # If it is a plain sqlite file, compress it before sending it. 
             try:
                 cf = os.path.join(tempfile.gettempdir(),str(uuid.uuid4()))
-                f = gzip.open(cf, 'wb')
-                f.writelines(source)
-                f.close()
+                
+                with gzip.open(cf, 'wb') as out_f:
+                    try:
+                        shutil.copyfileobj(source, out_f)
+                    except AttributeError:
+                        with open(source) as in_f:
+                            shutil.copyfileobj(in_f, out_f)
+                        
              
                 with open(cf) as sf_:
                     if isinstance(on,DatasetNumber ):

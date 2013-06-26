@@ -17,8 +17,7 @@ import logging
 from databundles.identity import Identity
 
 logger = databundles.util.get_logger(__name__)
-
-logger.setLevel(logging.DEBUG) 
+#logger.setLevel(logging.DEBUG) 
         
 ##makedirs
 ## Monkey Patch!
@@ -112,7 +111,7 @@ class Filesystem(object):
             subconfig = filesystem_config.get(cache_name)
         
         if subconfig is None:
-            raise ConfigurationError("Didn't get cache name {} from config. keys: {}".format(cache_name, filesystem_config.keys()))
+            raise ConfigurationError("Didn't get cache name '{}' from config. keys: {}".format(cache_name, filesystem_config.keys()))
         
         root_dir = filesystem_config.get('root_dir',tempfile.gettempdir())
         
@@ -1303,7 +1302,7 @@ class FsCompressionCache(FsCache):
 
     def list(self, path=None):
         '''get a list of all of the files in the repository'''
-        raise NotImplementedError() 
+        return self.upstream.list(path)
 
 
     def has(self, rel_path, md5=None):
@@ -1618,11 +1617,22 @@ class S3Cache(object):
             key.delete()    
         
     def list(self, path=None):
-        '''get a list of all of the files in the repository'''
+        '''Get a list of all of bundle files in the cache. Does not return partition files'''
         
-        path = path.strip('/')
+        path = self.prefix+'/'+path.strip('/') if path else self.prefix
         
-        raise NotImplementedError() 
+        l = []
+        for e in self.bucket.list(path):
+            path = e.name.replace(self.prefix,'',1).strip('/')
+            if path.startswith('_'):
+                continue
+            
+            if path.count('/') > 1:
+                continue # partition files
+            
+            l.append(path)
+        
+        return l
 
     def has(self, rel_path, md5=None):
         

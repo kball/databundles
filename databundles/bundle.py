@@ -485,6 +485,7 @@ class BuildBundle(Bundle):
     ### Prepare is run before building, part of the devel process.  
 
     def pre_meta(self):
+        '''Skips the meta stage if the :class:.`META_COMPLETE_MARKER` file already exists'''
         import os.path
         mf = self.filesystem.meta_path(self.META_COMPLETE_MARKER)
       
@@ -498,7 +499,7 @@ class BuildBundle(Bundle):
         return True
     
     def post_meta(self):
-        '''Create the meta marker so we don't run the meta process again'''
+        '''Create the :class:.`META_COMPLETE_MARKER` meta marker so we don't run the meta process again'''
         import datetime
         mf = self.filesystem.meta_path(self.META_COMPLETE_MARKER)
         with open(mf,'w+') as f:
@@ -506,34 +507,45 @@ class BuildBundle(Bundle):
     
         return True
 
-
     ### Prepare is run before building, part of the devel process.  
 
     def pre_prepare(self):
-      
+
+        
         if self.database.exists() and self.db_config.get_value('process','prepared'):
             self.log("Bundle has already been prepared")
             #raise ProcessError("Bundle has already been prepared")
+     
             return False
         return True
 
+    
     def prepare(self):
 
         if not self.database.exists():
             self.database.create()
 
-        sf = self.filesystem.path(self.config.build.get('schema_file', 'meta/schema.csv'))
+        sf  = self.filesystem.path(self.config.build.get('schema_file', 'meta/schema.csv'))
 
         if os.path.exists(sf):
             with open(sf, 'rbU') as f:
                 self.schema.schema_from_file(f)      
-                self.schema.create_tables()     
+                self.schema.create_tables()    
+
 
         return True
     
     def post_prepare(self):
-        self.db_config.set_value('process','prepared',True)
+        '''Set a marker in the database that it is already prepared. '''
+        from datetime import datetime
+        self.db_config.set_value('process','prepared',datetime.now().isoformat())
         self.update_configuration()
+        
+        sf  = self.filesystem.path(self.config.build.get('schema_file', 'meta/schema-revised.csv'))
+
+        with open(sf, 'w') as f:
+            self.schema.as_csv(f)
+                        
         return True
    
 
@@ -552,10 +564,8 @@ class BuildBundle(Bundle):
         return True
     
     def post_build(self):
-        import time
-        
-        self.db_config.set_value('build', 'completed', time.gmtime())
-        
+        from datetime import datetime
+        self.db_config.set_value('process', 'built', datetime.now().isoformat())
         return True
     
         
@@ -595,6 +605,8 @@ class BuildBundle(Bundle):
         return True
         
     def post_install(self):
+        from datetime import datetime
+        self.db_config.set_value('process', 'installed', datetime.now().isoformat())
         return True
     
     ### Submit the package to the repository
@@ -611,6 +623,8 @@ class BuildBundle(Bundle):
         return True
     
     def post_submit(self):
+        from datetime import datetime
+        self.db_config.set_value('process', 'submitted', datetime.now().isoformat())
         return True
 
     ### Submit the package to the repository
@@ -624,6 +638,8 @@ class BuildBundle(Bundle):
         return True
     
     def post_extract(self):
+        from datetime import datetime
+        self.db_config.set_value('process', 'extracted', datetime.now().isoformat())
         return True
     
     

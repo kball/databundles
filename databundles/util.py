@@ -124,7 +124,7 @@ class Counter(dict):
     def __missing__(self, key):
         return 0
 
-def lru_cache(maxsize=100):
+def lru_cache(maxsize=128):
     '''Least-recently-used cache decorator.
 
     Arguments to the cached function must be hashable.

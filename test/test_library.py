@@ -22,8 +22,8 @@ class Test(TestBase):
     def setUp(self):
         import testbundle.bundle
         self.bundle_dir = os.path.dirname(testbundle.bundle.__file__)
-        self.rc = get_runconfig([os.path.join(self.bundle_dir,'library-test-config.yaml'),
-                                 os.path.join(self.bundle_dir,'bundle.yaml')]
+        self.rc = get_runconfig((os.path.join(self.bundle_dir,'library-test-config.yaml'),
+                                 os.path.join(self.bundle_dir,'bundle.yaml'))
                                  )
 
         self.copy_or_build_bundle()
@@ -119,18 +119,7 @@ class Test(TestBase):
 
         self.assertTrue(l.database.needs_dump())
       
-
-    def test_public_url(self):
-        '''Check that the public_url_f works'''
-        cache = self.bundle.filesystem.get_cache('test')
-        print cache.public_url_f()('file')
-        
-        cache = self.bundle.filesystem.get_cache('test2')
-        print cache.public_url_f()('file')    
-        
-        #cache = self.bundle.filesystem.get_cache('s3')
-        #print cache.public_url_f()('file')      
-            
+      
     def test_resolve(self):
         """Test the resolve_id() function"""
         from databundles import resolve_id
@@ -438,7 +427,7 @@ class Test(TestBase):
         #fs = self.bundle.filesystem
         #local = fs.get_cache('downloads')
         
-        cache = self.bundle.filesystem.get_cache('s3')
+        cache = self.bundle.filesystem.get_cache('s3', self.rc)
         repo_dir  = cache.cache_dir
       
         print "Repo Dir: {}".format(repo_dir)

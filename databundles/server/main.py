@@ -2,7 +2,8 @@
 REST Server For DataBundle Libraries. 
 '''
 
-from bottle import  error, get, put, post, request, response, redirect #@UnresolvedImport
+
+from bottle import  error, hook, get, put, post, request, response, redirect #@UnresolvedImport
 from bottle import HTTPResponse, static_file, install, url #@UnresolvedImport
 from bottle import ServerAdapter, server_names, Bottle  #@UnresolvedImport
 from bottle import run, debug #@UnresolvedImport
@@ -18,40 +19,57 @@ from sqlalchemy.orm.exc import NoResultFound
 
 import databundles.client.exceptions as exc
 
-# This might get changed, as in test_run
-run_config = databundles.run.RunConfig()
-library_name = 'default'
-
 logger = databundles.util.get_logger(__name__)
 logger.setLevel(logging.DEBUG)
     
-    
-def get_library_config(name=None):
-    global library_name
 
-    if name is not None:
-        library_name = name
-
-    cfg =  run_config.library.get(library_name)
-    
-    if not cfg:
-        raise Exception("Failed to get exception for name {} ".format(library_name))
-    
-    return cfg
-    
-def get_library(name=None):
+def _get_library(run_config, library_name=None):
     '''Return the library. In a function to defer execution, so the
     run_config variable can be altered before it is called. '''
     
-    global library_name
-    # Originally, we were caching the library, but the library
-    # holds open a sqlite database, and that isn't multi-threaded, so then
-    # we can't use a multi-threaded server. 
-    # Of course, then you have concurrency problems with sqlite .... 
-    if name is not None:
-        library_name = name
-
+    if library_name is None:
+        library_name = 'default'
+    
     return databundles.library._get_library(run_config, library_name)
+ 
+#
+# The LibraryPlugin allows the library to be inserted into a reuest handler with a
+# 'library' argument. 
+class LibraryPlugin(object):
+    def __init__(self, rconfig, library_name, keyword='library'):
+        self.rconfig = rconfig
+        self.library_name = library_name
+        self.keyword = keyword
+    
+    def setup(self, app):
+        pass
+
+    def apply(self, callback, context):
+        import inspect
+        
+        # Override global configuration with route-specific values.
+        conf = context['config'].get('library') or {}
+        
+        rconfig = conf.get('rconfig', self.rconfig)
+        library_name = conf.get('library_name', self.library_name)
+        keyword = conf.get('keyword', self.keyword)
+        
+        # Test if the original callback accepts a 'db' keyword.
+        # Ignore it if it does not need a database handle.
+        args = inspect.getargspec(context['callback'])[0]
+        if keyword not in args:
+            return callback
+
+        def wrapper(*args, **kwargs):
+
+            kwargs[keyword] = _get_library(rconfig, library_name)
+
+            rv = callback(*args, **kwargs)
+
+            return rv
+
+        # Replace the route callback with the wrapped one.
+        return wrapper
  
 
 def capture_return_exception(e):
@@ -133,17 +151,22 @@ def error404(error):
 def error500(error):
     raise exc.InternalError("For Url: {}".format(repr(request.url)))
 
+@hook('after_request')
+def close_library_db():
+    '''Close the library database after the request if is sqlite, since sqlite
+    isn't multi-threaded'''
+
 @get('/datasets')
-def get_datasets():
+def get_datasets(library):
     '''Return all of the dataset identities, as a dict, 
     indexed by id'''
-    return { i.id_ : i.to_dict() for i in get_library().datasets}
+    return { i.id_ : i.to_dict() for i in library.datasets}
    
 @get('/datasets/find/<term>')
-def get_datasets_find(term):
+def get_datasets_find(term, library):
     '''Find a partition or data bundle with a, id or name term '''
     
-    dataset, partition  = get_library().get_ref(term)
+    dataset, partition  = library.get_ref(term)
      
     if dataset is False:
         return False
@@ -154,14 +177,14 @@ def get_datasets_find(term):
         return dataset.to_dict()
   
 @post('/datasets/find')
-def post_datasets_find():
+def post_datasets_find(library):
     '''Post a QueryCommand to search the library. '''
     from databundles.library import QueryCommand
    
     q = request.json
    
     bq = QueryCommand(q)
-    results = get_library().find(bq)
+    results = library.find(bq)
 
     out = []
     for r in results:
@@ -170,7 +193,7 @@ def post_datasets_find():
         
     return out
 
-def _get_dataset_partition_record(did, pid):
+def _get_dataset_partition_record(library, did, pid):
     """Get the reference information for a partition from the bundle database"""
     
     from databundles.identity import ObjectNumber, DatasetNumber, PartitionNumber
@@ -186,7 +209,7 @@ def _get_dataset_partition_record(did, pid):
     if str(pon.dataset) != str(don):
         raise exc.BadRequest('Partition number {} does not belong to datset {}'.format(pid, did))
     
-    bundle =  get_library().get(did)
+    bundle =  library.get(did)
     
     # Need to read the file early, otherwise exceptions here
     # will result in the cilent's ocket disconnecting. 
@@ -240,7 +263,7 @@ def _read_body(request):
 
 @put('/datasets/<did>')
 @CaptureException
-def put_dataset(did): 
+def put_dataset(did, library): 
     '''Store a bundle, calling put() on the bundle file in the Library.
     
         :param did: A dataset id string. must be parsable as a `DatasetNumber`
@@ -260,8 +283,7 @@ def put_dataset(did):
 
     try:
         
-
-        l = get_library()
+        l = library
         
         if l.require_upload:
             raise exc.NotAuthorized("This libraray uses an objct store for uploads.")
@@ -294,7 +316,7 @@ def put_dataset(did):
             tb = DbBundle(cf)
             type = tb.db_config.info.type
         except Exception as e:
-            logger.error("Failed to access database: {}".format(cf))
+            logger.error("Failed to access database: {}; {}".format(cf, e))
             raise
             
         if( type == 'partition'):
@@ -315,11 +337,14 @@ def put_dataset(did):
       
     r = identity.to_dict()
     r['url'] = url
+    
+    l.run_dumper_thread()
+    
     return r
   
 @post('/load')
 @CaptureException
-def post_load(): 
+def post_load(library): 
     '''Ask the libary to check its object store for the  given dataset. We only need to do this for
     datasets, which are referenced by the interface. 
 
@@ -330,11 +355,12 @@ def post_load():
     
     if identity.is_bundle:
         
-        l = get_library()
+        l = library
         
         # This will pull the file into the local cache from the remote, 
         # As long as the remote is listed as an upstream for the library. 
         path = l.cache.get(identity.cache_key)
+        l.run_dumper_thread()
         
         if not path or not os.path.exists(path):
             raise exc.Gone("Failed to get object {} from upstream; path '{}' does not exist".format(identity.cache_key, path))
@@ -346,21 +372,10 @@ def post_load():
 
     return identity.to_dict()
 
-@get('/backup')
-@CaptureException
-def post_backup():
-    '''Write a backup of the library to the remote. Makes a backup of this library and stores the
-    file at the remote at 'library.db'  ''' 
-    from databundles.util import temp_file_name
-    from databundles.filesystem import S3Cache, FsCompressionCache
-    import os
-    
-    return get_library().backup()
-
 
 @get('/datasets/<did>') 
 @CaptureException   
-def get_dataset_bundle(did):
+def get_dataset_bundle(did, library):
     '''Get a bundle database file, given an id or name
     
     Args:
@@ -368,14 +383,14 @@ def get_dataset_bundle(did):
               May be for a bundle or partition
     '''
 
-    l = get_library()
+    l = library
     
     # We can get the dataset file to the local storage because we need to reference it in the interface. 
     # which is not necessary for partitions. 
     bp = l.get(did)
 
     if not bp:
-        raise Exception("Didn't find dataset for id: {}, library = {}  ".format(did, get_library().database.dsn))
+        raise Exception("Didn't find dataset for id: {}, library = {}  ".format(did, library.database.dsn))
 
     if l.remote:
         url = l.remote.public_url_f()(bp.identity.cache_key)
@@ -393,11 +408,11 @@ def get_dataset_bundle(did):
         return static_file(f, root='/', mimetype="application/octet-stream")
 
 @get('/datasets/:did/info')
-def get_dataset_info(did):
+def get_dataset_info(did, library):
     '''Return the complete record for a dataset, including
     the schema and all partitions. '''
 
-    gr =  get_library().get(did)
+    gr =  library.get(did)
      
     if not gr:
         raise exc.NotFound("Failed to find dataset for {}".format(did))
@@ -411,9 +426,9 @@ def get_dataset_info(did):
 
 @get('/datasets/<did>/partitions')
 @CaptureException
-def get_dataset_partitions_info(did):
+def get_dataset_partitions_info(did, library):
     ''' GET    /dataset/:did/partitions''' 
-    gr =  get_library().get(did)
+    gr =  library.get(did)
     
     if not gr:
         raise exc.NotFound("Failed to find dataset for {}".format(did))
@@ -427,12 +442,12 @@ def get_dataset_partitions_info(did):
 
 @get('/datasets/<did>/partitions/<pid>')
 @CaptureException
-def get_dataset_partitions(did, pid):
+def get_dataset_partitions( did, pid, library):
     '''Return a partition for a dataset'''
     from databundles.client.exceptions import NotFound
     from databundles.dbexceptions import NotFoundError
     
-    dataset, partition = _get_dataset_partition_record(did, pid)
+    dataset, partition = _get_dataset_partition_record(library, did, pid)
 
     if not dataset:
         logger.info("Didn't find dataset")
@@ -444,7 +459,7 @@ def get_dataset_partitions(did, pid):
     
     try:
         # Realize the partition file in the top level cache. 
-        r = get_library().get(partition.identity.id_)
+        r = library.get(partition.identity.id_)
     except NotFoundError as e:
         raise NotFound("Found partition record, but not partition in library for {}. Original Exception: {}"
                        .format(partition.identity.name, e.message))
@@ -453,10 +468,10 @@ def get_dataset_partitions(did, pid):
 
 @get('/info/objectstore')
 @CaptureException
-def get_info_objectstore():
+def get_info_objectstore(library):
     """Return information about where to upload files"""
 
-    l = get_library()
+    l = library
 
     if l.remote:
         # Send it directly to the upstream API
@@ -473,19 +488,19 @@ def get_info_objectstore():
 
 @put('/datasets/<did>/partitions/<pid>')
 @CaptureException
-def put_datasets_partitions(did, pid):
+def put_datasets_partitions(did, pid, library):
     '''Upload a partition database file'''
     
     payload_file = _read_body(request)
     
-    l =  get_library()
+    l =  library
     
     if l.require_upload:
         raise exc.NotAuthorized("This libraray uses an objct store for uploads.")
     
     try:
         
-        dataset, partition = _get_dataset_partition_record(did, pid) #@UnusedVariable
+        dataset, partition = _get_dataset_partition_record(library, did, pid) #@UnusedVariable
         
         library_path, rel_path, url =l.put_file(partition.identity, payload_file) #@UnusedVariable
         
@@ -501,6 +516,8 @@ def put_datasets_partitions(did, pid):
 
     r = partition.identity.to_dict()
     r['url'] = url
+    
+    l.run_dumper_thread()
     
     return r 
 
@@ -518,6 +535,13 @@ def get_test_echo(arg):
 def put_test_echo():
     '''just echo the argument'''
     return  (request.json, dict(request.query.items()))
+
+
+@get('/test/info')
+def get_test_info(library):
+    '''Info about the server'''
+    return  str(type(library))
+
 
 
 @get('/test/exception')
@@ -579,71 +603,65 @@ class StoppableWSGIRefServer(ServerAdapter):
 
 server_names['stoppable'] = StoppableWSGIRefServer
 
-def test_run(config=None, library_name=None):
+def test_run(config, library_name='default'):
     '''Run method to be called from unit tests'''
     from bottle import run, debug #@UnresolvedImport
   
-    # Reset the library  with a  different configuration. This is the module
-    # level library, defined at the top of the module. 
-    if config:
-        global run_config
-        run_config = config # If this is called before get_library, will change the lib config
-
     debug()
 
-    l = get_library(library_name)  # fixate library
-    config = get_library_config(library_name)
-    port = config.get('port', 7979)
-    host = config.get('host', 'localhost')
+    l = _get_library(config, library_name)  # fixate library
+
+    port = l.port if l.port else 7979
+    host = l.host if l.host else 'localhost'
     
-    logger.info("starting server on http://{}:{}".format(host, port))
+    logger.info("starting test server on http://{}:{}".format(host, port))
+    install(LibraryPlugin(config, library_name))
     
     return run(host=host, port=port, reloader=False, server='stoppable')
 
-def local_run(config=None, name='default', reloader=True):
+def local_run(config, library_name='default', reloader=True):
  
     global stoppable_wsgi_server_run
     stoppable_wsgi_server_run = None
-    
-    if config:
-        global run_config
-        run_config = config # If this is called before get_library, will change the lib config
-    
+
     debug()
 
+    l = _get_library(config, library_name)  #@UnusedVariable 
+    port = l.port if l.port else 8080
+    host = l.host if l.host else 'localhost'
     
-    l = get_library(name)  #@UnusedVariable
-    config = get_library_config(name)
-    port = config.get('port', 8080)
-    host = config.get('host', '0.0.0.0')
-    
-    logger.info("starting server  for library '{}' on http://{}:{}".format(name, host, port))
+    logger.info("starting local server for library '{}' on http://{}:{}".format(library_name, host, port))
 
+    install(LibraryPlugin(config, library_name))
     return run(host=host, port=port, reloader=reloader)
     
-def local_debug_run(name='default'):
+def local_debug_run(config, library_name='default'):
 
     debug()
-    l = get_library()  #@UnusedVariable
-    config = get_library_config(name)
-    port = config.get('port', 8080)
-    host = config.get('host', '0.0.0.0')
+    l = _get_library(library_name)  #@UnusedVariable
+    port = l.port if l.port else 8080
+    host = l.host if l.host else 'localhost'
+    install(LibraryPlugin(config, library_name))
     return run(host=host, port=port, reloader=True)
 
-def production_run(config=None, name='default', reloader=True):
+def production_run(config, library_name='default', reloader=False):
 
-    if config:
-        global run_config
-        run_config = config # If this is called before get_library, will change the lib config
+    l = _get_library(config, library_name)  #@UnusedVariable
+    port = l.port if l.port else 80
+    host = l.host if l.host else 'localhost'
 
-    l = get_library(name)  #@UnusedVariable
-    config = get_library_config(name)
-    port = config.get('port', 80)
-    host = config.get('host', '0.0.0.0')
-    
-    logger.info("starting server  for library '{}' on http://{}:{}".format(name, host, port))
+    if l.can_restore():
+        logger.info("Restoring library from backup")
+        l.clean()
+        l.restore()
+    else:
+        logger.info('No backup, not restoring library database')
 
-    return run(host=host, port=port, reloader=False, server='paste')
+    logger.info("starting production server for library '{}' on http://{}:{}".format(library_name, host, port))
+
+    install(LibraryPlugin(config, library_name))
+
+    return run(host=host, port=port, reloader=reloader, server='paste')
     
 if __name__ == '__main__':
     local_debug_run()

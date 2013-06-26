@@ -8,7 +8,7 @@ of the bundles that have been installed into it.
 from databundles.run import  get_runconfig
 
 import os.path
-
+from databundles.util import temp_file_name
 from databundles.dbexceptions import ConfigurationError, NotFoundError
 from databundles.filesystem import  Filesystem
 from  databundles.identity import new_identity
@@ -19,17 +19,49 @@ import databundles
 from collections import namedtuple
 from sqlalchemy.exc import IntegrityError
 
+import Queue
+
 libraries = {}
 
 # Setup a default logger. The logger is re-assigned by the
 # bundle when the bundle instantiates the logger. 
 import logging #@UnusedImport
-import logging.handlers #@Unus gedImport
+import logging.handlers #@UnusedImport
 
 class NullHandler(logging.Handler):
     def emit(self, record):
         pass
     
+import threading
+import time
+class DumperThread (threading.Thread):
+    """Run a thread for a library to try to dump the database to the retome at regular intervals"""
+    
+    lock = threading.Lock()
+    
+    def __init__(self,library):
+        
+        self.library = library
+        threading.Thread.__init__(self)
+        #self.daemon = True
+        self.library.logger.setLevel(logging.DEBUG)
+        self.library.logger.debug("Initialized Dumper")
+
+    def run (self):
+
+        self.library.logger.debug("Run Dumper")
+        with DumperThread.lock:
+
+            time.sleep(5)
+
+            backed_up = self.library.backup()
+    
+            if backed_up:
+                self.library.logger.debug("Backed up database")
+            else:
+                self.library.logger.debug("No backup")
+
+
 def get_database(config=None,name='library'):
     """Return a new `LibraryDb`, constructed from a configuration
     
@@ -104,17 +136,23 @@ def _get_library(config=None, name='default'):
 
     require_upload = sc.get('require-upload', False)
 
-    l =  Library(cache = cache, database = database, remote = remote, require_upload = require_upload)
+    l =  Library(cache = cache, 
+                 database = database, 
+                 remote = remote, 
+                 require_upload = require_upload,
+                 host = sc.get('host','localhost'),
+                 port = sc.get('port',80)
+                 )
     
     return l
     
 def get_library(config=None, name='default', reset=False):
-    """Return a new `Library`, constructed from a configuration
+    """Return a new :class:`~databundles.library.Library`, constructed from a configuration
     
-    :param config: a `RunConfig` object
-    :rtype: a `Library` object
+    :param config: a :class:`~databundles.run.RunConfig` object
+    :rtype:  :class:`~databundles.library.Library` 
     
-    If config is None, the function will constuct a new RunConfig() with a default
+    If ``config`` is None, the function will constuct a new :class:`~databundles.run.RunConfig` with a default
     constructor. 
     
     """    
@@ -177,6 +215,9 @@ class LibraryDb(object):
         import logging
         self.logger.setLevel(logging.INFO) 
         
+    def clone(self):
+        return self.__class__(self.driver, self.server, self.dbname, self.username, self.password)
+        
     @property
     def engine(self):
         '''return the SqlAlchemy engine for this database'''
@@ -191,7 +232,6 @@ class LibraryDb(object):
             
             from sqlalchemy import event
             event.listen(self._engine, 'connect', _pragma_on_connect)
-            
             
         return self._engine
 
@@ -281,7 +321,7 @@ class LibraryDb(object):
         
         import datetime
         
-        self.set_config_value('activity','change', datetime.datetime.utcnow())
+        self.set_config_value('activity','change', datetime.datetime.utcnow().isoformat())
         
    
     def close(self):
@@ -406,60 +446,6 @@ class LibraryDb(object):
 
         else:
             raise RuntimeError("Unknown database driver: {} ".format(self.driver))
-        
-    def _copy_db(self, src, dst):
-        
-        for name, table in self.metadata.tables.items():
-            rows = src.session.execute(table.select()).fetchall()
-            for row in rows:
-                dst.session.execute(table.insert(), row)
-                        
-            dst.session.commit()
-                        
-    def dump(self, path):
-        '''Copy the database to a new Sqlite file, as a backup. '''
-        import datetime
-
-        dst = LibraryDb(driver='sqlite', dbname=path)
-
-        dst.create()
-        
-        self.set_config_value('activity','dump', datetime.datetime.utcnow())
-        
-        self._copy_db(self, dst)
-
-
-    def needs_dump(self):
-        '''Return true if the last dump date is after the last change date, and
-        the last change date is more than 10s in the past'''
-        import datetime
-        
-        configs = self.config_values
-        
-        td = datetime.timedelta(seconds=10)
-        
-        changed =  configs.get(('activity','change'),datetime.datetime.fromtimestamp(0))
-        dumped = configs.get(('activity','dump'),datetime.datetime.fromtimestamp(0))
-        dumped_past = dumped + td
-        now = datetime.datetime.utcnow()
-
-        if ( changed > dumped and now > dumped_past): 
-            return True
-        else:
-            return False
-    
-
-    def restore(self, path):
-        '''Restore a sqlite database dump'''
-        import datetime
-        
-        self.create()
-        
-        src = LibraryDb(driver='sqlite', dbname=path)
-        
-        self._copy_db(src, self)
-
-        self.set_config_value('activity','restore', datetime.datetime.utcnow())
 
     def install_bundle_file(self, identity, bundle_file):
         """Install a bundle in the database, starting from a file that may
@@ -807,6 +793,68 @@ class LibraryDb(object):
     def get_file(self,path):
         pass
 
+    #
+    # Database backup and restore. Synchronizes the database with 
+    # a remote. This is used when a library is created attached to a remote, and 
+    # needs to get the library database from the remote. 
+    #
+        
+        
+    def _copy_db(self, src, dst):
+        
+        for name, table in self.metadata.tables.items():
+            rows = src.session.execute(table.select()).fetchall()
+            for row in rows:
+                dst.session.execute(table.insert(), row)
+                        
+            dst.session.commit()
+            
+                        
+    def dump(self, path):
+        '''Copy the database to a new Sqlite file, as a backup. '''
+        import datetime
+
+        dst = LibraryDb(driver='sqlite', dbname=path)
+
+        dst.create()
+        
+        self.set_config_value('activity','dump', datetime.datetime.utcnow().isoformat())
+        
+        self._copy_db(self, dst)
+
+
+    def needs_dump(self):
+        '''Return true if the last dump date is after the last change date, and
+        the last change date is more than 10s in the past'''
+        import datetime
+        from dateutil  import parser
+        
+        configs = self.config_values
+        
+        td = datetime.timedelta(seconds=10)
+        
+        changed =  parser.parse(configs.get(('activity','change'),datetime.datetime.fromtimestamp(0).isoformat()))
+        dumped = parser.parse(configs.get(('activity','dump'),datetime.datetime.fromtimestamp(0).isoformat()))
+        dumped_past = dumped + td
+        now = datetime.datetime.utcnow()
+
+        if ( changed > dumped and now > dumped_past): 
+            return True
+        else:
+            return False
+    
+    def restore(self, path):
+        '''Restore a sqlite database dump'''
+        import datetime
+        
+        self.create()
+        
+        src = LibraryDb(driver='sqlite', dbname=path)
+        
+        self._copy_db(src, self)
+
+        self.set_config_value('activity','restore', datetime.datetime.utcnow().isoformat())
+
         
 class QueryCommand(object):
     '''An object that contains and transfers a query for a bundle
@@ -960,7 +1008,7 @@ class Library(object):
     # Return value for earches
     ReturnDs = collections.namedtuple('ReturnDs',['dataset','partition'])
     
-    def __init__(self, cache,database, remote=None, sync=False, require_upload = False):
+    def __init__(self, cache,database, remote=None, sync=False, require_upload = False, host=None,port = None):
         '''
         Libraries are constructed on the root cache name for the library. 
         If the cache does not exist, it will be created. 
@@ -972,15 +1020,15 @@ class Library(object):
             remote: URL of a remote library, for fallback for get and put. 
             sync: If true, put to remote synchronously. Defaults to False. 
    
-        
         '''
  
-
         self.cache = cache
         self._database = database
         self.remote = remote
         self.sync = sync
         self.bundle = None # Set externally in bundle.library()
+        self.host = host
+        self.port = port
 
         self.require_upload = require_upload
 
@@ -990,7 +1038,13 @@ class Library(object):
             raise ConfigurationError("Must specify library.cache for the library in bundles.yaml")
 
         self.logger = logging.getLogger(__name__)
+        #self.logger.setLevel(logging.DEBUG)
 
+        self.needs_update = False
+    
+    def clone(self):
+        
+        return self.__class__(self.cache, self.database.clone(), self.remote, self.sync, self.require_upload, self.host, self.port)
     
     @property
     def database(self):
@@ -1270,13 +1324,10 @@ class Library(object):
         
         return b
 
-
     def put_remote_ref(self,identity):
         '''Store a reference to a partition that has been uploaded directly to the remote'''
         pass
         
-        
-
     def put_file(self, identity, file_path, state='new'):
         '''Store a dataset or partition file, without having to open the file
         to determine what it is, by using  seperate identity''' 
@@ -1339,13 +1390,8 @@ class Library(object):
         self.clean()
         self.cache.clean()
         
-        
-    def run_dumper_thread(self, queue, cb):
-        '''Run a thread that will check the database and call the callback when the database should be
-        backed up after a change. '''
-        pass
-  
-  
+
+
     @property
     def datasets(self):
         '''Return an array of all of the dataset records in the library database'''
@@ -1354,40 +1400,7 @@ class Library(object):
         return [d for d in self.database.session.query(Dataset).all()]
 
   
-    def rebuild(self):
-        '''Rebuild the database from the bundles that are already installed
-        in the repositry cache'''
-  
-        from databundles.bundle import DbBundle
-   
-        bundles = []
-        for r,d,f in os.walk(self.cache.cache_dir): #@UnusedVariable
-            for file_ in f:
-                
-                if file_.endswith(".db"):
-                    try:
-                        b = DbBundle(os.path.join(r,file_))
-                        # This is a fragile hack -- there should be a flag in the database
-                        # that diferentiates a partition from a bundle. 
-                        f = os.path.splitext(file_)[0]
-    
-                        if b.db_config.get_value('info','type') == 'bundle':
-                            self.logger.info("Queing: {} from {}".format(b.identity.name, file_))
-                            bundles.append(b)
-                            
-                    except Exception as e:
-                        self.logger.error('Failed to process {} : {} '.format(file_, e))
 
-        self.database.clean()
-        
-        for bundle in bundles:
-            self.logger.info('Installing: {} '.format(bundle.identity.name))
-            self.database.install_bundle(bundle)
-            
-    
-        
-        self.database.commit()
-        return bundles
   
     @property
     def new_files(self):
@@ -1426,20 +1439,108 @@ class Library(object):
             for file_ in self.new_files:
                 self.push(file_)
     
+    #
+    # Backup and restore
+    #
+    
+    def run_dumper_thread(self):
+        '''Run a thread that will check the database and call the callback when the database should be
+        backed up after a change. '''
+        
+        dt = DumperThread(self.clone())
+        dt.start()
+
+        return dt
+    
     def backup(self):
-        '''Backup the database to the remote'''
-        from databundles.util import temp_file_name
-        import os
+        '''Backup the database to the remote, but only if the database needs to be backed up. '''
+
+
+        if not self.database.needs_dump():
+            return False
 
         backup_file = temp_file_name()+".db"
-    
+
         self.database.dump(backup_file)
-    
-        path = self.remote.put(backup_file,'library.db')
-       
+
+        path = self.remote.put(backup_file,'_/library.db')
+
         os.remove(backup_file)   
-        
+
         return path
+
+    def can_restore(self):
+        
+        backup_file = self.cache.get('_/library.db')
+        
+        if backup_file:
+            return True
+        else:
+            return False
+
+    def restore(self):
+        '''Restore the database from the remote'''
+
+        # This requires that the cache have and upstream that is also the remote
+        backup_file = self.cache.get('_/library.db')
+
+        self.database.restore(backup_file)
+
+        os.remove(backup_file)   
+
+        return backup_file        
+
+    def remote_rebuild(self):
+        '''Rebuild the library from the contents of the remote'''
+
+        self.clean()
+        for rel_path in self.remote.list():
+            path = self.cache.get(rel_path) # The cache and the remote must be connected!
+     
+            bundle = DbBundle(path)
+            identity = bundle.identity
+     
+            self.database.add_file(path, self.cache.repo_id, identity.id_,  'pushed')
+
+            self.database.install_bundle_file(identity, path)
+            
+
+
+    def rebuild(self):
+        '''Rebuild the database from the bundles that are already installed
+        in the repositry cache'''
+  
+        from databundles.bundle import DbBundle
+   
+        bundles = []
+        for r,d,f in os.walk(self.cache.cache_dir): #@UnusedVariable
+            for file_ in f:
+                
+                if file_.endswith(".db"):
+                    try:
+                        b = DbBundle(os.path.join(r,file_))
+                        # This is a fragile hack -- there should be a flag in the database
+                        # that diferentiates a partition from a bundle. 
+                        f = os.path.splitext(file_)[0]
+    
+                        if b.db_config.get_value('info','type') == 'bundle':
+                            self.logger.info("Queing: {} from {}".format(b.identity.name, file_))
+                            bundles.append(b)
+                            
+                    except Exception as e:
+                        self.logger.error('Failed to process {} : {} '.format(file_, e))
+
+        self.database.clean()
+        
+        for bundle in bundles:
+            self.logger.info('Installing: {} '.format(bundle.identity.name))
+            self.database.install_bundle(bundle)
+            
+    
+        
+        self.database.commit()
+        return bundles
+
 
 def _pragma_on_connect(dbapi_con, con_record):
     '''ISSUE some Sqlite pragmas when the connection is created'''

@@ -28,7 +28,8 @@ def _clean_int(i):
         raise ValueError("Input must be convertable to an int. got:  ".str(i)) 
 
 class Schema(object):
-
+    """Represents the table and column definitions for a bundle
+    """
     def __init__(self, bundle):
         from partition import  Partition
         self.bundle = bundle # COuld also be a partition
@@ -377,7 +378,12 @@ class Schema(object):
 
 
     def as_csv(self, f=None):
-        """Return the current schema as a CSV file"""
+        """Return the current schema as a CSV file
+        
+        :param f: A file-like object where the CSV data will be written. If ``None``, 
+        will default to stdout. 
+        
+        """
         import csv, sys
         from collections import OrderedDict
 
@@ -392,6 +398,7 @@ class Schema(object):
                 row = OrderedDict()
                 row['table'] = table.name
                 row['column'] = col.name
+                row['id'] = col.id_
                 row['is_pk'] = 1 if col.is_primary_key else ''
                 row['is_fk'] = col.foreign_key if col.foreign_key else ''
                 row['type'] = col.datatype.upper()

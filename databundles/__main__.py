@@ -12,7 +12,7 @@ import shutil
 from databundles.run import  get_runconfig
 from databundles import __version__
 
-def bundle_command(args, rc):
+def bundle_command(args, rc, src):
   
     from databundles.identity import Identity
     from databundles.identity import DatasetNumber
@@ -43,7 +43,7 @@ def bundle_command(args, rc):
     
         shutil.copy(bundle_file ,name  )
 
-def install_command(args, rc):
+def install_command(args, rc, src):
     import yaml, pkgutil
     import os
     from databundles.run import RunConfig as rc
@@ -72,7 +72,7 @@ def install_command(args, rc):
                 f.write(s)
 
 
-def library_command(args, rc):
+def library_command(args, rc, src):
     import library
 
     l = library.get_library(name=args.name)
@@ -82,15 +82,16 @@ def library_command(args, rc):
         l.database.create()
 
     elif args.subcommand == 'server':
+
         from databundles.server.main import production_run
 
-        def run_server(args, rc):
-            production_run(rc, name = args.name)
+        def run_server(args, src):
+            production_run(src, library_name = args.name)
         
         if args.daemonize:
-            daemonize(run_server, args,  rc)
+            daemonize(run_server, args,  src)
         else:
-            production_run(rc, name = args.name)
+            production_run(src, library_name = args.name)
         
       
     elif args.subcommand == 'drop':
@@ -133,11 +134,6 @@ def library_command(args, rc):
                     print "Failed: {}".format(e)
                     raise
                 
-                if i%5 == 0:
-                    print "Backup database";
-                    l.remote.backup()
-
-            l.remote.backup()
 
     elif args.subcommand == 'files':
 
@@ -259,7 +255,7 @@ def library_command(args, rc):
         print "Unknown subcommand"
         print args 
 
-def ckan_command(args,rc):
+def ckan_command(args,rc, src):
     from databundles.dbexceptions import ConfigurationError
     import databundles.client.ckan
     import requests
@@ -293,11 +289,11 @@ def ckan_command(args,rc):
         print args
  
 
-def code_command(args,rc):
+def code_command(args,rc, src):
     
     print "CODE {}".format(args)
 
-def test_command(args,rc):
+def test_command(args,rc, src):
     
     if args.subcommand == 'config':
         print rc.dump()
@@ -479,13 +475,15 @@ def main():
         
     if f != install_command:
         rc = get_runconfig(rc_path)
+        src = get_runconfig(rc_path, is_server = True)
     else:
         rc = None
+        src = None
         
     if not f:
         print "Error: No command: "+args.command
     else:
-        f(args, rc)
+        f(args, rc, src)
         
 
        

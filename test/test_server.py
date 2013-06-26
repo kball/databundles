@@ -12,6 +12,7 @@ from databundles.run import  RunConfig
 from test_base import  TestBase
 from  databundles.client.rest import Rest #@UnresolvedImport
 from databundles.library import QueryCommand, get_library
+from databundles.util import rm_rf
 
 logger = databundles.util.get_logger(__name__)
 logger.setLevel(logging.DEBUG) 
@@ -20,6 +21,8 @@ logging.captureWarnings(True)
 class Test(TestBase):
  
     def setUp(self):
+        
+        rm_rf('/tmp/server')
 
         self.copy_or_build_bundle()
         self.bundle_dir =  os.path.join(os.path.dirname(os.path.abspath(__file__)),'testbundle')    
@@ -44,9 +47,9 @@ class Test(TestBase):
         
         self.start_server()
           
-        api = Rest(self.server_url)
+        api = Rest(self.server_url, self.rc.filesystem.remote)
 
-        r =  api.put(self.bundle.identity, self.bundle.database.path)
+        r =  api.put(self.bundle.database.path, self.bundle.identity)
       
         self.assertEquals(self.bundle.identity.name,r.object.get('name',''))
   
@@ -56,7 +59,7 @@ class Test(TestBase):
         os.remove(r)
 
         for partition in self.bundle.partitions:
-            r =  api.put(partition.identity,partition.database.path)
+            r =  api.put(partition.database.path, partition.identity)
             self.assertEquals(partition.identity.name,r.object.get('name',''))
             
             
@@ -220,15 +223,15 @@ class Test(TestBase):
         bf = self.bundle.database.path
 
         # With an FLO
-        response =  r.put(self.bundle.identity, open(bf))
+        response =  r.put(open(bf), self.bundle.identity)
         self.assertEquals(self.bundle.identity.id_, response.object.get('id'))
       
         # with a path
-        response =  r.put(self.bundle.identity, bf)
+        response =  r.put( bf, self.bundle.identity)
         self.assertEquals(self.bundle.identity.id_, response.object.get('id'))
 
         for p in self.bundle.partitions.all:
-            response =  r.put(p.identity, open(p.database.path))
+            response =  r.put( open(p.database.path), p.identity)
             self.assertEquals(p.identity.id_, response.object.get('id'))
 
         # Now get the bundles
@@ -258,7 +261,7 @@ class Test(TestBase):
 
     def test_caches(self):
         from functools import partial
-        from databundles.util import rm_rf
+        
         
         fn = '/tmp/1mbfile'
         
@@ -329,12 +332,12 @@ class Test(TestBase):
         cache.remove(p.identity.cache_key, propagate = True)
 
         
-        r = api.put(self.bundle.identity, self.bundle.database.path )
+        r = api.put( self.bundle.database.path, self.bundle.identity )
         print "Put {}".format(r.object)
-        r = api.put(p.identity, p.database.path )
+        r = api.put(p.database.path, p.identity )
         print "Put {}".format(r.object)
         
-        r = api.put(p.identity, p.database.path )
+        r = api.put(p.database.path, p.identity )
         
         r = api.get(p.identity,'/tmp/foo.db')
         print "Get {}".format(r)        
@@ -344,11 +347,47 @@ class Test(TestBase):
         self.assertEquals("source-dataset-subset-variation-ca0d",b.identity.name )
         
         
-        #
-        # backup the library
-        #
+    def test_dump(self):
+        import time
+        import logging 
+     
+       
         
-        r = api.backup()
+        l = get_library(self.server_rc, name='default-remote', reset = True)
+        l.clean()
+        
+        l.remote_rebuild()
+        
+        return 
+        
+        self.start_server()
+        
+        l.run_dumper_thread()
+        l.run_dumper_thread()
+       
+        self.assertFalse(l.database.needs_dump())
+        l.put(self.bundle)
+        self.assertTrue(l.database.needs_dump()) 
+        time.sleep(6)
+        self.assertFalse(l.database.needs_dump())
+            
+        l.run_dumper_thread()
+        l.put(self.bundle)
+        time.sleep(6)
+        self.assertFalse(l.database.needs_dump())
+        
+        self.assertEquals(self.bundle.identity.name,  l.get(self.bundle.identity.name).identity.name)
+        
+        l.clean()
+        
+        self.assertEqual(None, l.get(self.bundle.identity.name))
+        
+        l.restore()
+        
+        self.assertEquals(self.bundle.identity.name,  l.get(self.bundle.identity.name).identity.name)
+        
+        
+        
         
 def suite():
     suite = unittest.TestSuite()
