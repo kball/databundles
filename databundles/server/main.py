@@ -160,7 +160,7 @@ def close_library_db():
 def get_datasets(library):
     '''Return all of the dataset identities, as a dict, 
     indexed by id'''
-    return { i.id_ : i.to_dict() for i in library.datasets}
+    return { i.identity.cache_key : { 'identity': i.identity.to_dict() } for i in library.datasets}
    
 @get('/datasets/find/<term>')
 def get_datasets_find(term, library):
@@ -305,7 +305,7 @@ def put_dataset(did, library):
         try:
             on = ObjectNumber.parse(did)
         except ValueError:
-            raise exc.BadRequest("Unparse dataset id: {}".format(did))
+            raise exc.BadRequest("Unparseablr dataset id: {}".format(did))
         
         if not isinstance(on, DatasetNumber):
             raise exc.BadRequest("Bad dataset id, not for a dataset: {}".format(did))

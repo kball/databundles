@@ -6,11 +6,9 @@ library:
 
     default-remote:
         port: 7979
-        remote: remote
         filesystem: server-remote
         database: server  
-        require-upload: true    
-        
+
 database:
     server:
         dbname: '/tmp/server/library.db'
@@ -27,19 +25,13 @@ filesystem:
     server-remote:
         dir: '/tmp/server/cache-l1'
         size: 5000
-        upstream:
-          options: [compress,usreadonly]
+        upstream: 
+          options: [compress,remote]
           bucket: devtest.clarinova.net
           prefix: test
           access_key: AKIAIOKK4KSYYGYXWQJQ
           secret: 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
 
-    remote:
-      options: [compress]
-      bucket: devtest.clarinova.net
-      prefix: test
-      access_key: AKIAIOKK4KSYYGYXWQJQ
-      secret: 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
           
     direct-remote:
       dir: '/tmp/server/cache-l1'

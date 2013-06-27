@@ -153,6 +153,11 @@ class Filesystem(object):
         
         if subconfig.get('options',False) and isinstance(subconfig.get('options',False), list):
          
+            # Must come before 'compress'!
+            if 'remote' in subconfig.get('options'):
+                cache.usreadonly = True
+                cache.is_remote = True
+         
             if 'compress' in subconfig.get('options'):
                 cache = FsCompressionCache(cache)
 
@@ -161,6 +166,9 @@ class Filesystem(object):
                 
             if 'usreadonly' in subconfig.get('options'):
                 cache.usreadonly = True
+
+                
+                
 
         return cache
         
@@ -678,6 +686,22 @@ class FsCache(object):
         
         if not os.path.isdir(self.cache_dir):
             raise ConfigurationError("Cache dir '{}' is not valid".format(self.cache_dir)) 
+        
+    @property
+    def connection_info(self):
+        '''Return reference to the connection, excluding the secret'''
+        if self.upstream:
+            return self.upstream.connection_info
+        else:
+            return {'service':'file','dir':self.cache_dir }
+        
+    @property
+    def remote(self):
+        '''Return a reference to an inner cache that is a remote'''
+        if self.upstream:
+            return self.upstream.remote
+        else:
+            return None
         
     @property
     def repo_id(self):
@@ -1316,6 +1340,11 @@ class FsCompressionCache(FsCache):
         '''Return reference to the connection, excluding the secret'''
         return self.upstream.connection_info
       
+    @property
+    def remote(self):
+        '''Return a reference to an inner cache that is a remote'''
+        return self.upstream.remote
+      
     def public_url_f(self):
         ''' Returns a function that will convert a rel_path into a public URL'''
         
@@ -1340,6 +1369,7 @@ class S3Cache(object):
 
         self.readonly = False
         self.usreadonly = False
+        self.is_remote = False
         self.access_key = access_key
         self.bucket_name = bucket
         self.prefix = prefix
@@ -1377,6 +1407,15 @@ class S3Cache(object):
         '''Return reference to the connection, excluding the secret'''
         
         return {'service':'s3','bucket':self.bucket_name, 'prefix':self.prefix, 'access_key': self.access_key}
+
+    @property
+    def remote(self):
+        '''Return a reference to an inner cache that is a remote'''
+
+        if self.is_remote:
+            return self
+        else:
+            return None
 
     def get_stream(self, rel_path):
         """Return the object as a stream"""

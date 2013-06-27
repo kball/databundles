@@ -26,12 +26,12 @@ class Rest(object):
     '''Interface class for the Databundles Library REST API
     '''
 
-    def __init__(self, url,  object_store_config=None):
+    def __init__(self, url,  accounts_config=None):
         '''
         '''
         
         self.url = url
-        self.object_store_config = object_store_config
+        self.accounts_config = accounts_config
         
     @property
     def remote(self):
@@ -49,6 +49,7 @@ class Rest(object):
         '''Upload  file to the object_store_config's object store'''
         from databundles.util import md5_for_file
         from databundles.dbexceptions import ConfigurationError
+        import json
 
         if ci is None:
             ci = self.remote.info().objectstore().get().object
@@ -56,14 +57,16 @@ class Rest(object):
         if ci['service'] == 's3':
             from databundles.filesystem import S3Cache, FsCompressionCache
             
-            if not self.object_store_config:
-                raise ConfigurationError("Remote requires S3 upload, but no object_store_config is set for this api")
+            if not self.accounts_config:
+                raise ConfigurationError("Remote requires S3 upload, but no account_config is set for this api")
             
-            if  ci['access_key'] != self.object_store_config.access_key:
-                
-                raise ConfigurationError("Remote config does not have access_key = {}".format(ci['access_key']))
+            secret = self.accounts_config.get('s3',{}).get(ci['access_key'], False)
             
-            ci['secret'] = self.object_store_config.secret
+            if not secret:
+                print self.accounts_config
+                raise ConfigurationError("Didn't find key {} in configuration accounts.s3".format(ci['access_key']))
+
+            ci['secret'] = secret
             
             del ci['service']
             fs = FsCompressionCache(S3Cache(**ci))
@@ -77,7 +80,7 @@ class Rest(object):
             return identity.cache_key
         else:
             
-            metadata = {'id':identity.id_, 'name':identity.name, 'md5':md5}
+            metadata = {'id':identity.id_, 'identity': json.dumps(identity.to_dict()), 'name':identity.name, 'md5':md5}
 
             return fs.put(path, identity.cache_key,  metadata=metadata)
         

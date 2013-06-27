@@ -75,7 +75,12 @@ def install_command(args, rc, src):
 def library_command(args, rc, src):
     import library
 
-    l = library.get_library(name=args.name)
+    if args.is_server:
+        config  = src
+    else:
+        config = rc
+    
+    l = library.get_library(config=config, name=args.name)
 
     if args.subcommand == 'init':
         print "Initialize Library"
@@ -110,11 +115,18 @@ def library_command(args, rc, src):
         print "Rebuild library"
         l.rebuild()
         
+    elif args.subcommand == 'list':
+        
+        for i in l.database.connection.execute('SELECT * from datasets'):
+            d =  dict(i)
+            print d['d_id'], d['d_name']
+        
     elif args.subcommand == 'info':
         print "Library Info"
+        print "Name:     {}".format(args.name)
         print "Database: {}".format(l.database.dsn)
-        print "Remote: {}".format(l.remote)
-        print "Cache: {}".format(l.cache.cache_dir)
+        print "Remote:   {}".format(l.remote.connection_info if l.remote else 'None')
+        print "Cache:    {}".format(l.cache.cache_dir)
         
     elif args.subcommand == 'push':
         
@@ -163,13 +175,9 @@ def library_command(args, rc, src):
                 print "Rel Path  : ",partition.cache_key
                 print "Abs Path  : ",l.cache.has(partition.cache_key)
 
-           
-            
-
                 
     elif args.subcommand == 'get':
      
-
         # This will fetch the data, but the return values aren't quite right
         r = l.get(args.term)
       
@@ -247,7 +255,7 @@ def library_command(args, rc, src):
         else:
         
             datasets = l.remote.list()
-            
+
             for id_, data in datasets.items():
                 print "{0:11s} {1:4s} {2}".format(id_,'remote',data['name'])
         
@@ -255,6 +263,40 @@ def library_command(args, rc, src):
         print "Unknown subcommand"
         print args 
 
+def remote_command(args, rc, src):
+    import library
+
+    if args.is_server:
+        config  = src
+    else:
+        config = rc
+    
+    l = library.get_library(config=config, name=args.name)
+
+    if args.subcommand == 'info':
+        if not l.remote:
+            print "No remote"
+        else:
+            print l.remote.connection_info
+
+    elif args.subcommand == 'list':
+        o = []
+        
+        if l.remote.connection_info['service'] == 'remote':
+            for name, d in l.remote.list().items():
+                identity = d['identity']
+                print identity['id'], identity['name']
+        else:
+            for i in l.remote.list():
+                try: o.append(i.name)
+                except: o.append(i)
+                
+            for i in sorted(o):
+                print i            
+        
+
+             
+            
 def ckan_command(args,rc, src):
     from databundles.dbexceptions import ConfigurationError
     import databundles.client.ckan
@@ -344,6 +386,11 @@ def main():
     asp = lib_p.add_subparsers(title='library commands', help='command help')
     lib_p.add_argument('-n','--name',  default='default',  help='Select a different name for the library')
         
+    group = lib_p.add_mutually_exclusive_group()
+    group.add_argument('-s', '--server',  default=False, dest='is_server',  action='store_true', help = 'Select the server configuration')
+    group.add_argument('-c', '--client',  default=False, dest='is_server',  action='store_false', help = 'Select the client configuration')
+        
+        
     sp = asp.add_parser('push', help='Push new library files')
     sp.set_defaults(subcommand='push')
     sp.add_argument('-w','--watch',  default=False,action="store_true",  help='Check periodically for new files.')
@@ -374,6 +421,9 @@ def main():
     
     sp = asp.add_parser('purge', help='Remove all entries from the library database and delete all files')
     sp.set_defaults(subcommand='purge')
+    
+    sp = asp.add_parser('list', help='List datasets in the library')
+    sp.set_defaults(subcommand='list')
     
     sp = asp.add_parser('rebuild', help='Rebuild the library database from the files in the library')
     sp.set_defaults(subcommand='rebuild')
@@ -426,16 +476,25 @@ def main():
     sp.add_argument('-r', '--root',  default=None,  help="Set the root dir")
     sp.add_argument('-R', '--remote',  default=None,  help="Url of remote library")
 
+
     #
-    # Code Command
+    # Remote Command
     #
-    lib_p = cmd.add_parser('code', help='Find and clone code bundles')
-    lib_p.set_defaults(command='code')
-    asp = lib_p.add_subparsers(title='code', help='Find and clone code bundles')
     
-    sp = asp.add_parser('clone', help='Find a code bundle in a configured repository and clone it')
-    sp.set_defaults(subcommand='clone')
-    sp.add_argument('name', type=str,help='Name of the bundle')
+    lib_p = cmd.add_parser('remote', help='Access the remote library')
+    lib_p.set_defaults(command='remote')
+    asp = lib_p.add_subparsers(title='remote commands', help='Access the remote library')
+    lib_p.add_argument('-n','--name',  default='default',  help='Select a different name for the library, from which the remote is located')
+     
+    group = lib_p.add_mutually_exclusive_group()
+    group.add_argument('-s', '--server',  default=False, dest='is_server',  action='store_true', help = 'Select the server configuration')
+    group.add_argument('-c', '--client',  default=False, dest='is_server',  action='store_false', help = 'Select the client configuration')
+        
+    sp = asp.add_parser('info', help='Display the remote configuration')
+    sp.set_defaults(subcommand='info')
+  
+    sp = asp.add_parser('list', help='List remote files')
+    sp.set_defaults(subcommand='list')
 
                        
     #
@@ -465,6 +524,7 @@ def main():
     funcs = {
         'bundle': bundle_command,
         'library':library_command,
+        'remote':remote_command,
         'test':test_command,
         'install':install_command,
         'ckan':ckan_command,

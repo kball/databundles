@@ -50,6 +50,11 @@ class DumperThread (threading.Thread):
     def run (self):
 
         self.library.logger.debug("Run Dumper")
+        
+        if not self.library.remote:
+            self.library.logger.debug("No remote")
+            return
+        
         with DumperThread.lock:
 
             time.sleep(5)
@@ -105,6 +110,7 @@ def _get_library(config=None, name='default'):
     
     sc = config.library.get(name,False)
     
+
     if not sc:
         raise Exception("Failed to get library.{} config key ".format(name))
     
@@ -117,16 +123,13 @@ def _get_library(config=None, name='default'):
 
     if remote_name:
         from  databundles.client.rest import Rest
-        if isinstance(remote_name, dict):
-            # it is an API that uses an object store. 
-            config = remote_name
-            url = config['url']
-            remote =  Rest(url, config)
+        if not isinstance(remote_name, basestring):
+            raise Exception("Deprecated")
         elif remote_name.startswith('http'):
             # It is a URL, and it points to an api that wil be used directly. 
             
             url = remote_name
-            remote =  Rest(url)
+            remote =  Rest(url, config.group('accounts'))
         else:
             # It is a name of a filesystem configuration
             
@@ -733,6 +736,7 @@ class LibraryDb(object):
     def add_file(self,path, group, ref, state='new'):
         from databundles.orm import  File
         
+  
         stat = os.stat(path)
       
         s = self.session
@@ -748,6 +752,9 @@ class LibraryDb(object):
     
         s.add(file_)
         s.commit()
+        
+        self._mark_update()
+        
 
     def add_ticket(self, identity, ticket):
         from databundles.orm import  File
@@ -1024,7 +1031,7 @@ class Library(object):
  
         self.cache = cache
         self._database = database
-        self.remote = remote
+        self._remote = remote
         self.sync = sync
         self.bundle = None # Set externally in bundle.library()
         self.host = host
@@ -1044,7 +1051,14 @@ class Library(object):
     
     def clone(self):
         
-        return self.__class__(self.cache, self.database.clone(), self.remote, self.sync, self.require_upload, self.host, self.port)
+        return self.__class__(self.cache, self.database.clone(), self._remote, self.sync, self.require_upload, self.host, self.port)
+    
+    @property
+    def remote(self):
+        if self._remote:
+            return self._remote # When it is a URL to a REST interface. 
+        else:
+            return self.cache.remote
     
     @property
     def database(self):
@@ -1128,6 +1142,7 @@ class Library(object):
                         dataset = r
                         partition = None
 
+
             except socket.error:
                 self.logger.error("Connection to remote ")
         elif dataset:
@@ -1155,7 +1170,10 @@ class Library(object):
         
         # Store it in the local cache. 
         
-        abs_path = self.cache.put(r, identity.cache_key )
+        if not self.cache.has(identity.cache_key):
+            abs_path = self.cache.put(r, identity.cache_key )
+        else:
+            abs_path = self.cache.get(identity.cache_key )
         
         if not os.path.exists(abs_path):
             raise Exception("Didn't get file '{}' for id {}".format(abs_path, identity.cache_key))
@@ -1163,6 +1181,7 @@ class Library(object):
         bundle = DbBundle(abs_path)
   
         # Ensure the file is in the local library. 
+
         self.database.add_file(abs_path, self.cache.repo_id, bundle.identity.id_, 'pulled')                 
         self.database.install_bundle(bundle)
       
@@ -1208,6 +1227,7 @@ class Library(object):
 
         # Get a reference to the dataset, partition and relative path
         # from the local database. 
+
         dataset, partition = self.get_ref(bp_id)
 
         if partition:
@@ -1219,6 +1239,8 @@ class Library(object):
 
         # Try to get the file from the cache. 
         abs_path = self.cache.get(dataset.cache_key)
+
+
 
         # Not in the cache, try to get it from the remote library, 
         # if a remote was set. 
@@ -1233,6 +1255,13 @@ class Library(object):
             
         bundle.library = self
 
+        # For filesystems that have an upstream remote that is S3, it is possible
+        # to get a dataset that isn't in the library, so well need to add it. 
+        dataset, partition =  self.database.get(bundle.identity)
+
+        if dataset is None:
+            self._get_remote_dataset(bundle.identity) # Side effect of adding to the library 
+            
         return bundle
     
     def _get_partition(self,  dataset, partition):

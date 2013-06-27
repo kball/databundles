@@ -46,8 +46,8 @@ class Test(TestBase):
         from databundles.library import QueryCommand
         
         self.start_server()
-          
-        api = Rest(self.server_url, self.rc.filesystem.remote)
+
+        api = Rest(self.server_url, self.rc.accounts)
 
         r =  api.put(self.bundle.database.path, self.bundle.identity)
       
@@ -216,6 +216,8 @@ class Test(TestBase):
         from databundles.bundle import DbBundle
         from databundles.library import QueryCommand
         
+        rm_rf('/tmp/server')
+        
         self.start_server(name=name)
         
         r = Rest(self.server_url, remote_config)
@@ -256,7 +258,7 @@ class Test(TestBase):
         return self._test_put_bundle('default')
 
     def test_put_bundle_remote(self):
-        return self._test_put_bundle('default-remote', self.rc.filesystem.remote)
+        return self._test_put_bundle('default-remote', self.rc.accounts)
 
 
     def test_caches(self):
@@ -279,11 +281,15 @@ class Test(TestBase):
 
         path = get_cache('cache3').get('cache3')
 
+        self.assertEquals('AKIAIOKK4KSYYGYXWQJQ', get_cache('cache3').connection_info.get('access_key'))
+
     
     def test_put_redirect(self):
         from databundles.bundle import DbBundle
         from databundles.library import QueryCommand
         from databundles.util import md5_for_file, rm_rf, bundle_file_type
+
+
 
         #
         # Simple out and retrieve
@@ -305,10 +311,10 @@ class Test(TestBase):
         #
         #  Connect through server. 
         #
-
+        rm_rf('/tmp/server')
         self.start_server(name='default-remote')
         
-        api = Rest(self.server_url, self.rc.filesystem.remote)  
+        api = Rest(self.server_url, self.rc.accounts)  
 
         # Upload directly, then download via the cache. 
         
@@ -330,7 +336,6 @@ class Test(TestBase):
 
         cache.remove(self.bundle.identity.cache_key, propagate = True)
         cache.remove(p.identity.cache_key, propagate = True)
-
         
         r = api.put( self.bundle.database.path, self.bundle.identity )
         print "Put {}".format(r.object)
@@ -345,21 +350,16 @@ class Test(TestBase):
         b = DbBundle(r)
 
         self.assertEquals("source-dataset-subset-variation-ca0d",b.identity.name )
-        
+
         
     def test_dump(self):
         import time
         import logging 
      
        
-        
         l = get_library(self.server_rc, name='default-remote', reset = True)
         l.clean()
-        
-        l.remote_rebuild()
-        
-        return 
-        
+
         self.start_server()
         
         l.run_dumper_thread()
@@ -368,12 +368,15 @@ class Test(TestBase):
         self.assertFalse(l.database.needs_dump())
         l.put(self.bundle)
         self.assertTrue(l.database.needs_dump()) 
+        l.run_dumper_thread()
         time.sleep(6)
         self.assertFalse(l.database.needs_dump())
             
         l.run_dumper_thread()
         l.put(self.bundle)
-        time.sleep(6)
+        l.run_dumper_thread()
+        time.sleep(7)
+        print l.database.needs_dump()
         self.assertFalse(l.database.needs_dump())
         
         self.assertEquals(self.bundle.identity.name,  l.get(self.bundle.identity.name).identity.name)
