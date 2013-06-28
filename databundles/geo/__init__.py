@@ -9,7 +9,7 @@ from collections import  namedtuple
 
 Point = namedtuple('Point', ['x', 'y'])
 
-from analysisarea import *
+#from analysisarea import *
 from kernel import *
 from util import *
 from array import *

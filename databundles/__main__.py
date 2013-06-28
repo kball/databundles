@@ -257,7 +257,7 @@ def library_command(args, rc, src):
             datasets = l.remote.list()
 
             for id_, data in datasets.items():
-                print "{0:11s} {1:4s} {2}".format(id_,'remote',data['name'])
+                print "{0:4s} {1:11s} {2}".format('remote',id_,data['identity']['name'])
         
     else:
         print "Unknown subcommand"
