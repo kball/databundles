@@ -33,6 +33,8 @@ def new_identity(d, bundle=None):
         except Exception as e:
             raise Exception("Failed for {}: {}".format(d, e))
         
+    
+
 
 class Identity(object):
 
@@ -361,32 +363,42 @@ class ObjectNumber(object):
     EPOCH = 1325376000 # Jan 1, 2012 in UNIX time
 
     @classmethod
-    def parse(cls, input): #@ReservedAssignment
+    def parse(cls, input, parse_revision = False): #@ReservedAssignment
         '''Parse a string into one of the object number classes. '''
         
 
         if input is None:
             return None
         
+        if not input:
+            raise Exception("Didn't get input")
+
+        if parse_revision:
+            revision = int(ObjectNumber.base62_decode(input[-3:]))
+            input = input[:-3]
+        else:
+            revision = None
+
+        
         if  isinstance(input, unicode):
             dataset = input.encode('ascii')
       
         if input[0] == cls.TYPE.DATASET:
             dataset = int(ObjectNumber.base62_decode(input[1:]))
-            return DatasetNumber(dataset)
+            return DatasetNumber(dataset, revision=revision)
         elif input[0] == cls.TYPE.TABLE:   
             table = int(ObjectNumber.base62_decode(input[-2:]))
             dataset = int(ObjectNumber.base62_decode(input[1:-2]))
-            return TableNumber(DatasetNumber(dataset), table)
+            return TableNumber(DatasetNumber(dataset), table, revision=revision)
         elif input[0] == cls.TYPE.PARTITION:
             partition = int(ObjectNumber.base62_decode(input[-3:]))
             dataset = int(ObjectNumber.base62_decode(input[1:-3]))  
-            return PartitionNumber(DatasetNumber(dataset), partition)              
+            return PartitionNumber(DatasetNumber(dataset), partition, revision=revision)              
         elif input[0] == cls.TYPE.COLUMN:       
             column = int(ObjectNumber.base62_decode(input[-2:]))
             table = int(ObjectNumber.base62_decode(input[-4:-2]))
             dataset = int(ObjectNumber.base62_decode(input[1:-4]))
-            return ColumnNumber(TableNumber(DatasetNumber(dataset), table), column)
+            return ColumnNumber(TableNumber(DatasetNumber(dataset), table), column, revision=revision)
         else:
             raise ValueError('Unknow type character: '+input[0]+ ' in '+str(input))
        
@@ -458,7 +470,7 @@ class ObjectNumber(object):
 
 class DatasetNumber(ObjectNumber):
     '''An identifier for a dataset'''
-    def __init__(self, dataset=None):
+    def __init__(self, dataset=None, revision=None):
         '''
         Constructor
         '''
@@ -473,10 +485,14 @@ class DatasetNumber(ObjectNumber):
             dataset = dataset - ObjectNumber.EPOCH
           
         self.dataset = dataset
+        self.revision = revision
+        
 
     def __str__(self):        
         return (ObjectNumber.TYPE.DATASET+
-                ObjectNumber.base62_encode(self.dataset))
+                ObjectNumber.base62_encode(self.dataset)+
+                (ObjectNumber.base62_encode(self.revision).rjust(3,'0') if self.revision else '')
+                )
            
  
 
@@ -484,7 +500,7 @@ class DatasetNumber(ObjectNumber):
 
 class TableNumber(ObjectNumber):
     '''An identifier for a table'''
-    def __init__(self, dataset, table):
+    def __init__(self, dataset, table, revision=None):
         if not isinstance(dataset, DatasetNumber):
             raise ValueError("Constructor requires a DatasetNumber")
 
@@ -493,19 +509,24 @@ class TableNumber(ObjectNumber):
 
 
         self.dataset = dataset
-        self.table = table;
+        self.table = table
+        self.revision = revision
         
-
+        if not self.revision and dataset.revision:
+            self.revision = dataset.revision
+        
+        
          
     def __str__(self):        
         return (ObjectNumber.TYPE.TABLE+
                 ObjectNumber.base62_encode(self.dataset.dataset)+
-                ObjectNumber.base62_encode(self.table).rjust(2,'0'))
+                ObjectNumber.base62_encode(self.table).rjust(2,'0')+
+                (ObjectNumber.base62_encode(self.revision).rjust(3,'0') if self.revision else ''))
                   
          
 class ColumnNumber(ObjectNumber):
     '''An identifier for a column'''
-    def __init__(self, table, column):
+    def __init__(self, table, column, revision=None):
         if not isinstance(table, TableNumber):
             raise ValueError("Constructor requires a TableNumber. got: "+str(type(table)))
 
@@ -514,6 +535,12 @@ class ColumnNumber(ObjectNumber):
 
         self.table = table
         self.column = column
+        self.revision = revision
+   
+        if not self.revision and table.revision:
+            self.revision = table.revision
+             
+   
    
     @property
     def dataset(self):
@@ -526,13 +553,14 @@ class ColumnNumber(ObjectNumber):
         return (ObjectNumber.TYPE.COLUMN+
                 ObjectNumber.base62_encode(self.table.dataset.dataset)+
                 ObjectNumber.base62_encode(self.table.table).rjust(2,'0')+
-                ObjectNumber.base62_encode(self.column).rjust(2,'0')
+                ObjectNumber.base62_encode(self.column).rjust(2,'0')+
+                (ObjectNumber.base62_encode(self.revision).rjust(3,'0') if self.revision else '')
                 )
            
 
 class PartitionNumber(ObjectNumber):
     '''An identifier for a partition'''
-    def __init__(self, dataset, partition):
+    def __init__(self, dataset, partition, revision=None):
         '''
         Arguments:
         dataset -- Must be a DatasetNumber
@@ -545,13 +573,17 @@ class PartitionNumber(ObjectNumber):
             raise ValueError("Value is too large")
 
         self.dataset = dataset
-        self.partition = partition;
+        self.partition = partition
+        self.revision = revision
 
-         
+        if not self.revision and dataset.revision:
+            self.revision = dataset.revision
+        
     def __str__(self):        
         return (ObjectNumber.TYPE.PARTITION+
                 ObjectNumber.base62_encode(self.dataset.dataset)+
-                ObjectNumber.base62_encode(self.partition).rjust(3,'0'))
+                ObjectNumber.base62_encode(self.partition).rjust(3,'0')+
+                (ObjectNumber.base62_encode(self.revision).rjust(3,'0') if self.revision else ''))
 
 
 

@@ -5,7 +5,7 @@
 /* Project name:                                                          */
 /* Author:                                                                */
 /* Script type:           Database creation script                        */
-/* Created on:            2013-05-19 21:53                                */
+/* Created on:            2013-07-06 13:23                                */
 /* ---------------------------------------------------------------------- */
 
 

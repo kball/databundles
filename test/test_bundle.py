@@ -218,12 +218,7 @@ class Test(TestBase):
         self.bundle.database.session.commit()
      
     def test_names(self):
-        
-        print self.bundle.identity.path
-        print self.bundle.database.path
-        
-        for p in self.bundle.partitions:
-            print "Part: ",p.identity.path, p.database.path
+        print 'Testing Names'
 
      
     def test_column_processor(self):

@@ -48,6 +48,17 @@ class Schema(object):
         self.table_sequence = len(self.tables)+1
         self.col_sequence = 1 
 
+        self.dataset = self.get_dataset()
+
+    def get_dataset(self):
+        '''Initialize the identity, creating a dataset record, 
+        from the bundle.yaml file'''
+        
+        from databundles.orm import Dataset
+ 
+        s = self.bundle.database.session
+
+        return  (s.query(Dataset).one())
 
     def clean(self):
         from databundles.orm import Table, Column, Partition
@@ -93,17 +104,14 @@ class Schema(object):
      
         if name in self._seen_tables:
             raise Exception("schema.add_table has already loaded a table named: "+name)
-        
-        id_ = str(TableNumber(ObjectNumber.parse(self.d_id), self.table_sequence))
-      
+
         data = { k.replace('d_','',1): v for k,v in kwargs.items() if k.startswith('d_') }
       
-        row = Table(id = id_,
+        row = Table(self.dataset,
                     name=name, 
-                    d_id=self.d_id, 
                     sequence_id=self.table_sequence,
                     data=data)
-     
+
         self.bundle.database.session.add(row)
 
         for key, value in kwargs.items():
@@ -399,6 +407,7 @@ class Schema(object):
                 row['table'] = table.name
                 row['column'] = col.name
                 row['id'] = col.id_
+                row['vid'] = col.vid_
                 row['is_pk'] = 1 if col.is_primary_key else ''
                 row['is_fk'] = col.foreign_key if col.foreign_key else ''
                 row['type'] = col.datatype.upper()

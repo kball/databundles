@@ -195,14 +195,17 @@ class SavableMixin(object):
 class Dataset(Base):
     __tablename__ = 'datasets'
     
-    id_ = SAColumn('d_id',Text, primary_key=True)
-    name = SAColumn('d_name',Integer, unique=True, nullable=False)
+    vid = SAColumn('d_vid',Text, primary_key=True)
+    id_ = SAColumn('d_id',Text, )
+    name = SAColumn('d_name',Integer, unique=False, nullable=False)
+    vname = SAColumn('d_vname',Integer, unique=True, nullable=False)
     source = SAColumn('d_source',Text, nullable=False)
     dataset = SAColumn('d_dataset',Text, nullable=False)
     subset = SAColumn('d_subset',Text)
     variation = SAColumn('d_variation',Text)
     creator = SAColumn('d_creator',Text, nullable=False)
-    revision = SAColumn('d_revision',Text)
+    revision = SAColumn('d_revision',Integer)
+
     data = SAColumn('d_data', MutationDict.as_mutable(JSONEncodedObj))
 
     path = None  # Set by the LIbrary and other queries. 
@@ -215,6 +218,7 @@ class Dataset(Base):
     def __init__(self,**kwargs):
         self.id_ = kwargs.get("oid",kwargs.get("id", None)) 
         self.name = kwargs.get("name",None) 
+        self.vname = kwargs.get("vname",None) 
         self.source = kwargs.get("source",None) 
         self.dataset = kwargs.get("dataset",None) 
         self.subset = kwargs.get("subset",None) 
@@ -223,7 +227,15 @@ class Dataset(Base):
         self.revision = kwargs.get("revision",None) 
 
         if not self.id_:
-            self.id_ = str(DatasetNumber())
+            dn = DatasetNumber(None, self.revision )
+            self.vid = str(dn)
+            dn.revision = None
+            self.id_ = str(dn)
+        else:
+            dn = ObjectNumber.parse(self.id_)
+            dn.revision = self.revision
+            self.vid = str(dn)
+
  
     @property
     def creatorcode(self):
@@ -232,8 +244,8 @@ class Dataset(Base):
     
    
     def __repr__(self):
-        return """<datasets: id={} name={} source={} ds={} ss={} var={} creator={} rev={}>""".format(
-                    self.id_, self.name, self.source,
+        return """<datasets: id={} vid={} name={} source={} ds={} ss={} var={} creator={} rev={}>""".format(
+                    self.id_, self.vid, self.name, self.source,
                     self.dataset, self.subset, self.variation, 
                     self.creator, self.revision)
         
@@ -246,13 +258,15 @@ class Dataset(Base):
     def to_dict(self):
         return {
                 'id':self.id_, 
-                'name':self.name, 
+                'vid':self.vid,
+                'name':self.name,
+                'vname':self.vname, 
                 'source':self.source,
                 'dataset':self.dataset, 
                 'subset':self.subset, 
                 'variation':self.variation, 
                 'creator':self.creator, 
-                'revision':self.revision
+                'revision':self.revision, 
                 }
         
 def _clean_flag( in_flag):
@@ -265,9 +279,11 @@ def _clean_flag( in_flag):
 class Column(Base):
     __tablename__ = 'columns'
 
-    id_ = SAColumn('c_id',Text, primary_key=True)
+    vid = SAColumn('c_vid',Text, primary_key=True)
+    id_ = SAColumn('c_id',Text)
     sequence_id = SAColumn('c_sequence_id',Integer)
-    t_id = SAColumn('c_t_id',Text,ForeignKey('tables.t_id'))
+    t_vid = SAColumn('c_t_vid',Text,ForeignKey('tables.t_vid'))
+    t_id = SAColumn('c_t_id',Text)
     name = SAColumn('c_name',Text, unique=True)
     altname = SAColumn('c_altname',Text)
     datatype = SAColumn('c_datatype',Text)
@@ -341,11 +357,9 @@ class Column(Base):
         return self.types[self.datatype][2]
         
         
-    def __init__(self,**kwargs):
-     
-        self.id_ = kwargs.get("oid",None) 
+    def __init__(self,table, **kwargs):
+
         self.sequence_id = kwargs.get("sequence_id",None) 
-        self.t_id = kwargs.get("t_id",None)  
         self.name = kwargs.get("name",None) 
         self.altname = kwargs.get("altname",None) 
         self.is_primary_key = _clean_flag(kwargs.get("is_primary_key",False))
@@ -370,6 +384,13 @@ class Column(Base):
         if not self.name:
             raise ValueError('Column must have a name')
 
+        self.t_id = table.id_
+        self.t_vid = table.vid
+        ton = ObjectNumber.parse(table.vid, parse_revision=True)
+        con = ColumnNumber(ton, self.sequence_id)
+        self.vid = str(con)
+        con.revision = None
+        self.id = str(con)
 
 
     @staticmethod
@@ -418,8 +439,10 @@ event.listen(Column, 'before_update', Column.before_update)
 class Table(Base):
     __tablename__ ='tables'
 
-    id_ = SAColumn('t_id',Text, primary_key=True)
-    d_id = SAColumn('t_d_id',Text,ForeignKey('datasets.d_id'), nullable = False)
+    vid = SAColumn('t_vid',Text, primary_key=True)
+    id_ = SAColumn('t_id',Text, primary_key=False)
+    d_id = SAColumn('t_d_id',Text)
+    d_vid = SAColumn('t_d_vid',Text,ForeignKey('datasets.d_vid'), nullable = False)
     sequence_id = SAColumn('t_sequence_id',Integer, nullable = False)
     name = SAColumn('t_name',Text, unique=True, nullable = False)
     altname = SAColumn('t_altname',Text)
@@ -429,15 +452,24 @@ class Table(Base):
     
     columns = relationship(Column, backref='table', cascade="all, delete-orphan")
 
-    def __init__(self,**kwargs):
-        self.id_ = kwargs.get("id",None) 
-        self.d_id = kwargs.get("d_id",None)
+    def __init__(self,dataset, **kwargs):
+
         self.sequence_id = kwargs.get("sequence_id",None)  
         self.name = kwargs.get("name",None) 
+        self.vname = kwargs.get("vname",None) 
         self.altname = kwargs.get("altname",None) 
         self.description = kwargs.get("description",None) 
         self.keywords = kwargs.get("keywords",None) 
         self.data = kwargs.get("data",None) 
+        
+        self.d_id = dataset.id_
+        self.d_vid = dataset.vid
+        don = ObjectNumber.parse(dataset.vid, parse_revision=True)
+        ton = TableNumber(don, self.sequence_id)
+      
+        self.vid = str(ton)
+        ton.revision = None
+        self.id_ = str(ton)
 
         if self.name:
             self.name = self.mangle_name(self.name)
@@ -502,9 +534,8 @@ class Table(Base):
         else:
             sequence = None
 
-        row = Column(id=str(ColumnNumber(ObjectNumber.parse(self.id_),sequence)),
+        row = Column(self, 
                      name=name, 
-                     t_id=self.id_,
                      **kwargs              
                      )
          
@@ -690,7 +721,7 @@ event.listen(Table, 'before_update', Table.before_update)
 class Config(Base):
     __tablename__ = 'config'
 
-    d_id = SAColumn('co_d_id',Text, primary_key=True)
+    d_vid = SAColumn('co_d_vid',Text, primary_key=True)
     group = SAColumn('co_group',Text, primary_key=True)
     key = SAColumn('co_key',Text, primary_key=True)
     #value = SAColumn('co_value', PickleType(protocol=0))
@@ -700,14 +731,14 @@ class Config(Base):
     source = SAColumn('co_source',Text)
 
     def __init__(self,**kwargs):
-        self.d_id = kwargs.get("d_id",None) 
+        self.d_vid = kwargs.get("d_vid",None) 
         self.group = kwargs.get("group",None) 
         self.key = kwargs.get("key",None) 
         self.value = kwargs.get("value",None)
         self.source = kwargs.get("source",None) 
 
     def __repr__(self):
-        return "<config: {},{},{} = {}>".format(self.d_id, self.group, self.key, self.value)
+        return "<config: {},{},{} = {}>".format(self.d_vid, self.group, self.key, self.value)
      
 
 class File(Base, SavableMixin):
@@ -742,34 +773,44 @@ class File(Base, SavableMixin):
 class Partition(Base):
     __tablename__ = 'partitions'
 
-    id_ = SAColumn('p_id',Text, primary_key=True, nullable=False)
+    vid = SAColumn('p_vid',Text, primary_key=True, nullable=False)
+    id_ = SAColumn('p_id',Text, nullable=False)
     name = SAColumn('p_name',Text, nullable=False)
     sequence_id = SAColumn('p_sequence_id',Integer)
-    t_id = SAColumn('p_t_id',Integer,ForeignKey('tables.t_id'))
-    d_id = SAColumn('p_d_id',Text,ForeignKey('datasets.d_id'))
+    t_vid = SAColumn('p_t_vid',Integer,ForeignKey('tables.t_vid'))
+    t_id = SAColumn('p_t_id',Text)
+    d_vid = SAColumn('p_d_vid',Text,ForeignKey('datasets.d_vid'))
+    d_id = SAColumn('p_d_id',Text)
     time = SAColumn('p_time',Text)
     space = SAColumn('p_space',Text)
     grain = SAColumn('p_grain',Text)
     #format = SAColumn('p_format',Text)
     state = SAColumn('p_state',Text)
     data = SAColumn('p_data',MutationDict.as_mutable(JSONEncodedObj))
-    
 
-   
     table = relationship('Table', backref='partitions')
     
-    def __init__(self,**kwargs):
+    def __init__(self,dataset, **kwargs):
         self.id_ = kwargs.get("id",kwargs.get("id_",None)) 
         self.name = kwargs.get("name",kwargs.get("name",None)) 
-        self.t_id = kwargs.get("t_id",None) 
+        self.sequence_id = kwargs.get("sequence_id",None) 
         self.d_id = kwargs.get("d_id",None) 
         self.space = kwargs.get("space",None) 
         self.time = kwargs.get("time",None)  
-        self.table = kwargs.get("table",None) 
+        self.t_id = kwargs.get("t_id",None) 
         self.grain = kwargs.get('grain',None)
-        #self.format = kwargs.get('format',None)
-        
+
         self.data = kwargs.get('data',None)
+        
+        self.d_id = dataset.id_
+        self.d_vid = dataset.vid
+        # See before_insert for setting self.vid and self.id_
+        
+        if self.t_id:
+            ton = ObjectNumber.parse(self.t_id)
+            don = ObjectNumber.parse(self.d_vid, parse_revision=True)
+            ton.revision = don.revision
+            self.t_vid = str(ton)
         
     @property
     def identity(self):
@@ -820,6 +861,13 @@ class Partition(Base):
                 max_id = 1
                 
             target.sequence_id = max_id
+            
+            
+        don = ObjectNumber.parse(target.d_vid, parse_revision=True)
+        pon = PartitionNumber(don, target.sequence_id)
+        target.vid = str(pon)
+        pon.revision = None
+        target.id_ = str(pon)
         
         Partition.before_update(mapper, conn, target)
 

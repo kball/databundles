@@ -618,12 +618,15 @@ class Partitions(object):
         except: pass
 
          
+        if 'dataset' in d:
+            del d['dataset']
+         
         op = OrmPartition(
-             t_id = table.id_ if table else None,
-             d_id = self.bundle.identity.id_,
-             data=data,
-             state=kwargs.get('state',None),
-             **d
+                self.bundle.dataset,         
+                t_id = table.id_ if table else None,
+                data=data,
+                state=kwargs.get('state',None),
+                **d
              )  
 
         return op
@@ -644,6 +647,7 @@ class Partitions(object):
             if p.name == pid.name:
                 return self.partition(p, db_type=kwargs.get('db_type',None))
        
+      
         op = self.new_orm_partition(pid, **kwargs)
         s = self.bundle.database.session
         s.add(op)   

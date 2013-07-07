@@ -75,6 +75,16 @@ class Bundle(object):
         return self._identity            
         
     @property
+    def dataset(self):
+        '''Return the dataset'''
+        
+        from databundles.orm import Dataset
+ 
+        s = self.database.session
+
+        return  (s.query(Dataset).one())
+        
+    @property
     def library(self):
         '''Return the library set for the bundle, or 
         local library from get_library() if one was not set. '''
@@ -541,7 +551,9 @@ class BuildBundle(Bundle):
         self.db_config.set_value('process','prepared',datetime.now().isoformat())
         self.update_configuration()
         
-        sf  = self.filesystem.path(self.config.build.get('schema_file', 'meta/schema-revised.csv'))
+        #sf  = self.filesystem.path(self.config.build.get('schema_file', 'meta/schema-revised.csv'))
+
+        sf  = self.filesystem.path('meta','schema-revised.csv')
 
         with open(sf, 'w') as f:
             self.schema.as_csv(f)
@@ -823,10 +835,10 @@ class BundleDbConfig(BundleConfig):
   
         s.query(SAConfig).filter(SAConfig.group == group,
                                  SAConfig.key == key,
-                                 SAConfig.d_id == self.dataset.id_).delete()
+                                 SAConfig.d_vid == self.dataset.vid).delete()
         
-        o = SAConfig(group=group,
-                     key=key,d_id=self.dataset.id_,value = value)
+
+        o = SAConfig(group=group, key=key,d_vid=self.dataset.vid,value = value)
         s.add(o)
         s.commit()       
 

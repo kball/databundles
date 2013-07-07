@@ -787,7 +787,9 @@ class Database(DatabaseInterface):
             s =  self.session
             ds = Dataset(**self.bundle.config.identity)
             ds.name = Identity.name_str(ds)
-           
+            ds.vname = Identity.name_str(ds, use_revision=True)
+            
+            
             s.add(ds)
             s.commit()
  

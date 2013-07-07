@@ -282,10 +282,10 @@ class LibraryDb(object):
 
         s.query(SAConfig).filter(SAConfig.group == group,
                                  SAConfig.key == key,
-                                 SAConfig.d_id == 'none').delete()
+                                 SAConfig.d_vid == 'none').delete()
         
         o = SAConfig(group=group,
-                     key=key,d_id='none',value = value)
+                     key=key,d_vid='none',value = value)
         s.add(o)
         s.commit()  
    
@@ -298,7 +298,7 @@ class LibraryDb(object):
         try:
             c = s.query(SAConfig).filter(SAConfig.group == group,
                                      SAConfig.key == key,
-                                     SAConfig.d_id == 'none').first()
+                                     SAConfig.d_vid == 'none').first()
        
             return c
         except:
@@ -313,7 +313,7 @@ class LibraryDb(object):
         
         d = {}
         
-        for config in s.query(SAConfig).filter(SAConfig.d_id == 'none').all():
+        for config in s.query(SAConfig).filter(SAConfig.d_vid == 'none').all():
             d[(str(config.group),str(config.key))] = config.value
             
         return d
@@ -469,10 +469,16 @@ class LibraryDb(object):
         '''
         from databundles.orm import Dataset
         from databundles.bundle import Bundle
+           
+        if not isinstance(bundle, Bundle):
+            raise ValueError("Can only install a  Bundle object")
+
+            # The Tables only get installed when the dataset is installed, 
+            # not for the partition
             
         self._mark_update()
                 
-        self.remove_bundle(bundle)
+        #self.remove_bundle(bundle)
                 
         bdbs = bundle.database.session 
         s = self.session
@@ -481,11 +487,7 @@ class LibraryDb(object):
         s.merge(dataset)
         s.commit()
 
-        if not isinstance(bundle, Bundle):
-            raise ValueError("Can only install a  Bundle object")
 
-            # The Tables only get installed when the dataset is installed, 
-            # not for the partition
  
         for table in dataset.tables:
             try:
@@ -1117,6 +1119,7 @@ class Library(object):
                 dataset, partition  = self._get_bundle_path_from_id(r.id_) 
                 
         # Try the name as a partition name
+        
         if not dataset:
             q = self.find(QueryCommand().partition(name = bp_id) )
        
@@ -1124,6 +1127,7 @@ class Library(object):
                 r = q.pop(0)
                 if r:
                     dataset, partition  = self._get_bundle_path_from_id(r.id_)         
+
 
         # No luck so far, so now try to get it from the remote library
         if not dataset and self.remote:

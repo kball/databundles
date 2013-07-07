@@ -447,6 +447,7 @@ def get_shapefile_geometry_types(shape_file):
         type_map = {'1':'GEOMETRY',
                     '2':'GEOMETRYCOLLECTION',  
                     '3':'POINT',
+                    'Point':'POINT',
                     '4':'MULTIPOINT', 
                     '5':'POLYGON', 
                     '6':'MULTIPOLYGON', 
