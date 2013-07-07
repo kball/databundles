@@ -33,6 +33,8 @@ class Test(TestBase):
         
         print "Deleting: {}".format(self.rc.filesystem.root_dir)
         Test.rm_rf(self.rc.filesystem.root_dir)
+       
+
           
     @staticmethod
     def rm_rf(d):
@@ -62,6 +64,7 @@ class Test(TestBase):
         import os
         
         l = self.get_library()
+        print "Library: ", l.database.dsn
      
         r = l.put(self.bundle) #@UnusedVariable
 
@@ -84,7 +87,8 @@ class Test(TestBase):
             
             # Get the partition with an id
             r = l.get(partition.identity.id_)
-            self.assertTrue(r is not False)
+
+            self.assertTrue(bool(r))
             self.assertEquals(partition.identity.name, r.partition.identity.name)
             self.assertEquals(self.bundle.identity.name, r.identity.name)            
 
@@ -216,6 +220,59 @@ class Test(TestBase):
        
         ds_names = [ds.identity.name for ds in l.datasets]
         self.assertIn('source-dataset-subset-variation-ca0d', ds_names)
+
+
+    def test_versions(self):
+        import testbundle.bundle
+        from databundles.run import get_runconfig
+        idnt = self.bundle.identity
+       
+        #Test.rm_rf(self.bundle.filesystem.build_path())
+
+        l = self.get_library()
+        print "Database: ", l.database.dsn
+
+        vnames = {}
+        name = None
+        
+        for i in [1,2,3]:
+            idnt.revision = i
+
+            bundle = Bundle()  
+            bundle.config.rewrite(identity=idnt.to_dict())
+            get_runconfig.clear()
+           
+            print 'Building version {}'.format(i)
+
+            bundle = Bundle() 
+             
+            bundle.clean()
+            bundle.prepare()
+            bundle.build()
+            bundle.update_configuration()
+
+            print "Installing ", bundle.identity.vname
+            l = self.get_library()
+            r = l.put(bundle)
+        
+            name = bundle.identity.name # Same every time. 
+            vnames[i] = bundle.identity.vname
+        
+        
+        r = l.get(name)
+        
+        for i,vname in vnames.items():
+            r = l.get(vname)
+            print i, vname, r, r.identity.vname
+        
+        
+        
+        
+        
+        
+        idnt.revision = 1
+        self.bundle.config.rewrite(identity=idnt.to_dict())
+
 
     def test_cache(self):
         from databundles.filesystem import  FsCache, FsLimitedCache

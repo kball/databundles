@@ -229,12 +229,9 @@ class Dataset(Base):
         if not self.id_:
             dn = DatasetNumber(None, self.revision )
             self.vid = str(dn)
-            dn.revision = None
-            self.id_ = str(dn)
+            self.id_ = str(dn.rev(None))
         else:
-            dn = ObjectNumber.parse(self.id_)
-            dn.revision = self.revision
-            self.vid = str(dn)
+            self.vid = str(ObjectNumber.parse(self.id_).rev(self.revision))
 
  
     @property
@@ -386,11 +383,10 @@ class Column(Base):
 
         self.t_id = table.id_
         self.t_vid = table.vid
-        ton = ObjectNumber.parse(table.vid, parse_revision=True)
+        ton = ObjectNumber.parse(table.vid)
         con = ColumnNumber(ton, self.sequence_id)
         self.vid = str(con)
-        con.revision = None
-        self.id = str(con)
+        self.id = str(con.rev(None))
 
 
     @staticmethod
@@ -464,12 +460,11 @@ class Table(Base):
         
         self.d_id = dataset.id_
         self.d_vid = dataset.vid
-        don = ObjectNumber.parse(dataset.vid, parse_revision=True)
+        don = ObjectNumber.parse(dataset.vid)
         ton = TableNumber(don, self.sequence_id)
       
         self.vid = str(ton)
-        ton.revision = None
-        self.id_ = str(ton)
+        self.id_ = str(ton.rev(None))
 
         if self.name:
             self.name = self.mangle_name(self.name)
@@ -776,6 +771,7 @@ class Partition(Base):
     vid = SAColumn('p_vid',Text, primary_key=True, nullable=False)
     id_ = SAColumn('p_id',Text, nullable=False)
     name = SAColumn('p_name',Text, nullable=False)
+    vname = SAColumn('p_vname',Integer, unique=True, nullable=False)
     sequence_id = SAColumn('p_sequence_id',Integer)
     t_vid = SAColumn('p_t_vid',Integer,ForeignKey('tables.t_vid'))
     t_id = SAColumn('p_t_id',Text)
@@ -793,6 +789,7 @@ class Partition(Base):
     def __init__(self,dataset, **kwargs):
         self.id_ = kwargs.get("id",kwargs.get("id_",None)) 
         self.name = kwargs.get("name",kwargs.get("name",None)) 
+        self.vname = kwargs.get("vname",None) 
         self.sequence_id = kwargs.get("sequence_id",None) 
         self.d_id = kwargs.get("d_id",None) 
         self.space = kwargs.get("space",None) 
@@ -807,10 +804,9 @@ class Partition(Base):
         # See before_insert for setting self.vid and self.id_
         
         if self.t_id:
+            don = ObjectNumber.parse(self.d_vid)
             ton = ObjectNumber.parse(self.t_id)
-            don = ObjectNumber.parse(self.d_vid, parse_revision=True)
-            ton.revision = don.revision
-            self.t_vid = str(ton)
+            self.t_vid = str(ton.rev( don.revision))
         
     @property
     def identity(self):
@@ -863,11 +859,10 @@ class Partition(Base):
             target.sequence_id = max_id
             
             
-        don = ObjectNumber.parse(target.d_vid, parse_revision=True)
+        don = ObjectNumber.parse(target.d_vid)
         pon = PartitionNumber(don, target.sequence_id)
         target.vid = str(pon)
-        pon.revision = None
-        target.id_ = str(pon)
+        target.id_ = str(pon.rev(None))
         
         Partition.before_update(mapper, conn, target)
 

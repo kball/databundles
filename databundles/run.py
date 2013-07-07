@@ -40,14 +40,12 @@ class RunConfig(object):
         Arguments
         path -- If present, a yaml file to load last, overwriting earlier values.
           If it is an array, load only the files in the array. 
-          
 
         '''
         
         self.config = AttrDict()
         self.config['loaded'] = []
 
-            
     
         if isinstance(path, (list, tuple, set)):
             self.files = path

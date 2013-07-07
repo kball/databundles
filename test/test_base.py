@@ -27,6 +27,11 @@ class TestBase(unittest.TestCase):
         # build a new one. 
 
         bundle = Bundle()  
+        idnt = bundle.identity
+        idnt.revision = 1
+        bundle.config.rewrite(identity=idnt.to_dict())
+
+        bundle = Bundle()  
         marker = bundle.filesystem.build_path('test-marker')
         build_dir =  bundle.filesystem.build_path()+'/' # Slash needed for rsync
         save_dir = bundle.filesystem.build_path()+"-save/"
@@ -35,6 +40,8 @@ class TestBase(unittest.TestCase):
             logger.info( "Build dir marker ({}) is missing".format(marker))
             # There is a good reason to create a seperate instance, 
             # but don't remember what it is ... 
+            
+                        
             
             bundle.clean()
             

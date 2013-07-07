@@ -5,7 +5,7 @@
 /* Project name:                                                          */
 /* Author:                                                                */
 /* Script type:           Database creation script                        */
-/* Created on:            2013-07-06 18:53                                */
+/* Created on:            2013-07-06 22:49                                */
 /* ---------------------------------------------------------------------- */
 
 
@@ -82,8 +82,8 @@ CREATE TABLE "tables" (
     "t_keywords" TEXT,
     "t_data" TEXT,
     CONSTRAINT "PK_tables" PRIMARY KEY ("t_vid"),
-    CONSTRAINT "TUC_tables_1" UNIQUE ("t_name"),
-    CONSTRAINT "TUC_tables_2" UNIQUE ("t_sequence_id"),
+    CONSTRAINT "TUC_tables_1" UNIQUE ("t_name", "t_vid"),
+    CONSTRAINT "TUC_tables_2" UNIQUE ("t_sequence_id", "t_vid"),
     FOREIGN KEY ("t_d_vid") REFERENCES "datasets" ("d_vid")
 );
 
@@ -133,6 +133,7 @@ CREATE TABLE "partitions" (
     "p_vid" TEXT NOT NULL,
     "p_id" TEXT NOT NULL,
     "p_name" TEXT NOT NULL,
+    "p_vname" TEXT NOT NULL,
     "p_sequence_id" INTEGER NOT NULL,
     "p_space" TEXT,
     "p_time" TEXT,
@@ -145,7 +146,7 @@ CREATE TABLE "partitions" (
     "p_data" TEXT,
     "p_state" TEXT,
     CONSTRAINT "PK_partitions" PRIMARY KEY ("p_vid"),
-    CONSTRAINT "TUC_partitions_1" UNIQUE ("p_name"),
+    CONSTRAINT "TUC_partitions_1" UNIQUE ("p_vname"),
     FOREIGN KEY ("p_d_vid") REFERENCES "datasets" ("d_vid"),
     FOREIGN KEY ("p_t_vid") REFERENCES "tables" ("t_vid")
 );

@@ -59,16 +59,25 @@ class Identity(object):
         '''Returns the identity as a dict. values that are empty are removed'''
         d =  {
              'id':self.id_,
+             'vid': self.vid, 
              'source':self.source,
              'dataset':self.dataset,
              'subset':self.subset,
              'variation':self.variation,
              'creator':self.creator,
              'revision':self.revision,
-             'name' : self.name
+             'name' : self.name,
+             'vname' : self.vname
              }
 
         return { k:v for k,v in d.items() if v}
+ 
+    @property
+    def vid(self):
+        try:
+            return str(ObjectNumber.parse(self.id_).rev(self.revision))
+        except AttributeError:
+            return None
  
     @property
     def creatorcode(self):
@@ -363,7 +372,7 @@ class ObjectNumber(object):
     EPOCH = 1325376000 # Jan 1, 2012 in UNIX time
 
     @classmethod
-    def parse(cls, input, parse_revision = False): #@ReservedAssignment
+    def parse(cls, input): #@ReservedAssignment
         '''Parse a string into one of the object number classes. '''
         
 
@@ -373,9 +382,9 @@ class ObjectNumber(object):
         if not input:
             raise Exception("Didn't get input")
 
-        if parse_revision:
+        if '/' in input: # The string has a revision
             revision = int(ObjectNumber.base62_decode(input[-3:]))
-            input = input[:-3]
+            input = input[:-4]
         else:
             revision = None
 
@@ -464,6 +473,13 @@ class ObjectNumber(object):
     
         return num
 
+    def rev(self, i):
+        '''Return a clone with a different revision'''
+        from copy import copy
+        on =  copy(self)
+        on.revision = i
+        return on
+
 
     def __eq__(self, other):
         return str(self) == str(other)
@@ -491,7 +507,7 @@ class DatasetNumber(ObjectNumber):
     def __str__(self):        
         return (ObjectNumber.TYPE.DATASET+
                 ObjectNumber.base62_encode(self.dataset)+
-                (ObjectNumber.base62_encode(self.revision).rjust(3,'0') if self.revision else '')
+                ('/'+ObjectNumber.base62_encode(self.revision).rjust(3,'0') if self.revision else '')
                 )
            
  
@@ -521,7 +537,7 @@ class TableNumber(ObjectNumber):
         return (ObjectNumber.TYPE.TABLE+
                 ObjectNumber.base62_encode(self.dataset.dataset)+
                 ObjectNumber.base62_encode(self.table).rjust(2,'0')+
-                (ObjectNumber.base62_encode(self.revision).rjust(3,'0') if self.revision else ''))
+                ('/'+ObjectNumber.base62_encode(self.revision).rjust(3,'0') if self.revision else ''))
                   
          
 class ColumnNumber(ObjectNumber):
@@ -554,7 +570,7 @@ class ColumnNumber(ObjectNumber):
                 ObjectNumber.base62_encode(self.table.dataset.dataset)+
                 ObjectNumber.base62_encode(self.table.table).rjust(2,'0')+
                 ObjectNumber.base62_encode(self.column).rjust(2,'0')+
-                (ObjectNumber.base62_encode(self.revision).rjust(3,'0') if self.revision else '')
+                ('/'+ObjectNumber.base62_encode(self.revision).rjust(3,'0') if self.revision else '')
                 )
            
 
@@ -583,7 +599,7 @@ class PartitionNumber(ObjectNumber):
         return (ObjectNumber.TYPE.PARTITION+
                 ObjectNumber.base62_encode(self.dataset.dataset)+
                 ObjectNumber.base62_encode(self.partition).rjust(3,'0')+
-                (ObjectNumber.base62_encode(self.revision).rjust(3,'0') if self.revision else ''))
+                ('/'+ObjectNumber.base62_encode(self.revision).rjust(3,'0') if self.revision else ''))
 
 
 

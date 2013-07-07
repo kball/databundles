@@ -197,6 +197,7 @@ class BuildBundle(Bundle):
         # For build bundles, always use the FileConfig though self.config
         # to get configuration. 
         self.config = BundleFileConfig(self.bundle_dir)
+
      
         self.filesystem = BundleFilesystem(self, self.bundle_dir)
         
@@ -257,6 +258,7 @@ class BuildBundle(Bundle):
     
         sp = asp.add_parser('rewrite', help='Re-write the bundle file, updating the formatting')     
         sp.set_defaults(subcommand='rewrite')
+       
         #
         # Clean Command
         #
@@ -681,9 +683,9 @@ class BundleFileConfig(BundleConfig):
         
         self.root_dir = root_dir
         self.local_file = os.path.join(self.root_dir,'bundle.yaml')
-
+        
         self._run_config = get_runconfig(self.local_file)
-
+        
         # If there is no id field, create it immediately and
         # write the configuration back out. 
    

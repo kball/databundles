@@ -467,7 +467,7 @@ class LibraryDb(object):
         '''Copy the schema and partitions lists into the library database
         
         '''
-        from databundles.orm import Dataset
+        from databundles.orm import Dataset, Config
         from databundles.bundle import Bundle
            
         if not isinstance(bundle, Bundle):
@@ -480,14 +480,19 @@ class LibraryDb(object):
                 
         #self.remove_bundle(bundle)
                 
+        # There should be only one dataset record in the 
+        # bundle
         bdbs = bundle.database.session 
         s = self.session
         dataset = bdbs.query(Dataset).one()
-        partition = None
         s.merge(dataset)
+ 
+        for config in bdbs.query(Config).all():
+            print "Merging: ", config
+            s.merge(config)
+            
         s.commit()
-
-
+        
  
         for table in dataset.tables:
             try:
@@ -573,35 +578,46 @@ class LibraryDb(object):
     
         if isinstance(bp_id, basestring):
             bp_id = ObjectNumber.parse(bp_id)
+
+            
         elif isinstance(bp_id, ObjectNumber):
             pass
         elif isinstance(bp_id, Identity):
-            if not bp_id.id_:
+            if not bp_id.vid:
                 raise Exception("Identity does not have an id_ defined")
-            bp_id = ObjectNumber.parse(bp_id.id_)
+            bp_id = ObjectNumber.parse(bp_id.vid)
             
         else:
             # hope that is has an identity field
-            bp_id = ObjectNumber.parse(bp_id.identity.id_)
+            bp_id = ObjectNumber.parse(bp_id.identity.vid)
 
         dataset = None
         partition = None
 
-        try:
-            if isinstance(bp_id, PartitionNumber):
-                query = s.query(Dataset, Partition).join(Partition).filter(Partition.id_ == str(bp_id)) 
+        queries = []
 
-                dataset, partition = query.one();
-                    
-            else:
-                query = s.query(Dataset)
-                query = s.query(Dataset).filter(Dataset.id_ == str(bp_id)) 
-
-                dataset = query.one();
-        except sqlalchemy.orm.exc.NoResultFound as e: #@UnusedVariable
-            return None, None
-            #raise ResultCountError("Failed to find dataset or partition for: {}".format(str(bp_id)))
-        
+        if isinstance(bp_id, PartitionNumber):
+            queries.append((2, s.query(Dataset, Partition).join(Partition).filter(Partition.vid == str(bp_id))))
+            queries.append((2, s.query(Dataset, Partition).join(Partition).filter(Partition.id_ == str(bp_id))))
+            
+        else:
+            queries.append((1, s.query(Dataset).filter(Dataset.vid == str(bp_id))))
+            queries.append((1, s.query(Dataset).filter(Dataset.id_ == str(bp_id))))
+                
+        for c, q in queries:
+            q = q.order_by(Dataset.revision.desc())
+            
+            try:
+                if c == 1:
+                    dataset = q.first()
+                else:
+                    dataset, partition = q.first()
+                
+                if dataset:
+                    break
+                
+            except sqlalchemy.orm.exc.NoResultFound as e: #@UnusedVariable
+                pass
 
         return dataset, partition
         
@@ -674,6 +690,8 @@ class LibraryDb(object):
 
         out = []
 
+        query = query.order_by(Dataset.revision.desc())
+
         for r in query.all():
             if has_partition:
                 out.append(r.Partition.identity)
@@ -738,11 +756,10 @@ class LibraryDb(object):
     def add_file(self,path, group, ref, state='new'):
         from databundles.orm import  File
         
-  
         stat = os.stat(path)
       
         s = self.session
-      
+
         s.query(File).filter(File.path == path).delete()
       
         file_ = File(path=path, 
@@ -1071,7 +1088,7 @@ class Library(object):
         
         try:
             # Assume it is an Identity, or Identity-like
-            dataset, partition = self.database.get(bp_id.id_)
+            dataset, partition = self.database.get(bp_id.vid)
             
             return  dataset, partition
         except AttributeError:
@@ -1085,50 +1102,67 @@ class Library(object):
     def get_ref(self,bp_id):
         from databundles.identity import ObjectNumber, DatasetNumber, PartitionNumber, Identity, PartitionIdentity
 
+        term = None
+
         if isinstance(bp_id, Identity):
-            if bp_id.id_:
-                bp_id = bp_id.id_
+            if bp_id.revision:
+                if bp_id.vid:
+                    term = bp_id.vid
+                else:
+                    term = bp_id.vname
             else:
-                bp_id = bp_id.name
+                if bp_id.id_:
+                    term = bp_id.id_
+                else:
+                    term = bp_id.name
+        elif isinstance(bp_id, basestring):
+            try:
+                on = ObjectNumber.parse(bp_id)
                 
+                if not ( isinstance(on, DatasetNumber) or isinstance(on, PartitionNumber)):
+                    raise ValueError("Object number must be for a Dataset or Partition: {} ".format(bp_id))
+                
+                term  = bp_id
+            except: # Not parsable
+                term  = bp_id # Possibly a name
+            
+        else:
+            ValueError("Don't know how to get ref for '{}'".format(type(bp_id)))
+                    
         # If dataset is not None, it means the file already is in the cache.
         dataset = None
-    
-        try:
-            on = ObjectNumber.parse(bp_id)
-
-            if not ( isinstance(on, DatasetNumber) or isinstance(on, PartitionNumber)):
-                raise ValueError("Object number must be for a Dataset or Partition: {} ".format(bp_id))
-            
-            dataset, partition  = self._get_bundle_path_from_id(bp_id) #@UnusedVariable
-        except: 
-            pass
         
-        # Try it as a dataset name
-        if not dataset:
-            r = self.find(QueryCommand().identity(name = bp_id) )
+        queries = []
+        
+        queries.append(QueryCommand().identity(name = term) )
+        queries.append(QueryCommand().identity(vname = term) )
+        queries.append(QueryCommand().identity(id_ = term) )
+        queries.append(QueryCommand().identity(vid = term) )
+                              
+        queries.append(QueryCommand().partition(name = term))
+        queries.append(QueryCommand().partition(vname = term))
+        queries.append(QueryCommand().partition(id_ = term))
+        queries.append(QueryCommand().partition(vid = term))
+        
+        
+        for q in queries:
+            r = self.find(q)
             
             if len(r) > 1:
-                raise Exception("Got more than one result")
+                # Names aren't unique ( vnames are )  and they are ordered so the highest 
+                # version is first, so return that one
+                r = r.pop()
             elif len(r) == 0:
                 r = None
             else:
-                r = r.pop()
+                r = r.pop()            
             
+    
             if r:
-                dataset, partition  = self._get_bundle_path_from_id(r.id_) 
-                
-        # Try the name as a partition name
-        
-        if not dataset:
-            q = self.find(QueryCommand().partition(name = bp_id) )
-       
-            if q:
-                r = q.pop(0)
-                if r:
-                    dataset, partition  = self._get_bundle_path_from_id(r.id_)         
-
-
+                dataset, partition  = self._get_bundle_path_from_id(r.vid)   
+                break
+    
+                    
         # No luck so far, so now try to get it from the remote library
         if not dataset and self.remote:
             import socket
@@ -1245,7 +1279,6 @@ class Library(object):
         abs_path = self.cache.get(dataset.cache_key)
 
 
-
         # Not in the cache, try to get it from the remote library, 
         # if a remote was set. 
 
@@ -1261,6 +1294,7 @@ class Library(object):
 
         # For filesystems that have an upstream remote that is S3, it is possible
         # to get a dataset that isn't in the library, so well need to add it. 
+
         dataset, partition =  self.database.get(bundle.identity)
 
         if dataset is None:
@@ -1272,7 +1306,7 @@ class Library(object):
         from databundles.dbexceptions import NotFoundError
         
         r = self._get_dataset(dataset)
-        
+
         if not r:
             return False
 

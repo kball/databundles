@@ -26,15 +26,21 @@ class Test(unittest.TestCase):
         self.assertEquals('a4c92', str(dn))
         
         dn = DatasetNumber(dnn, rev)
-        self.assertEquals('a4c9201C', str(dn))
+        self.assertEquals('a4c92/01C', str(dn))
 
-        self.assertEquals('a4c9201C', str(ObjectNumber.parse(str(dn), True)))
+        self.assertEquals('a4c92/01C', str(ObjectNumber.parse(str(dn))))
 
         tn = TableNumber(dn, 1)
 
-        self.assertEquals('c4c920101C', str(tn))
+        self.assertEquals('c4c9201/01C', str(tn))
         
-        self.assertEquals('c4c920101C', str(ObjectNumber.parse(str(tn), True)))
+        self.assertEquals('c4c9201/01C', str(ObjectNumber.parse(str(tn))))
+
+        tnnr = tn.rev(None)
+        
+        self.assertEquals('c4c9201', str(tnnr))
+
+        self.assertEquals('c4c9201/004', str(tnnr.rev(4)))
 
 
 if __name__ == "__main__":

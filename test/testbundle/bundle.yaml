@@ -1,46 +1,58 @@
+about:
+    author: Albert Uthor
+    homepage: http://homepage.com
+    license: other-open
+    maintainer: Mark Aintainer
+    tags:
+    - one
+    - two
+    - three
+    title: This is the Title
+    url: http://theurl.com
 build:
-    geoheaderFile: meta/geoschema.csv
     dependencies:
-      usgeo: census.gov-geography-dim-orig-a7d9
-      geocoder: clarinova.com-geocode-casnd-429e-segments
-      crime: sandag.org-crimeincidents-orig-429e-incidents
-      communities: sangis.org-neighborhoods-orig-429e-communities.sd
-      extents: clarinova.com-extents-2012-7ba4
+        communities: sangis.org-neighborhoods-orig-429e-communities.sd
+        crime: sandag.org-crimeincidents-orig-429e-incidents
+        extents: clarinova.com-extents-2012-7ba4
+        geocoder: clarinova.com-geocode-casnd-429e-segments
+        usgeo: census.gov-geography-dim-orig-a7d9
+    geoheaderFile: meta/geoschema.csv
+extracts:
+-   description: 'This is a multi-line description for the extract of {p_name}, with
+        the table named {p_table}
+
+        '
+    each:
+    -   -   dima: 1
+        -   dima: 2
+        -   dima: 3
+    -   -   dimb: x
+        -   dimb: y
+        -   dimb: z
+    -   -   dimc: a
+        -   dimc: b
+        -   dimc: c
+    for: 'True '
+    name: extract-{p_table}.csv
+    partition: any
+    query: select * from  {p_table}
+    title: 'Extract for table: {p_table}, a={dima}, b={dimb} and c={dimc}'
 identity:
     creator: creator
     dataset: dataset
     id: a1DxuZ
+    name: source-dataset-subset-variation-ca0d
     revision: 1
     source: source
     subset: subset
     variation: variation
-about:
-    title: This is the Title
-    maintainer: Mark Aintainer
-    author: Albert Uthor
-    homepage: http://homepage.com
-    url: http://theurl.com
-    license: other-open
-    tags: [one,two,three]
-extracts:
-  - partition: any
-    query: 'select * from  {p_table}'
-    title: 'Extract for table: {p_table}, a={dima}, b={dimb} and c={dimc}'
-    description: > 
-      This is a multi-line description for the extract
-      of {p_name}, with the table named {p_table}
-    name: 'extract-{p_table}.csv'
-    for: "True "
-    each:
-      -
-        - { dima: 1 }
-        - { dima: 2 }
-        - { dima: 3 }
-      -
-        - { dimb: x }
-        - { dimb: y }
-        - { dimb: z }
-      -
-        - { dimc: a }
-        - { dimc: b }
-        - { dimc: c }        
+    vid: a1DxuZ/001
+    vname: source-dataset-subset-variation-ca0d-r1
+partitions:
+- source-dataset-subset-variation-ca0d-tone
+- source-dataset-subset-variation-ca0d-ttwo
+- source-dataset-subset-variation-ca0d-tthree
+- source-dataset-subset-variation-ca0d-all
+- source-dataset-subset-variation-ca0d-geot1
+- source-dataset-subset-variation-ca0d-geot2
+- source-dataset-subset-variation-ca0d-hdf5
