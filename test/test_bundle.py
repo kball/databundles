@@ -115,10 +115,10 @@ class Test(TestBase):
         del d['id']
         
         self.assertEquals('source-dataset-subset-variation-ca0d',str(new_identity(d)))
-        self.assertEquals('source-dataset-subset-variation-ca0d-grain',str(new_identity( {'grain':'grain'}, bundle=self.bundle)))
+        self.assertEquals('source-dataset-subset-variation-ca0d.grain',str(new_identity( {'grain':'grain'}, bundle=self.bundle)))
         
         d['grain'] = 'grain'
-        self.assertEquals('source-dataset-subset-variation-ca0d-grain',str( new_identity(d)))
+        self.assertEquals('source-dataset-subset-variation-ca0d.grain',str( new_identity(d)))
         
    
 
@@ -390,7 +390,7 @@ class Test(TestBase):
         s.commit()
         p.database.create()
         
-        p = self.bundle.partitions.find('source-dataset-subset-variation-ca0d-30')
+        p = self.bundle.partitions.find('source-dataset-subset-variation-ca0d.30')
         self.assertTrue(p is not None)
         self.assertEquals(pid3.name, p.identity.name)
  

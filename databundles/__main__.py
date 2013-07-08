@@ -331,10 +331,46 @@ def ckan_command(args,rc, src):
         print args
  
 
-def code_command(args,rc, src):
+def source_command(args,rc, src):
     
-    print "CODE {}".format(args)
+    if args.subcommand == 'find':
+        import os
+        import sys
+        from databundles.bundle import BuildBundle
+        from databundles.util import toposort
+        
+        if not os.path.exists(args.term) and os.path.isdir(args.term):
+            print "ERROR: '{}' is not a valid directory ".format(args.term)
+            sys.exit(1)
+            
+        
+        topo = {}
+        toname = {}
+        
+        
+        for root, subFolders, files in os.walk(args.term):
+                
+            for f in files: 
+                if f == 'bundle.yaml':
+                    
+                    try: 
+                        b = BuildBundle(root)
+                        topo[b.identity.name] = (root, set( b.config.group('build').get('dependencies', {}).values()))
+                        toname[b.identity.vname] = b.identity.name
+                        toname[b.identity.name] = b.identity.name
+                        for p in b.partitions:
+                            toname[p.identity.vname] = b.identity.name
+                            toname[p.identity.name] = b.identity.name
+                    except:
+                        pass
 
+            
+        for name, deps in topo.items():
+            if len(deps[1]) == 0:
+                print name, deps[0]
+           
+    
+    
 def test_command(args,rc, src):
     
     if args.subcommand == 'config':
@@ -469,6 +505,9 @@ def main():
     lib_p.set_defaults(command='install')
     asp = lib_p.add_subparsers(title='Install', help='Install configuration files')
     
+    #
+    # Config Command
+    #
     sp = asp.add_parser('config', help='Install the global configuration')
     sp.set_defaults(subcommand='config')
     sp.add_argument('-p', '--print',  dest='prt', default=False, action='store_true', help='Print, rather than save, the config file')
@@ -477,6 +516,19 @@ def main():
     sp.add_argument('-R', '--remote',  default=None,  help="Url of remote library")
 
 
+    #
+    # Source Command
+    #
+    src_p = cmd.add_parser('source', help='Manage bundle source files')
+    src_p.set_defaults(command='source')
+    asp = src_p.add_subparsers(title='source commands', help='command help')  
+    sp = asp.add_parser('find', help='Find source bundle source directories')
+    sp.set_defaults(subcommand='find')
+    sp.add_argument('term', type=str,help='Query term')
+    sp.add_argument('-r','--register',  default=False,action="store_true",  help='Register directories in the library. ')
+    sp.add_argument('-l','--library',  default='default',  help='Select a different name for the library')
+      
+    
     #
     # Remote Command
     #
@@ -528,7 +580,7 @@ def main():
         'test':test_command,
         'install':install_command,
         'ckan':ckan_command,
-        'code': code_command
+        'source': source_command
     }
         
     f = funcs.get(args.command, False)

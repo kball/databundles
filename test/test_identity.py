@@ -17,10 +17,22 @@ class Test(unittest.TestCase):
         pass
 
 
-    def test_basic(self):
+    def test_name(self):
+
+    
+        idnt = Identity(source='source', dataset='dataset', 
+                         subset='subset', variation='variation', 
+                         revision=1, creator='xxx')
+       
+        part = PartitionIdentity(idnt, table='table',grain='grain')
+        
+        print idnt, idnt.vname
+        print part, part.vname
+
+
+    def test_id(self):
         dnn = 1000000
         rev = 100
-        
         
         dn = DatasetNumber(dnn)
         self.assertEquals('a4c92', str(dn))

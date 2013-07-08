@@ -211,6 +211,8 @@ class BuildBundle(Bundle):
             import sys
             sys.path.append(lib_dir)
 
+        self._build_time = None
+
 
     @property
     def path(self):
@@ -566,12 +568,15 @@ class BuildBundle(Bundle):
     ### Build the final package
 
     def pre_build(self):
-        
+        from time import time
         if not self.database.exists():
             raise ProcessError("Database does not exist yet. Was the 'prepare' step run?")
         
         if not self.db_config.get_value('process','prepared'):
             raise ProcessError("Build called before prepare completed")
+        
+        self._build_time = time()
+        
         return True
         
     def build(self):
@@ -579,7 +584,10 @@ class BuildBundle(Bundle):
     
     def post_build(self):
         from datetime import datetime
+        from time import time
         self.db_config.set_value('process', 'built', datetime.now().isoformat())
+        self.db_config.set_value('process', 'buildtime',time()-self._build_time)
+        self.update_configuration()
         return True
     
         

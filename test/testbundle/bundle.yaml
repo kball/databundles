@@ -49,10 +49,10 @@ identity:
     vid: a1DxuZ/001
     vname: source-dataset-subset-variation-ca0d-r1
 partitions:
-- source-dataset-subset-variation-ca0d-tone
-- source-dataset-subset-variation-ca0d-ttwo
-- source-dataset-subset-variation-ca0d-tthree
-- source-dataset-subset-variation-ca0d-all
-- source-dataset-subset-variation-ca0d-geot1
-- source-dataset-subset-variation-ca0d-geot2
-- source-dataset-subset-variation-ca0d-hdf5
+- source-dataset-subset-variation-ca0d.tone
+- source-dataset-subset-variation-ca0d.ttwo
+- source-dataset-subset-variation-ca0d.tthree
+- source-dataset-subset-variation-ca0d.all
+- source-dataset-subset-variation-ca0d.geot1
+- source-dataset-subset-variation-ca0d.geot2
+- source-dataset-subset-variation-ca0d.hdf5

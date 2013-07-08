@@ -1,8 +1,6 @@
-
-identity: 
-  source: 
-  dataset: 
-  subset: 
-  creator: 
-  revision: 
- 
+identity:
+    creator: null
+    dataset: null
+    revision: null
+    source: null
+    subset: null

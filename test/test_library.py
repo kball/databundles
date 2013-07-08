@@ -191,10 +191,10 @@ class Test(TestBase):
         self.assertEquals('source-dataset-subset-variation-ca0d',r[0].name)  
     
         r = l.find(QueryCommand().table(name='tone').partition(any=True))
-        self.assertEquals('source-dataset-subset-variation-ca0d-tone',r[0].name)
+        self.assertEquals('source-dataset-subset-variation-ca0d.tone',r[0].name)
         
         r = l.find(QueryCommand().table(name='tthree').partition(any=True))
-        self.assertEquals('source-dataset-subset-variation-ca0d-tthree',r[0].name)
+        self.assertEquals('source-dataset-subset-variation-ca0d.tthree',r[0].name)
         
         #
         #  Try getting the files 
@@ -461,7 +461,7 @@ class Test(TestBase):
             self.assertEquals(partition.identity.id_, r.partition.identity.id_)
         
         
-        hdf = l.get('source-dataset-subset-variation-ca0d-hdf5')
+        hdf = l.get('source-dataset-subset-variation-ca0d.hdf5')
         
         print hdf.database.path
         print hdf.partition.database.path

@@ -54,6 +54,8 @@ class Identity(object):
         self.variation =  d.get('variation','orig')
         self.creator =  d.get('creator')
         self.revision =  int(d.get('revision',1))
+        
+
 
     def to_dict(self):
         '''Returns the identity as a dict. values that are empty are removed'''
@@ -256,38 +258,19 @@ class PartitionIdentity(Identity):
        
         return  os.path.join(id_path ,  *partition_parts )
         
-    
-    @classmethod
-    def name_str(cls,o=None, use_revision=False):
-        
-        return '-'.join(cls.name_parts(o, use_revision))
-    
-    @classmethod
-    def name_parts(cls,o=None, use_revision=False):
-        import re
-       
-        parts = Identity.name_parts(o)
-    
-        rev = parts.pop()
-        # HACK HACK HACK!
-        # The table,space,time,grain order must match up with Partition._path_parts and self._path_pats
-        partition_component = '.'.join([re.sub('[^\w\.]','_',str(s))
-                         for s in filter(None, [o.table, o.space, o.time, o.grain, o.format])])
-        
-        parts.append(partition_component)
-        
-        if use_revision:
-            parts.append(rev)
-        
-        return parts
-    
     @property
     def cache_key(self):
         '''The name is a form suitable for use in a filesystem'''
         return self.path_str(self)+".db"
+      
+    @classmethod
+    def name_str(cls,o=None, use_revision=False):
+        import re 
+
+        return Identity.name_str(o, use_revision) +  '.' + '.'.join([re.sub('[^\w\.]','_',str(s))
+                         for s in filter(None, [o.table, o.space, o.time, o.grain, o.format])])
     
-    
-    
+
     @property
     def as_dataset(self):
         """Convert this identity to the identity of the correcsponding dataset. """

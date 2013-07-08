@@ -488,7 +488,6 @@ class LibraryDb(object):
         s.merge(dataset)
  
         for config in bdbs.query(Config).all():
-            print "Merging: ", config
             s.merge(config)
             
         s.commit()
