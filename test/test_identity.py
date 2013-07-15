@@ -20,15 +20,19 @@ class Test(unittest.TestCase):
     def test_name(self):
 
     
-        idnt = Identity(source='source', dataset='dataset', 
+        idnt = Identity(source='source.com', dataset='dataset', 
                          subset='subset', variation='variation', 
                          revision=1, creator='xxx')
        
         part = PartitionIdentity(idnt, table='table',grain='grain')
-        
-        print idnt, idnt.vname
-        print part, part.vname
 
+
+        print idnt.name, Identity.parse_name(idnt.name).vname
+        print idnt.vname, Identity.parse_name(idnt.vname).vname
+        print part.name, Identity.parse_name(part.name).vname
+        print part.vname, Identity.parse_name(part.vname).vname
+        
+        print Identity.parse_name('foobar')
 
     def test_id(self):
         dnn = 1000000

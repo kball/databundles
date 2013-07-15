@@ -573,7 +573,7 @@ class Partitions(object):
                 tr = self.bundle.schema.table(pid.table)
                 
                 if not tr:
-                    raise ValueError("Didn't find table named {} ".format(pid.table))
+                    raise ValueError("Didn't find table named {} in {} bundle path = {}".format(pid.table, pid.vname, self.bundle.database.path))
                 
                 q = q.filter(OrmPartition.t_id==tr.id_)
 
@@ -723,6 +723,7 @@ class Partitions(object):
         
         t = self.bundle.schema.add_table(pid.table)
         self.bundle.database.commit()
+
         
         partition = self.new_partition(pid, db_type='geo')
         

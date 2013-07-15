@@ -104,7 +104,7 @@ def bundle_file_type(path_or_file):
         elif path_or_file.endswith('.gz'):
             return 'gzip'
         else:
-            raise Exception("Can't figure out file type")
+            raise Exception("Can't figure out file type for {}".format(path_or_file))
     
     d = d.strip()
     
@@ -512,6 +512,7 @@ items in the preceeding sets.
         data = {item: (dep - ordered)
                 for item, dep in data.iteritems()
                     if item not in ordered}
+        
     assert not data, "Cyclic dependencies exist among these items:\n%s" % '\n'.join(repr(x) for x in data.iteritems())
 ## end of http://code.activestate.com/recipes/578272/ }}}
 

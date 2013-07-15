@@ -6,12 +6,93 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 import ogr #@UnresolvedImport
 from numpy import * 
-from osgeo.gdalconst import GDT_Float32, GDT_Byte, GDT_Int16 #@UnresolvedImport
+from osgeo.gdalconst import * #@UnresolvedImport
 from databundles.geo import Point
 from util import create_poly
 from databundles.dbexceptions import ConfigurationError
 
 #ogr.UseExceptions()
+
+class _RasterLayer(object):
+    
+    def __init__(self, aa, file_=None, data_type=GDT_Byte, nodata=0):
+        import uuid, tempfile, os
+        
+        self.data_type = data_type
+        self.aa = aa
+
+        if file_:
+            self.image = self.aa.get_geotiff(file_,data_type=self.data_type, nodata=nodata )
+        else:
+            self.image = self.aa.get_memimage(data_type=self.data_type)
+
+        # File should not actually get written. 
+        self.ogr_ds = ogr.GetDriverByName('Memory').CreateDataSource(os.path.join(tempfile.gettempdir(), str(uuid.uuid4())))
+
+        field_map = {
+                    GDT_Byte : ogr.OFTInteger, 
+                    GDT_UInt16 : ogr.OFTInteger, 
+                    GDT_Int16 : ogr.OFTInteger, 
+                    GDT_UInt32 : ogr.OFTInteger, 
+                    GDT_Int32 : ogr.OFTInteger, 
+                    GDT_Float32 : ogr.OFTReal,
+                    GDT_Float64 : ogr.OFTReal, 
+                    GDT_CInt16 : ogr.OFTInteger, 
+                    GDT_CInt32 : ogr.OFTInteger, 
+                    GDT_CFloat32 : ogr.OFTReal, 
+                    GDT_CFloat64 : ogr.OFTReal,
+                     }
+
+        self.lyr = self.ogr_ds.CreateLayer('rastered', self.aa.srs)
+        self.lyr.CreateField(ogr.FieldDefn( "value", field_map[self.data_type] )) # 0
+
+    
+    def add_geometry(self, geometry, value):
+
+        geometry.AssignSpatialReference(self.aa.srs)
+        
+        feature = ogr.Feature(self.lyr.GetLayerDefn())
+        feature.SetField(0, value )
+        feature.SetGeometryDirectly(geometry)
+
+        self.lyr.CreateFeature(feature)
+        feature.Destroy()
+            
+    def add_wkt(self, wkt, value):
+        
+        geometry = ogr.CreateGeometryFromWkt(wkt)
+    
+        self.add_geometry(geometry, value)
+    
+    def rasterize(self):
+        '''Rasterize the layer, to a file if a file was set, and return a numpy array for the
+        rasterized data'''
+        
+        import gdal
+        import numpy as np
+        
+        gdal.RasterizeLayer( self.image, [1], self.lyr, options = ["ATTRIBUTE=value"])   
+
+        self.ogr_ds.SyncToDisk()
+        self.ogr_ds.Release()
+
+        field_map = {
+                    GDT_Byte : int, 
+                    GDT_UInt16 : int, 
+                    GDT_Int16 : int, 
+                    GDT_UInt32 : int, 
+                    GDT_Int32 : int, 
+                    GDT_Float32 : float,
+                    GDT_Float64 : float, 
+                    GDT_CInt16 : float, 
+                    GDT_CInt32 : float, 
+                    GDT_CFloat32 : float, 
+                    GDT_CFloat64 : float,
+                     }
+
+        a = np.flipud(np.array(self.image.GetRasterBand(1).ReadAsArray(), dtype=field_map[self.data_type]))
+
+        return a
 
 
 def get_analysis_area(library, **kwargs):
@@ -174,6 +255,15 @@ class AnalysisArea(object):
     @property
     def pixel_size(self):
         return self._scale
+
+    def translate_to_array(self, x, y):
+        """Translate state plane coordinates to arry_coordinates"""
+        
+        return Point(
+                         int((x-self.eastmin)/self._scale),
+                         int((y-self.northmin)/self._scale)
+                    )
+        
 
     @property
     def srs(self):
@@ -349,6 +439,21 @@ class AnalysisArea(object):
         
         return out
 
+    
+
+    
+    def get_rasterlayer(self, file_=None, data_type=GDT_Byte):
+        """Return a GDAL layer that can be rasterized. """
+        
+        from databundles.datasets.geo import US
+        import ogr
+        import gdal
+        from osgeo.gdalconst import GDT_Byte
+        import numpy as np  
+        import numpy.ma as ma
+        
+    
+        return  _RasterLayer(self, file_, data_type=data_type)
     
     
     def write_geotiff(self, file_,  a, data_type=DEFAULT_D_TYPE, nodata=0):

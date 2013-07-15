@@ -66,8 +66,9 @@ class Geocoder(object):
             return None   
        
         r = {'address': None, 'segment': None}
-       
+
         segment = self._geocode_segment(ps)
+
        
         if not segment:
             return None
@@ -187,8 +188,8 @@ class Geocoder(object):
         max_score = 0
         winner = None
        
+
         for s in self.addresses.query(q, street):
-            
             s= dict(s)
              
             s['score']  = score = self.rank_street(s, number,  direction, street_type, in_city)

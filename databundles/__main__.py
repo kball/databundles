@@ -336,8 +336,13 @@ def source_command(args,rc, src):
     if args.subcommand == 'find':
         import os
         import sys
+        import library
+        
+        from databundles.identity import Identity
         from databundles.bundle import BuildBundle
         from databundles.util import toposort
+        
+        l = library.get_library(config=rc)
         
         if not os.path.exists(args.term) and os.path.isdir(args.term):
             print "ERROR: '{}' is not a valid directory ".format(args.term)
@@ -345,9 +350,7 @@ def source_command(args,rc, src):
             
         
         topo = {}
-        toname = {}
-        
-        
+
         for root, subFolders, files in os.walk(args.term):
                 
             for f in files: 
@@ -355,21 +358,52 @@ def source_command(args,rc, src):
                     
                     try: 
                         b = BuildBundle(root)
-                        topo[b.identity.name] = (root, set( b.config.group('build').get('dependencies', {}).values()))
-                        toname[b.identity.vname] = b.identity.name
-                        toname[b.identity.name] = b.identity.name
-                        for p in b.partitions:
-                            toname[p.identity.vname] = b.identity.name
-                            toname[p.identity.name] = b.identity.name
+
+                        name_set = set([Identity.parse_name(n).name for n in b.config.group('build').get('dependencies', {}).values() ])
+
+                        topo[b.identity.name] = set(name_set)
+
                     except:
                         pass
 
+        import pprint
+        
+        for group  in  toposort(topo):
+            print group
             
-        for name, deps in topo.items():
-            if len(deps[1]) == 0:
-                print name, deps[0]
-           
-    
+            
+        return 
+            
+        for name, (dir,deps) in topo.items():
+            if len(deps) < 1:
+                continue
+            
+            x = ''
+            x += '{} {}\n'.format(name, dir)
+            error = False
+            for d in deps:
+               
+                try: 
+                    dep = l.get(d)
+                    
+                    if  dep:
+                        x += "   {} {}\n".format(d, dep.identity)
+                    else:
+                        x += "   {} {}\n".format(d, "Not Installed")
+                    
+                    
+                except: 
+                    x += "   {} {}\n".format(d, "Error")
+                    error = True
+                    
+                
+
+            if error:
+                print
+                print x
+                    
+               
+
     
 def test_command(args,rc, src):
     

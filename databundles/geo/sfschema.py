@@ -221,7 +221,10 @@ class TableShapefile(object):
                     if v is not False:
                         feature.SetField(str(c.name), v)
                     elif c.default:
-                        feature.SetField(str(c.name), c.python_type(c.default))
+                        try: feature.SetField(str(c.name), c.python_type(c.default))
+                        except:
+                            print "Failed for {} ".format(c.name)
+                            raise
                       
         else:
             for i,v in enumerate(row):

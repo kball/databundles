@@ -298,7 +298,10 @@ class Schema(object):
         from orm import Column
         import csv, re
         
-        reader  = csv.DictReader(file_)
+        dlct = csv.Sniffer().sniff(file_.read(2024))
+        file_.seek(0)
+
+        reader  = csv.DictReader(file_, dialect=dlct)
 
         t = None
 
@@ -401,6 +404,23 @@ class Schema(object):
 
         w = None
         
+        # Collect indexes
+        indexes = {}
+
+        for table in self.tables:
+            for col in table.columns: 
+                for index_set in [col.indexes, col.uindexes, col.unique_constraints]:
+                    for idx in index_set.split(','):
+                        
+                        idx = idx.replace(table.name+'_','')
+                        if not idx in indexes:
+                            indexes[idx] = set()
+                            
+                        indexes[idx].add(col)
+                 
+        indexes = OrderedDict(sorted(indexes.items(), key=lambda t: t[0]))
+
+        
         for table in self.tables:
             for col in table.columns:
                 row = OrderedDict()
@@ -410,6 +430,11 @@ class Schema(object):
                 row['vid'] = col.vid
                 row['is_pk'] = 1 if col.is_primary_key else ''
                 row['is_fk'] = col.foreign_key if col.foreign_key else ''
+                
+                for idx,s in indexes.items():
+                    if idx:
+                        row[idx] = 1 if col in s else None
+                   
                 row['type'] = col.datatype.upper()
                 row['default'] = col.default
                 row['description'] = col.description

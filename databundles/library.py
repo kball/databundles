@@ -1380,7 +1380,7 @@ class Library(object):
         bundle_name = self.dependencies.get(name, False)
         
         if not bundle_name:
-            raise ConfigurationError("No dependency names '{}'".format(name))
+            raise ConfigurationError("No dependency named '{}'".format(name))
         
         b = self.get(bundle_name)
         

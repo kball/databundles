@@ -8,19 +8,49 @@ from databundles.identity import PartitionIdentity
 from osgeo import gdal, gdal_array, osr
 from osgeo.gdalconst import GDT_Float32, GDT_Byte, GDT_Int16
 from numpy  import *
-  
+
 class Kernel(object):
 
-    def round(self):
+    def __init__(self, size):
+        self.size = size
+        
+        if size%2 == 0:
+            raise ValueError("Size must be odd")
+        
+        # For 1-based array indexing, we'd have to +1, but this is zero-based
+         
+        if size > 1:
+            self.center =  int(size/2) 
+        else:
+            self.center = 1
+            
+        self.offset = (self.size - 1) / 2 
+                        
+        self.matrix = ones((self.size, self.size))
+        
+        self._dindices = None
+
+    def limit(self):
         '''Make the matrix spot sort of round, by masking values in the corners'''
         
         # Get the max value for the edge of the enclosed circle. 
         # This assumes that there is a radial gradient. 
         row_max = self.matrix[self.center][0]
 
-        for (x_m,y_m), value in ndenumerate(self.matrix):
+        for (y_m,x_m), value in ndenumerate(self.matrix):
             if self.matrix[y_m][x_m] > row_max:
                 self.matrix[y_m][x_m] = 0
+                
+    def round(self):
+        '''Make the matrix spot sort of round, using a radius'''
+        import math
+        # Get the max value for the edge of the enclosed circle. 
+        # This assumes that there is a radial gradient. 
+        
+        for (x_m,y_m), value in ndenumerate(self.matrix):
+            if math.sqrt( (x_m-self.center)**2 + (y_m-self.center)**2 ) > float(self.size) / 2.:
+                self.matrix[y_m][x_m] = 0
+
         
     def norm(self):
         #self.matrix /= sum(self.matrix)
@@ -60,33 +90,15 @@ class Kernel(object):
         
         print s
       
-    def apply(self,a, point,  f=None, v=None):
-        """Apply the values in the kernel onto an array, centered at a point. 
-        
-        :param a: The array to apply to 
-        :type a: numpy.array
-        :param f: A two argument function that decides which value to apply to the array
-        :type f: callable
-        :param point: The point, in the array coordinate system, where the center of the
-        kernel will be applied
-        :type point: Point
-        :param v: External value to be passed into the function
-        :type v: any
-        """
-        import numpy as np
-        
-        if v:
-            from functools import partial
-            f = partial(f,v)
+    def bounds(self, a, point):
         
         y_max, x_max = a.shape
         m = None
         use_m=False
         
-        
         if point.x < self.offset:
             if point.x < 0:
-                return
+                return (False, None, None, None, None)
             
             x_start = max(point.x - self.offset,0)
             x_end = point.x + self.offset +1  
@@ -95,7 +107,7 @@ class Kernel(object):
             
         elif point.x+self.offset+1 >  x_max :
             if point.x > x_max:
-                return
+                return (False, None, None, None, None)
             
             x_start = point.x - self.offset
             x_end = min(point.x + self.offset+1, x_max)
@@ -109,7 +121,7 @@ class Kernel(object):
         
         if point.y < self.offset:
             if point.y < 0:
-                return
+                return (False, None, None, None, None)
             
             y_start = max(point.y - self.offset,0)
             y_end = point.y + self.offset+1
@@ -117,7 +129,7 @@ class Kernel(object):
             use_m=True
         elif point.y+self.offset+1 >  y_max:
             if point.y > y_max:
-                return
+                return (False, None, None, None, None)
             
             y_start = point.y - self.offset
             y_end = point.y + self.offset+1
@@ -125,12 +137,83 @@ class Kernel(object):
             use_m=True
         else:
             y_start = point.y - self.offset
-            y_end = point.y + self.offset+1      
+            y_end = point.y + self.offset+1    
+            
+        if m is None:
+            m = self.matrix
+            
+        return ( m,  y_start, y_end, x_start, x_end)
+        
+    @property     
+    def dindices(self):
+        '''Return the indices of the matrix, sorted by distance from the center'''
+        
+        if self._dindices is None:
+            indices = []
+            c = self.center
+    
+            for i, v in ndenumerate(self.matrix):
+                indices.append(i)
+                
+            self._dindices = sorted(indices, key=lambda i: math.sqrt( (i[0]-c)**2 + (i[1]-c)**2 ))
+             
+        return self._dindices
+         
+    def diterate(self, a, point):
+        '''Iterate over the distances from the point in the array a'''
+        
+        for i in self.dindices:
+            x = point[0]+i[1]-self.center
+            x = x if x >=0 else 0
+            y = point[1]+i[0]-self.center
+            y = y if y >=0 else 0
+            yield i, (y,x )
+        
+        
+               
+    def apply(self,a, point, source = None,  f=None, v=None):
+        """Apply the values in the kernel onto an array, centered at a point. 
+        
+        :param a: The array to apply to 
+        :type a: numpy.array
+        :param source: The source for reading data. Must have same dimensions as a
+        :type a: numpy.array
+        :param f: A two argument function that decides which value to apply to the array    
+        :type f: callable
+        :param point: The point, in the array coordinate system, where the center of the
+        kernel will be applied
+        :type point: Point
+        :param v: External value to be passed into the function
+        :type v: any
+        """
+
+        if v:
+            from functools import partial
+            f = partial(f,v)
+
+        (m,  y_start, y_end, x_start, x_end) = self.bounds(a, point)
+
+        if not source:
+            source = a
 
         #print a.shape, point, x_start, x_end, y_start, y_end, (m if use_m else self.matrix).shape
-        a[y_start:y_end, x_start:x_end] = f( a[y_start:y_end, x_start:x_end], 
-                                             (m if use_m else self.matrix) )
+        a[y_start:y_end, x_start:x_end] = f( source[y_start:y_end, x_start:x_end], m)
+                                          
                         
+    def iterate(self, a, indices = None):
+        '''Iterate over kernel sized arrays of the input array. If indices are specified, use them to iterate
+        over some of the cells, rather than all of them. '''
+        from ..geo import Point
+        if indices is None:
+            it = nditer(a,flags=['multi_index'] )
+            while not it.finished:
+                (m,  y_start, y_end, x_start, x_end) = self.bounds(a, Point(it.multi_index[1], it.multi_index[0]))
+                yield  it.multi_index[0], it.multi_index[1], a[y_start:y_end, x_start:x_end], m
+                it.iternext()     
+        else:
+            for y,x in zip(indices[0],indices[1]):
+                (m,  y_start, y_end, x_start, x_end) = self.bounds(a, Point(x, y))
+                yield y,x, a[y_start:y_end, x_start:x_end], m
         
     def apply_add(self,a,point,y=None):
         from ..geo import Point
@@ -139,15 +222,22 @@ class Kernel(object):
         return self.apply(a,point, f=lambda x,y: x+y)
     
     def apply_min(self,a,point):
-        return self.apply(a,point, min)        
+        import numpy.ma as ma
+        import numpy as np
+        f = lambda a,b: where(a<b, a, b)
+        return self.apply(a,point, f=f)        
     
     def apply_max(self,a,point):
-        return self.apply(a,point, max)        
+        import numpy as np
+        return self.apply(a,point, f=np.max)        
         
 class ConstantKernel(Kernel):
     """A Kernel for a constant value"""
     
     def __init__(self, size=1, value = None ):
+        
+        super(ConstantKernel, self).__init__(size)
+        
         self.value  = value
         
         if value:
@@ -157,21 +247,15 @@ class ConstantKernel(Kernel):
             self.matrix /= sum(self.matrix) # Normalize the sum of all cells in the matrix to 1
             
         self.offset = (self.matrix.shape[0] - 1) / 2 
-        
-        if size > 1:
-            self.center =  int(size/2) 
-        else:
-            self.center = 1
+    
                   
          
 class GaussianKernel(Kernel):
     
     def __init__(self, size=9, fwhm=3 ):
         
-        
-        # For 1-based array indexing, we'd have to +1, but this is zero-based
-        self.center =  int(size/2) 
-         
+        super(GaussianKernel, self).__init__(size)
+
         m = self.makeGaussian(size, fwhm)
 
         self.offset = (m.shape[0] - 1) / 2 
@@ -185,12 +269,12 @@ class GaussianKernel(Kernel):
         fwhm is full-width-half-maximum, which
         can be thought of as an effective radius.
         """
-        import numpy as np
+
         
         x = arange(0, size, 1, float32)
         y = x[:,newaxis]
         x0 = y0 = size // 2
-        ar = np.array(exp(-4*log(2) * ((x-x0)**2 + (y-y0)**2) / fwhm**2))
+        ar = array(exp(-4*log(2) * ((x-x0)**2 + (y-y0)**2) / fwhm**2))
         m =  ma.masked_less(ar, ar[0,x0+1]).filled(0) #mask less than the value at the edge to make it round. 
 
         m /= sum(m) # Normalize the sum of all cells in the matrix to 1
@@ -200,22 +284,66 @@ class GaussianKernel(Kernel):
 class DistanceKernel(Kernel):
     ''' Each cell is the distance, in cell widths, from the center '''
     def __init__(self, size): 
-        import math
-        if size%2 == 0:
-            raise ValueError("Array size must be odd")
         
+        import math
+        
+        super(DistanceKernel, self).__init__(size)
+
         self.inverted = False
         
-        self.matrix = ma.masked_array(zeros((size,size)), mask=True)
+        #self.matrix = ma.masked_array(zeros((size,size)), mask=True, dtype=float)
+        self.matrix = zeros((size,size), dtype=float)
         
-        # For 1-based array indexing, we'd have to +1, but this is zero-based
-        self.center = center = int(size/2) 
-        
-        row_max = size - center - 1 # Max value on a horix or vert edge
+        row_max = size - self.center - 1 # Max value on a horix or vert edge
      
-        for (x_m,y_m), value in ndenumerate(self.matrix):
-                r  = sqrt( (y_m-center)**2 + (x_m-center)**2)
-                if r <= row_max:
-                    self.matrix[y_m,x_m] = r
+        for (y_m,x_m), value in ndenumerate(self.matrix):
+                r  = sqrt( (y_m-self.center)**2 + (x_m-self.center)**2)
+                self.matrix[y_m,x_m] = r
+                    
+class MostCommonKernel(ConstantKernel):
+    """Applies the most common value in the kernel area"""
+    
+    def __init__(self, size=1):
+        super(MostCommonKernel, self).__init__(size, 1)
+        
+    
+    def apply(self,a, point, source = None,  f=None, v=None):
+        """Apply the values in the kernel onto an array, centered at a point. 
+        
+        :param a: The array to apply to 
+        :type a: numpy.array
+        :param source: The source for reading data. Must have same dimensions as a
+        :type a: numpy.array
+        :param f: A two argument function that decides which value to apply to the array    
+        :type f: callable
+        :param point: The point, in the array coordinate system, where the center of the
+        kernel will be applied
+        :type point: Point
+        :param v: External value to be passed into the function
+        :type v: any
+        """
+
+        
+
+        if v:
+            from functools import partial
+            f = partial(f,v)
+
+        (m,  y_start, y_end, x_start, x_end) = self.bounds(a, point)
+
+        if source is None:
+            source = a
+
+        d1 = ravel(source[y_start:y_end, x_start:x_end])
+
+        bc = bincount(d1, minlength=10)
+        am = argmax(bc)
+        
+        if am != a[point[0], point[1]]:
+            print am
+
+
+        a[y_start:y_end, x_start:x_end] = 1        
+                    
 
                  

@@ -18,7 +18,6 @@ class Hdf5File(h5py.File):
         super(Hdf5File, self).__init__(self._path)  
 
 
-        
     def exists(self):
         import os.path
         
@@ -31,11 +30,24 @@ class Hdf5File(h5py.File):
     def path(self):
         return self._path
 
-    def put_geo(self,name, a, aa):
+    def recursive_require_group(self, path):
+        
+        parts = path.split('/')
+        
+        ds_name = parts.pop()
+        
+        parent = self
+       
+        for part in parts:      
+            parent = parent.require_group(part)
+        
+        return parent, ds_name
+
+    def put_geo(self,path, a, aa):
         '''Store an array along with an Analysis Area'''
         import json
 
-        group = self.require_group("geo")
+        group, name = self.recursive_require_group(path)
         
         if name in group:
             del group[name]
@@ -49,13 +61,16 @@ class Hdf5File(h5py.File):
                 ds.attrs['nodata'] = a.fill_value
         except:
             pass
+        
+        self.flush()
+        
 
-    def get_geo(self, name):
+    def get_geo(self, path):
         """Return an array an an associated analysis area"""
         import json
         from databundles.geo.analysisarea import AnalysisArea
 
-        group = self.require_group("geo")
+        group, name = self.recursive_require_group(path)
 
         
         try:

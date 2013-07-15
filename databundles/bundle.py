@@ -285,6 +285,7 @@ class BuildBundle(Bundle):
         command_p.set_defaults(command='prepare')   
         
         command_p.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')
+        command_p.add_argument('-r','--rebuild', default=False,action="store_true", help='Rebuild the schema, but dont delete built files')
         
         #
         # Build Command
@@ -525,8 +526,7 @@ class BuildBundle(Bundle):
 
     def pre_prepare(self):
 
-        
-        if self.database.exists() and self.db_config.get_value('process','prepared'):
+        if not vars(self.run_args).get('rebuild',False) and  self.database.exists() and self.db_config.get_value('process','prepared'):
             self.log("Bundle has already been prepared")
             #raise ProcessError("Bundle has already been prepared")
      
@@ -537,15 +537,17 @@ class BuildBundle(Bundle):
     def prepare(self):
 
         if not self.database.exists():
+
             self.database.create()
 
         sf  = self.filesystem.path(self.config.build.get('schema_file', 'meta/schema.csv'))
 
         if os.path.exists(sf):
             with open(sf, 'rbU') as f:
+                
+                self.schema.clean()
                 self.schema.schema_from_file(f)      
-                self.schema.create_tables()    
-
+                self.schema.create_tables()
 
         return True
     

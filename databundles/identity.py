@@ -53,8 +53,9 @@ class Identity(object):
         self.subset =  d.get('subset',None)
         self.variation =  d.get('variation','orig')
         self.creator =  d.get('creator')
-        self.revision =  int(d.get('revision',1))
         
+        try: self.revision =  int(d.get('revision',1))
+        except:  self.revision =  None
 
 
     def to_dict(self):
@@ -90,6 +91,9 @@ class Identity(object):
         import hashlib
         # Create the creator code if it was not specified. 
         
+        if isinstance(o.creator, basestring) and len(o.creator) == 4:
+            return o.creator # It is already hashed. 
+        
         if o.creator is None:
             raise ValueError('Got identity object with None for creator')
         
@@ -103,7 +107,7 @@ class Identity(object):
     @property
     def vname(self):
         """The name of the bundle, including the revision"""
-        return self.name_str(self, use_revision=True)
+        return self.name_str(self, use_revision=True if self.revision else False)
     
     @property
     def path(self):
@@ -183,6 +187,41 @@ class Identity(object):
         import re
         return [re.sub('[^\w\.]','_',s).lower() for s in name_parts]
        
+    @classmethod
+    def parse_name(cls,input):
+        '''Parse a name to return the Identity. Will discard the Partition parts. '''
+        
+        import re
+        
+        p = r'([^-]+)-(.*?)(?:-r(\d+))?(?:\.(.*))?$'
+        
+        reo = re.compile(p)
+
+        m = reo.match(input)
+        if not m:
+            raise ValueError('Could not parse name: {}'.format(input))
+
+        (source, rest, revision, partition) = m.groups()   
+    
+        parts = rest.split('-')
+    
+        dataset = parts.pop(0)
+        creator = parts.pop()
+        
+        # The last two parts are optional, and indistinguishable. 
+        
+        subset = None
+        variation = None
+        if parts:
+            subset = parts.pop(0)
+            
+        if parts:
+            variation = parts.pop(0)            
+        
+    
+        return Identity( source = source, dataset = dataset, subset = subset, 
+                         variation =  variation, creator =  creator, revision =  revision);
+
        
     def __str__(self):
         return self.name

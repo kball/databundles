@@ -11,10 +11,10 @@ about:
     url: http://theurl.com
 build:
     dependencies:
-        communities: sangis.org-neighborhoods-orig-429e-communities.sd
-        crime: sandag.org-crimeincidents-orig-429e-incidents
+        communities: sangis.org-neighborhoods-orig-429e.communities.sd
+        crime: sandag.org-crimeincidents-orig-429e.incidents
         extents: clarinova.com-extents-2012-7ba4
-        geocoder: clarinova.com-geocode-casnd-429e-segments
+        geocoder: clarinova.com-geocode-casnd-429e.segments
         usgeo: census.gov-geography-dim-orig-a7d9
     geoheaderFile: meta/geoschema.csv
 extracts:
