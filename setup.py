@@ -62,6 +62,6 @@ setup(name = "databundles",
       platforms = "Posix; MacOS X; Windows",
       classifiers = [],
       #zip_safe=False,
-      install_requires = parse_requirements('requirements.txt'),
+      #install_requires = parse_requirements('requirements.txt'),
       dependency_links = parse_dependency_links('requirements.txt'),
       )

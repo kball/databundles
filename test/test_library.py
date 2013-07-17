@@ -264,11 +264,7 @@ class Test(TestBase):
         for i,vname in vnames.items():
             r = l.get(vname)
             print i, vname, r, r.identity.vname
-        
-        
-        
-        
-        
+
         
         idnt.revision = 1
         self.bundle.config.rewrite(identity=idnt.to_dict())

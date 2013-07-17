@@ -216,7 +216,7 @@ class Dataset(Base):
                                passive_updates=False)
    
     def __init__(self,**kwargs):
-        self.id_ = kwargs.get("oid",kwargs.get("id", None)) 
+        self.id_ = kwargs.get("oid",kwargs.get("id",kwargs.get("id_", None)) )
         self.name = kwargs.get("name",None) 
         self.vname = kwargs.get("vname",None) 
         self.source = kwargs.get("source",None) 
@@ -230,7 +230,7 @@ class Dataset(Base):
             dn = DatasetNumber(None, self.revision )
             self.vid = str(dn)
             self.id_ = str(dn.rev(None))
-        else:
+        elif not self.vid:
             self.vid = str(ObjectNumber.parse(self.id_).rev(self.revision))
 
  
@@ -298,7 +298,7 @@ class Column(Base):
     data = SAColumn('c_data',MutationDict.as_mutable(JSONEncodedObj))
 
     is_primary_key = SAColumn('c_is_primary_key',Boolean, default = False)
-    foreign_key = SAColumn('c_is_foreign_key',Text, default = False)
+    foreign_key = SAColumn('c_is_foreign_key',Boolean, default = False)
     unique_constraints = SAColumn('c_unique_constraints',Text)
     indexes = SAColumn('c_indexes',Text)
     uindexes = SAColumn('c_uindexes',Text)

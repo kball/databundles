@@ -13,11 +13,12 @@ from databundles.dbexceptions import ConfigurationError, NotFoundError
 from databundles.filesystem import  Filesystem
 from  databundles.identity import new_identity
 from databundles.bundle import DbBundle
+from databundles.util import lru_cache
         
 import databundles
 
 from collections import namedtuple
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, ProgrammingError
 
 import Queue
 
@@ -174,6 +175,24 @@ def get_library(config=None, name='default', reset=False):
     
     return libraries[name]
 
+@lru_cache(maxsize=128)
+def get_warehouse(config=None, name='default'):
+    
+    if name is None:
+        name = 'default'
+    
+    if config is None:
+        config = get_runconfig()
+    
+    sc = config.warehouse.get(name,False)
+    
+    if not sc:
+        raise ConfigurationError("Failed to get name '{}' in configuration group 'warehouse' ".format(name))
+    
+    database = get_database(config, name=sc.database)
+    
+    return Warehouse(database)
+    
 def copy_stream_to_file(stream, file_path):
     '''Copy an open file-list object to a file
     
@@ -282,10 +301,10 @@ class LibraryDb(object):
 
         s.query(SAConfig).filter(SAConfig.group == group,
                                  SAConfig.key == key,
-                                 SAConfig.d_vid == 'none').delete()
+                                 SAConfig.d_vid == 'a0').delete()
         
         o = SAConfig(group=group,
-                     key=key,d_vid='none',value = value)
+                     key=key,d_vid='a0',value = value)
         s.add(o)
         s.commit()  
    
@@ -298,7 +317,7 @@ class LibraryDb(object):
         try:
             c = s.query(SAConfig).filter(SAConfig.group == group,
                                      SAConfig.key == key,
-                                     SAConfig.d_vid == 'none').first()
+                                     SAConfig.d_vid == 'a0').first()
        
             return c
         except:
@@ -313,7 +332,7 @@ class LibraryDb(object):
         
         d = {}
         
-        for config in s.query(SAConfig).filter(SAConfig.d_vid == 'none').all():
+        for config in s.query(SAConfig).filter(SAConfig.d_vid == 'a0').all():
             d[(str(config.group),str(config.key))] = config.value
             
         return d
@@ -341,60 +360,88 @@ class LibraryDb(object):
         self.session.commit()     
         
     def exists(self):
-        
+        from databundles.orm import Dataset
+          
         self.engine
         
         if self.driver == 'sqlite':
             return os.path.exists(self.dbname)
         else :
-            return True; # Don't know how to check for a postgres database. 
-        
+            try: 
+                self.session.query(Dataset).filter(Dataset.vid=='a0').one()
+                return True; 
+            except :
+                return False
+
     
     def clean(self):
         s = self.session
         from databundles.orm import Column, Partition, Table, Dataset, Config, File
         
+        s.query(Config).delete()
+        s.query(File).delete()
         s.query(Column).delete()
         s.query(Partition).delete()
         s.query(Table).delete()
         s.query(Dataset).delete()
-        s.query(Config).delete()
-        s.query(File).delete()
+
+        self._add_config_root()
+
         s.commit()
  
         
+    def _creation_sql(self):
+        try:   
+            script_str = os.path.join(os.path.dirname(databundles.__file__),
+                                      self.PROTO_SQL_FILE)
+        except:
+            # Not sure where to find pkg_resources, so this will probably
+            # fail. 
+            from pkg_resources import resource_string #@UnresolvedImport
+            
+            script_str = resource_string(databundles.__name__, self.sql)        
+    
+        return script_str
+    
     def create(self):
-        
         """Create the database from the base SQL"""
+
+        
         if not self.exists():    
-         
-            try:   
-                script_str = os.path.join(os.path.dirname(databundles.__file__),
-                                          self.PROTO_SQL_FILE)
-            except:
-                # Not sure where to find pkg_resources, so this will probably
-                # fail. 
-                from pkg_resources import resource_string #@UnresolvedImport
-                
-                script_str = resource_string(databundles.__name__, self.sql)
+
+            sql = self._creation_sql()
+            self.load_sql(sql)
             
-            self.load_sql(script_str)
-            
+            self._add_config_root()
+
             return True
         
         return False
     
+    def _add_config_root(self):
+        from databundles.orm import Dataset
+        from sqlalchemy.orm.exc import NoResultFound 
+        
+        try: 
+            self.session.query(Dataset).filter(Dataset.vid=='a0').one()
+        except NoResultFound:
+            o = Dataset(vid='a0', id='a0',name='a0', vname='a0')
+            self.session.add(o)
+            self.session.commit()  
+             
+    
     def _drop(self, s):
-        s.execute("DROP TABLE IF EXISTS files")
-        s.execute("DROP TABLE IF EXISTS columns")
-        s.execute("DROP TABLE IF EXISTS partitions")
-        s.execute("DROP TABLE IF EXISTS tables")
-        s.execute("DROP TABLE IF EXISTS config")
-        s.execute("DROP TABLE IF EXISTS datasets")
+        
+        for table in reversed(self.metadata.sorted_tables): # sorted by foreign key dependency
+            print "TABLE: {}".format(str(table))
+            q = 'DROP TABLE IF EXISTS "{}"'.format(str(table))
+            s.execute(q)
+
     
     def drop(self):
         s = self.session
         self._drop(s)
+        
         s.commit()
 
 
@@ -411,9 +458,11 @@ class LibraryDb(object):
            
             conn = psycopg2.connect(dsn)
          
+            self.drop()
+         
             cur = conn.cursor()
           
-            self._drop(cur)
+            #self._drop(cur)
             
             cur.execute("COMMIT")
             cur.execute(sql_text) 
@@ -453,6 +502,10 @@ class LibraryDb(object):
     def install_bundle_file(self, identity, bundle_file):
         """Install a bundle in the database, starting from a file that may
         be a partition or a bundle"""
+
+        #
+        # This is really just used to ignore partitions
+        #
 
         if isinstance(identity , dict):
             identity = new_identity(identity)
@@ -759,7 +812,8 @@ class LibraryDb(object):
       
         s = self.session
 
-        s.query(File).filter(File.path == path).delete()
+        try: s.query(File).filter(File.path == path).delete()
+        except ProgrammingError: pass
       
         file_ = File(path=path, 
                      group=group, 
@@ -826,13 +880,22 @@ class LibraryDb(object):
         
         
     def _copy_db(self, src, dst):
+        from databundles.orm import Dataset
+        from sqlalchemy.orm.exc import NoResultFound 
         
-        for name, table in self.metadata.tables.items():
+        try: 
+            dst.session.query(Dataset).filter(Dataset.vid=='a0').delete()
+        except:
+            pass
+            
+        for table in self.metadata.sorted_tables: # sorted by foreign key dependency
+
             rows = src.session.execute(table.select()).fetchall()
+
             for row in rows:
                 dst.session.execute(table.insert(), row)
-                        
-            dst.session.commit()
+
+        dst.session.commit()
             
                         
     def dump(self, path):
@@ -857,11 +920,12 @@ class LibraryDb(object):
         configs = self.config_values
         
         td = datetime.timedelta(seconds=10)
-        
+
         changed =  parser.parse(configs.get(('activity','change'),datetime.datetime.fromtimestamp(0).isoformat()))
         dumped = parser.parse(configs.get(('activity','dump'),datetime.datetime.fromtimestamp(0).isoformat()))
         dumped_past = dumped + td
         now = datetime.datetime.utcnow()
+
 
         if ( changed > dumped and now > dumped_past): 
             return True
@@ -1020,6 +1084,8 @@ class _qc_attrdict(object):
         for k,v in kwargs.items():
             self.inner[k] = v
         return self.query
+       
+
             
 class Library(object):
     '''
@@ -1142,8 +1208,7 @@ class Library(object):
         queries.append(QueryCommand().partition(vname = term))
         queries.append(QueryCommand().partition(id_ = term))
         queries.append(QueryCommand().partition(vid = term))
-        
-        
+
         for q in queries:
             r = self.find(q)
             
@@ -1156,11 +1221,9 @@ class Library(object):
             else:
                 r = r.pop()            
             
-    
             if r:
                 dataset, partition  = self._get_bundle_path_from_id(r.vid)   
                 break
-    
                     
         # No luck so far, so now try to get it from the remote library
         if not dataset and self.remote:
@@ -1229,8 +1292,6 @@ class Library(object):
         from databundles.identity import  PartitionIdentity, new_identity 
 
         identity = new_identity(partition.to_dict(), bundle=bundle) 
-
-            
 
         p = bundle.partitions.get(identity.id_) # Get partition information from bundle
         
@@ -1601,13 +1662,81 @@ class Library(object):
         for bundle in bundles:
             self.logger.info('Installing: {} '.format(bundle.identity.name))
             self.database.install_bundle(bundle)
-            
-    
-        
+
         self.database.commit()
         return bundles
 
+class Warehouse(object):
+    
+    def __init__(self, database):
+        self.database = database
+        
+    
+    def install(self, b_or_p):
+        from bundle import Bundle
+        from partition import Partition, GeoPartition, HdfPartition
+        
+        if isinstance(b_or_p, Bundle):
+            self._install_bundle( b_or_p)
+        elif isinstance(b_or_p, Partition):
+            if isinstance(b_or_p, GeoPartition):
+                self._install_partition( b_or_p)
+            elif isinstance(b_or_p, HdfPartition):
+                self._install_hdf_partition( b_or_p)
+            else:
+                self._install_partition( b_or_p)
+        else:
+            raise ValueError("Can only install a partition or bundle")
 
+        
+    def _install_bundle(self, bundle):
+        
+        self.database.install_bundle(bundle)
+    
+    def _install_partition(self, partition):
+        
+        print "Contemplating ", partition.database.path    
+
+        pdb = partition.database
+     
+        tables = partition.data.get('tables',[])
+
+        for table_name in tables:
+            print "Look for {}".format(table_name)
+            if not table_name in self.database.inspector.get_table_names():
+                print "Creating {}".format(table_name)
+                t_meta, table = partition.bundle.schema.get_table_meta(table_name, use_id=True) #@UnusedVariable
+                t_meta.create_all(bind=self.database.engine)     
+     
+        #for table in pdb.sorted_tables: # sorted by foreign key dependency
+
+            #rows = pdb.session.execute(table.select()).fetchall()
+
+            #for row in rows:
+            #    self.database.session.execute(table.insert(), row)
+
+        #self.database.session.commit()
+            
+        
+    
+    def _install_hdf_partition(self, partition):
+        
+        print "HDF Partition ", partition.database.path   
+        
+ 
+                        
+    def uninstall(self,b_or_p):
+        pass
+        
+    def clean(self):
+        self.database.clean()
+        
+    def drop(self):
+        self.database.drop()
+        
+    def create(self):
+        self.database.create()
+        
 def _pragma_on_connect(dbapi_con, con_record):
     '''ISSUE some Sqlite pragmas when the connection is created'''
     

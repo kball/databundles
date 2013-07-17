@@ -1,0 +1,31 @@
+# Configuration for a library that is backed by a remote library
+
+library:
+    default:
+      filesystem: default
+      database: default
+
+warehouse:
+    default:
+      database: default
+
+database:
+    default:
+        driver: postgres
+        server: lorne
+        dbname: test-library
+        username: test
+        password: test 
+
+
+filesystem:  
+  root_dir: /tmp/warehouse-test/
+  default:
+      dir: '{root}/cache-l1'
+      size: 50
+      upstream:
+        dir: '{root}/cache-l2'
+        options: [compress]
+
+
+        

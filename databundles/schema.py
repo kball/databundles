@@ -148,7 +148,7 @@ class Schema(object):
         from databundles.orm import Column
         return (self.bundle.database.session.query(Column).all())
         
-    def get_table_meta(self, name_or_id):
+    def get_table_meta(self, name_or_id, use_id=False):
         s = self.bundle.database.session
         from databundles.orm import Table, Column
         
@@ -181,7 +181,7 @@ class Schema(object):
             except sqlalchemy.orm.exc.NoResultFound: #@UndefinedVariable
                 raise ValueError("No table found for name {}".format(name_or_id))
         
-        at = SATable(table.name, metadata)
+        at = SATable(table.dataset.id_+'_'+table.name if  use_id else table.name, metadata)
  
         indexes = {}
         uindexes = {}

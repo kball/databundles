@@ -12,3 +12,5 @@ python-dateutil
 fuzzy
 paste
 bottle
+numpy
+gdal
