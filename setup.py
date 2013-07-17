@@ -48,7 +48,9 @@ setup(name = "databundles",
       author = "Eric Busboom",
       author_email = "eric@clarinova.com",
       url = "https://github.com/clarinova/databundles",
-      install_requires=['distribute'],
+      # If the base system uses setuptools, there is a patching for distribute  that fails, and
+      # bad things happen. http://stackoverflow.com/questions/7446187/no-module-named-pkg-resources
+      #install_requires=['distribute'],
       xpackages = ["databundles", 
                   "databundles.client",
                   "databundles.server",
