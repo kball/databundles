@@ -1701,7 +1701,7 @@ class S3Cache(object):
         return d
 
 
-    def public_url_f(self, public=False, expires_in_=None):
+    def public_url_f(self, public=False, expires_in=None):
         ''' Returns a function that will convert a rel_path into a public URL'''
 
         if self.prefix is not None:
@@ -1711,7 +1711,7 @@ class S3Cache(object):
             
         bucket = self.bucket_name
 
-        expires_in = expires_in_
+        _expires_in = expires_in
         
         def public_url_f_inner(rel_path):
             
@@ -1725,9 +1725,9 @@ class S3Cache(object):
                 return "https://s3.amazonaws.com/{}/{}".format(bucket, key)
         
             else:
-                if not expires_in:
-                    expires_in=60
-                return key.generate_url(expires_in)
+                if not _expires_in:
+                    _expires_in=60
+                return key.generate_url(_expires_in)
             
         return public_url_f_inner
         
