@@ -18,9 +18,12 @@ from databundles.util import lru_cache
 import databundles
 
 from collections import namedtuple
-from sqlalchemy.exc import IntegrityError, ProgrammingError
+from sqlalchemy.exc import IntegrityError, ProgrammingError, OperationalError
 
 import Queue
+
+ROOT_CONFIG_NAME = 'a0'
+ROOT_CONFIG_NAME_V = 'a0/001'
 
 libraries = {}
 
@@ -301,10 +304,10 @@ class LibraryDb(object):
 
         s.query(SAConfig).filter(SAConfig.group == group,
                                  SAConfig.key == key,
-                                 SAConfig.d_vid == 'a0').delete()
+                                 SAConfig.d_vid == ROOT_CONFIG_NAME_V).delete()
         
         o = SAConfig(group=group,
-                     key=key,d_vid='a0',value = value)
+                     key=key,d_vid=ROOT_CONFIG_NAME_V,value = value)
         s.add(o)
         s.commit()  
    
@@ -317,7 +320,7 @@ class LibraryDb(object):
         try:
             c = s.query(SAConfig).filter(SAConfig.group == group,
                                      SAConfig.key == key,
-                                     SAConfig.d_vid == 'a0').first()
+                                     SAConfig.d_vid == ROOT_CONFIG_NAME_V).first()
        
             return c
         except:
@@ -332,7 +335,7 @@ class LibraryDb(object):
         
         d = {}
         
-        for config in s.query(SAConfig).filter(SAConfig.d_vid == 'a0').all():
+        for config in s.query(SAConfig).filter(SAConfig.d_vid == ROOT_CONFIG_NAME).all():
             d[(str(config.group),str(config.key))] = config.value
             
         return d
@@ -368,7 +371,7 @@ class LibraryDb(object):
             return os.path.exists(self.dbname)
         else :
             try: 
-                self.session.query(Dataset).filter(Dataset.vid=='a0').one()
+                self.session.query(Dataset).filter(Dataset.vid==ROOT_CONFIG_NAME).one()
                 return True; 
             except :
                 return False
@@ -423,9 +426,17 @@ class LibraryDb(object):
         from sqlalchemy.orm.exc import NoResultFound 
         
         try: 
-            self.session.query(Dataset).filter(Dataset.vid=='a0').one()
+            self.session.query(Dataset).filter(Dataset.vid==ROOT_CONFIG_NAME).one()
         except NoResultFound:
-            o = Dataset(vid='a0', id='a0',name='a0', vname='a0')
+            o = Dataset(
+                        id=ROOT_CONFIG_NAME,
+                        name=ROOT_CONFIG_NAME, 
+                        vname=ROOT_CONFIG_NAME,
+                        source=ROOT_CONFIG_NAME,
+                        dataset = ROOT_CONFIG_NAME,
+                        creator=ROOT_CONFIG_NAME,
+                        revision=1,
+                        )
             self.session.add(o)
             self.session.commit()  
              
@@ -662,11 +673,18 @@ class LibraryDb(object):
             try:
                 if c == 1:
                     dataset = q.first()
+                    
+                    if dataset:
+                        break
+                    
                 else:
-                    dataset, partition = q.first()
+                    r = q.first()
+                    
+                    if r:
+                        dataset, partition = r
+                        break
                 
-                if dataset:
-                    break
+                
                 
             except sqlalchemy.orm.exc.NoResultFound as e: #@UnusedVariable
                 pass
@@ -813,7 +831,10 @@ class LibraryDb(object):
         s = self.session
 
         try: s.query(File).filter(File.path == path).delete()
-        except ProgrammingError: pass
+        except ProgrammingError: 
+            pass
+        except OperationalError: 
+            pass
       
         file_ = File(path=path, 
                      group=group, 
@@ -1708,14 +1729,10 @@ class Warehouse(object):
                 t_meta, table = partition.bundle.schema.get_table_meta(table_name, use_id=True) #@UnusedVariable
                 t_meta.create_all(bind=self.database.engine)     
      
-        #for table in pdb.sorted_tables: # sorted by foreign key dependency
+            
+     
 
-            #rows = pdb.session.execute(table.select()).fetchall()
-
-            #for row in rows:
-            #    self.database.session.execute(table.insert(), row)
-
-        #self.database.session.commit()
+        self.database.session.commit()
             
         
     

@@ -14,3 +14,4 @@ paste
 bottle
 numpy
 gdal
+h5py

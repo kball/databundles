@@ -347,6 +347,13 @@ class BuildBundle(Bundle):
         command_p.add_argument('-s','--schema',  default=False,action="store_true",
                                help='Dump the schema as a CSV. The bundle must have been prepared')
          
+        #
+        # repopulate
+        #
+        command_p = cmd.add_parser('repopulate', help='Load data previously submitted to the library back into the build dir')
+        command_p.set_defaults(command='repopulate')               
+
+
 
         return parser
 
@@ -667,9 +674,8 @@ class BuildBundle(Bundle):
         return True
     
     
-    ########################
-    # Support for the submit() process
- 
+    def repopulate(self, args):
+        print "repopulate {}".format(args)
 
 class BundleConfig(object):
    

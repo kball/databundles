@@ -103,6 +103,7 @@ def config_command(b, args):
     if args.subcommand == 'rewrite':
         b.log("Rewriting the config file")
         b.update_configuration()
+ 
 
 def run(argv, bundle_class):
 
@@ -112,6 +113,10 @@ def run(argv, bundle_class):
     if args.command == 'config':
         config_command(b,args)
         return
+
+    if args.command == 'repopulate':
+        b.repopulate(args)
+
 
     if hasattr(args,'clean') and args.clean:
         # If the clean arg is set, then we need to run  clean, and all of the

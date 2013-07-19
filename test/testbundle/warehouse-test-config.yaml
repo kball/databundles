@@ -7,10 +7,15 @@ library:
 
 warehouse:
     default:
-      database: default
+      database: warehouse
 
 database:
+  
     default:
+        dbname: '/tmp/server/library.db'
+        driver: sqlite  
+  
+    warehouse:
         driver: postgres
         server: lorne
         dbname: test-library

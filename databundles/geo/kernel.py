@@ -9,6 +9,8 @@ from osgeo import gdal, gdal_array, osr
 from osgeo.gdalconst import GDT_Float32, GDT_Byte, GDT_Int16
 from numpy  import *
 
+class OutOfBounds(Exception): pass
+
 class Kernel(object):
 
     def __init__(self, size):
@@ -197,7 +199,10 @@ class Kernel(object):
             source = a
 
         #print a.shape, point, x_start, x_end, y_start, y_end, (m if use_m else self.matrix).shape
-        a[y_start:y_end, x_start:x_end] = f( source[y_start:y_end, x_start:x_end], m)
+        if m is not False: # 
+            a[y_start:y_end, x_start:x_end] = f( source[y_start:y_end, x_start:x_end], m)
+        else:
+            raise OutOfBounds("Point {} is out of bounds for this array ( {} )".format(str(point), str(a.shape)))
                                           
                         
     def iterate(self, a, indices = None):
@@ -217,9 +222,10 @@ class Kernel(object):
         
     def apply_add(self,a,point,y=None):
         from ..geo import Point
+        import numpy as np
         if y is not None:
             point = Point(point, y)
-        return self.apply(a,point, f=lambda x,y: x+y)
+        return self.apply(a,point, f=lambda x,y: np.add(x,y))
     
     def apply_min(self,a,point):
         import numpy.ma as ma

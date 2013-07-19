@@ -22,6 +22,7 @@ class Repository(object):
         self.partitions = self.bundle.partitions   
         self.repo_name = repo_name
         self._api = None
+        self.filestore = None
    
     @property
     def remote(self):
@@ -44,16 +45,20 @@ class Repository(object):
         
         # Look for an S3 filestore
         
-        if repo_config.get('s3-filestore', False):
+        fs_config = repo_config.get('filestore', False)
+        
+        if fs_config is not False:
             from databundles.filesystem import S3Cache
 
-            config = repo_config.get('s3-filestore')
-
-            self.filestore =  S3Cache(bucket=config.get('bucket'), 
-                    prefix=config.get('prefix', None),
-                    access_key=config.get('access_key'),
-                    secret=config.get('secret'))
-            
+            if isinstance(fs_config, basestring):
+                from filesystem import Filesystem
+                self.filestore = Filesystem._get_cache(self.bundle.config.filesystem, fs_config )
+            else:
+                self.filestore =  S3Cache(bucket=fs_config.get('bucket'), 
+                        prefix=fs_config.get('prefix', None),
+                        access_key=fs_config.get('access_key'),
+                        secret=fs_config.get('secret'))
+                
         else:
             self.filestore = None
         
@@ -221,7 +226,7 @@ class Repository(object):
             md5 =  md5_for_file(file_)
             if not self.filestore.has(path, md5=md5):
                 self.filestore.put(file_, path, metadata={'public':True, 'md5':md5})
-         
+
             r = self.remote.add_url_resource(package, urlf(path), name,
                     description=extract_data['description'],
                     content_type = content_type, 
@@ -314,7 +319,9 @@ class Repository(object):
                 l = self.bundle.library
                
                 r = l.get(partition_name)
-                if r.partition:
+                if not r:
+                    raise Exception("Failed to get partition {} ".format(partition_name))
+                elif r.partition:
                     partitions = [r.partition]
                 else:
                     partitions = [r.bundle]
@@ -366,7 +373,7 @@ class Repository(object):
 
     
     def dep_tree(self, root):
-        """Return the tree of dependencies rooted in the given nod name, 
+        """Return the tree of dependencies rooted in the given node name, 
         excluding all other nodes"""
         
         graph = {}
@@ -430,6 +437,7 @@ class Repository(object):
             p_id = extract.get('partition', False)
             eaches = self._expand_each(each)
   
+  
             # This part is a awful hack and should be refactored
             if function:
                 for data in eaches:  
@@ -457,11 +465,43 @@ class Repository(object):
                                         description=config['description'])
         
         return r
+    
+
+    def zip(self, zips):
+        import os
+        from util import zipdir
+
+        outs = {}
+        
+        for z in zips:
+            
+            if os.path.isdir(z):
+                
+                out = z+'.zip'
+                print "zip {} to {}".format(z, out)
+                zipdir(z, out)
+                outs[z] = out
+            elif os.path.isfile(z):
+                print "zip file"
+                pass
+            else:
+                raise Exception("Can't zip: '{}' ".format(z))
+                       
+        return outs
           
     def extract(self, root=None, force=False):
         import os
 
+        zips = set()
+        
         for extract_data in self.generate_extracts(root=root):
+            
+            zip = extract_data.get('zip', False)
+            if zip == 'dir':
+                zips.add(os.path.dirname(extract_data['path']))
+            elif zip == 'file':
+                zips.add(extract_data['path'])
+            
             file_ = self._do_extract(extract_data, force=force)
             if file_ is True:
                 self.bundle.log("Extract {} marked as done".format(extract_data['_name']))
@@ -470,7 +510,10 @@ class Repository(object):
             else:
                 self.bundle.error("Extracted file {} does not exist".format(file_))
        
+        self.zip(zips)
+       
         return True
+ 
                     
     def submit(self,  root=None, force=False, repo=None): 
         """Create a dataset for the bundle, then add a resource for each of the
@@ -481,7 +524,7 @@ class Repository(object):
             self.repo_name = repo
             self.set_api()
         
-        
+        import os
         from os.path import  basename
     
         ckb = self.remote.update_or_new_bundle_extract(self.bundle)
@@ -493,16 +536,45 @@ class Repository(object):
         for doc in self.bundle.config.group('about').get('documents',[]):
             self.store_document(ckb, doc)
 
+        zip_inputs = {}
+
         for extract_data in self.generate_extracts(root=root):
 
+            zip = extract_data.get('zip', False)
+            will_zip = False
+            
+            if zip == 'dir':
+                zip_inputs[os.path.dirname(extract_data['path'])] = extract_data
+                will_zip = True
+            elif zip == 'file':
+                zip_inputs[extract_data['path']] = extract_data
+                will_zip = True
+ 
             file_ = self._do_extract(extract_data, force=force)
-            if file_ not in sent:
-
+            
+            if will_zip:
+                self.bundle.log("{} will get submitted as a zip".format(file_))
+            elif file_ not in sent:
                 r = self._send(ckb, extract_data,file_)
                 sent.add(file_)
                 url = r['ckan_url']
                 self.bundle.log("Submitted {} to {}".format(basename(file_), url))
             else:
                 self.bundle.log("Already processed {}, not sending.".format(basename(file_)))
+        
+        
+        zip_outputs = self.zip(zip_inputs.keys() )
+        
+        
+        print zip_outputs
+        
+        for in_zf, out_zf in zip_outputs.items():
+            extract_data = zip_inputs[in_zf]
+            extract_data['name'] = extract_data['zipname'] if 'zipname' in extract_data else extract_data['name']
+            r = self._send(ckb, extract_data,out_zf)
+        
+            url = r['ckan_url']
+            self.bundle.log("Submitted {} to {}".format(basename(out_zf), url))
+        
         
         return True

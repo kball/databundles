@@ -563,9 +563,7 @@ def segment_points(areas,table_name=None,  query_template=None, places_query=Non
 
         yield area, query, is_in
 
-    
-    
-    
+
     
     
     

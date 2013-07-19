@@ -59,89 +59,6 @@ class Test(TestBase):
     def tearDown(self):
         pass
 
-    def test_basic(self):
-        
-        l = self.get_library()
-    
-        print l.database.dsn
-
-        db = l.database
-        
-        db.drop()
-
-        db.create()
-        
-        r = db.install_bundle(self.bundle) #@UnusedVariable
-
-        db.set_config_value('group', 'key','value')
-        print db.get_config_value('group', 'key')
-
-    def test_simple_install(self):
-        from databundles.library import QueryCommand
-        from databundles.util import temp_file_name
-        import pprint
-        import os
-        
-        l = self.get_library()
-        print "Library: ", l.database.dsn
-     
-        r = l.put(self.bundle) #@UnusedVariable
-
-        r = l.get(self.bundle.identity.name)
-        self.assertTrue(r is not False)
-        self.assertEquals(self.bundle.identity.name, r.identity.name)
-
-        r = l.get('gibberish')
-        self.assertFalse(r)
-
-
-        for partition in self.bundle.partitions:
-            r = l.put(partition)
-
-            # Get the partition with a name
-            r = l.get(partition.identity.name)
-            self.assertTrue(r is not False)
-            self.assertEquals(partition.identity.name, r.partition.identity.name)
-            self.assertEquals(self.bundle.identity.name, r.identity.name)
-            
-            # Get the partition with an id
-            r = l.get(partition.identity.id_)
-
-            self.assertTrue(bool(r))
-            self.assertEquals(partition.identity.name, r.partition.identity.name)
-            self.assertEquals(self.bundle.identity.name, r.identity.name)            
-
-        self.assertTrue(l.database.needs_dump())
-
-        backup_file = temp_file_name()+".db"
-        
-        l.database.dump(backup_file)
-        
-        l.database.close()
-        l.database.clean()
-        l.database.create()
-
-        r = l.get(self.bundle.identity.name)
-    
-        self.assertTrue(not r)
-        
-        l.database.restore(backup_file)
-        
-        r = l.get(self.bundle.identity.name)
-        self.assertTrue(r is not False)
-        self.assertEquals(self.bundle.identity.name, r.identity.name)
-
-        os.remove(backup_file)
-
-        # An extra change so the following tests work
-        l.put(self.bundle)
-        
-        self.assertFalse(l.database.needs_dump())
-
-        import time; time.sleep(10)
-
-        self.assertTrue(l.database.needs_dump())
-
         
     def test_install(self):
         from databundles.library import get_warehouse
@@ -156,8 +73,7 @@ class Test(TestBase):
         
         for p in self.bundle.partitions:
             w.install(p)
-            
-        
+             
 
 def suite():
     suite = unittest.TestSuite()

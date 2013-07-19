@@ -1068,7 +1068,10 @@ class GeoDb(PartitionDb):
         ''''''    
         super(GeoDb, self).__init__(bundle, partition, base_path, **kwargs)  
 
+        #self.connection.execute("SELECT load_extension('libspatialite.dylib');")
+
         def load_spatialite(this):
+            
             pass # SHould load the spatialite library into sqlite here. 
 
         self.add_post_create(load_spatialite)
@@ -1113,6 +1116,7 @@ class BundleDb(Database):
     def __init__(self, path):
 
         super(BundleDb, self).__init__(None, path)  
+        
 def _pragma_on_connect(dbapi_con, con_record):
     '''ISSUE some Sqlite pragmas when the connection is created'''
 
@@ -1121,6 +1125,7 @@ def _pragma_on_connect(dbapi_con, con_record):
     dbapi_con.execute('PRAGMA cache_size = 500000')
     dbapi_con.execute('PRAGMA foreign_keys=ON')
     dbapi_con.execute('PRAGMA journal_mode = OFF')
+    #dbapi_con.enable_load_extension(True)
     #dbapi_con.execute('PRAGMA synchronous = OFF')
 
     

@@ -647,6 +647,22 @@ def temp_file_name():
     
     return f.name
     
+# http://stackoverflow.com/questions/296499/how-do-i-zip-the-contents-of-a-folder-using-python-version-2-5
+def zipdir(basedir, archivename):
+    from contextlib import closing
+    from zipfile import ZipFile, ZIP_DEFLATED
+    import os
+
+    assert os.path.isdir(basedir)
     
+    with closing(ZipFile(archivename, "w", ZIP_DEFLATED)) as z:
+        for root, dirs, files in os.walk(basedir):
+           
+            #NOTE: ignore empty directories
+            for fn in files:
+           
+                absfn = os.path.join(root, fn)
+                zfn = absfn[len(basedir)+len(os.sep):] #XXX: relative path
+                z.write(absfn, zfn)
     
 

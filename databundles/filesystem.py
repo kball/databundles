@@ -882,10 +882,10 @@ class FsCache(object):
         raise NotImplementedError() 
 
 
-    def public_url_f(self):
+    def public_url_f(self, public=False, expires_in=None):
         ''' Returns a function that will convert a rel_path into a public URL'''
         if self.upstream:
-            upstream_f = self.upstream.public_url_f()
+            upstream_f = self.upstream.public_url_f(public=public, expires_in=expires_in)
             return lambda rel_path: upstream_f(rel_path)
         else:
             cache_dir = self.cache_dir
@@ -1218,11 +1218,11 @@ class FsLimitedCache(FsCache):
         raise NotImplementedError() 
 
     
-    def public_url_f(self):
+    def public_url_f(self, public=False, expires_in=None):
         ''' Returns a function that will convert a rel_path into a public URL'''
 
         if self.upstream:
-            upstream_f = self.upstream.public_url_f()
+            upstream_f = self.upstream.public_url_f(public=public, expires_in=expires_in)
             return lambda rel_path: upstream_f(rel_path)
         else:
             cache_dir = self.cache_dir
@@ -1345,13 +1345,13 @@ class FsCompressionCache(FsCache):
         '''Return a reference to an inner cache that is a remote'''
         return self.upstream.remote
       
-    def public_url_f(self):
+    def public_url_f(self, public=False, expires_in=None):
         ''' Returns a function that will convert a rel_path into a public URL'''
         
         if not self.upstream:
             raise Exception("CompressionCache must have an upstream")
         
-        upstream_f = self.upstream.public_url_f()
+        upstream_f = self.upstream.public_url_f(public=public, expires_in=expires_in)
         rename_f = self._rename
         return lambda rel_path: upstream_f(rename_f(rel_path))
     
@@ -1480,6 +1480,7 @@ class S3Cache(object):
         
         rel_path = self._rename(rel_path)
         
+
         sink = self.put_stream(rel_path, metadata = metadata)
         
         copy_file_or_flo(source, sink)
@@ -1700,7 +1701,7 @@ class S3Cache(object):
         return d
 
 
-    def public_url_f(self, public=False):
+    def public_url_f(self, public=False, expires_in=None):
         ''' Returns a function that will convert a rel_path into a public URL'''
 
         if self.prefix is not None:
@@ -1711,6 +1712,8 @@ class S3Cache(object):
         bucket = self.bucket_name
 
         def public_url_f_inner(rel_path):
+            
+            rel_path = self._rename(rel_path)
 
             key =  self._get_boto_key(rel_path)
             if not key:
@@ -1720,7 +1723,9 @@ class S3Cache(object):
                 return "https://s3.amazonaws.com/{}/{}".format(bucket, key)
         
             else:
-                return key.generate_url(60)
+                if not expires_in:
+                    expires_in=60
+                return key.generate_url(expires_in)
             
         return public_url_f_inner
         
