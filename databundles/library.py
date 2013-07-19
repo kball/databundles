@@ -1530,8 +1530,8 @@ class Library(object):
         
         self.cache.remove(bundle.identity.cache_key)
         
-    def clean(self):
-        self.database.clean()
+    def clean(self, add_config_root=True):
+        self.database.clean(add_config_root=add_config_root)
         
     def purge(self):
         """Remove all records from the library database, then delete all
