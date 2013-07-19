@@ -377,7 +377,7 @@ class LibraryDb(object):
                 return False
 
     
-    def clean(self):
+    def clean(self, add_config_root=True):
         s = self.session
         from databundles.orm import Column, Partition, Table, Dataset, Config, File
         
@@ -388,7 +388,8 @@ class LibraryDb(object):
         s.query(Table).delete()
         s.query(Dataset).delete()
 
-        self._add_config_root()
+        if add_config_root:
+            self._add_config_root()
 
         s.commit()
  

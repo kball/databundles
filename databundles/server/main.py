@@ -652,7 +652,7 @@ def production_run(config, library_name='default', reloader=False):
 
     if l.can_restore():
         logger.info("Restoring library from backup")
-        l.clean()
+        l.clean(add_config_root=False)
         l.restore()
     else:
         logger.info('No backup, not restoring library database')

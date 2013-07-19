@@ -184,11 +184,9 @@ class Geocoder(object):
         try: in_city = self.by_name[ps.city.title()]
         except: in_city = self.by_name['NONE']
            
-
         max_score = 0
         winner = None
        
-
         for s in self.addresses.query(q, street):
             s= dict(s)
              

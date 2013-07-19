@@ -5,7 +5,7 @@
 /* Project name:                                                          */
 /* Author:                                                                */
 /* Script type:           Database creation script                        */
-/* Created on:            2013-07-06 22:49                                */
+/* Created on:            2013-07-19 11:10                                */
 /* ---------------------------------------------------------------------- */
 
 
@@ -100,7 +100,7 @@ CREATE TABLE "columns" (
     "c_name" TEXT NOT NULL,
     "c_altname" TEXT,
     "c_is_primary_key" INTEGER,
-    "c_is_foreign_key" INTEGER,
+    "c_is_foreign_key" TEXT,
     "c_unique_constraints" TEXT,
     "c_indexes" TEXT,
     "c_uindexes" TEXT,

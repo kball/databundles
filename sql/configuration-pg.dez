@@ -5,14 +5,14 @@
 <PROJECTSETTINGS>
 <COMMONSETTINGS>
 <PROJECTFILENAME>Y:\proj\bundles\databundles\sql\configuration-pg.dez</PROJECTFILENAME>
-<MODIFIED>2013-07-15</MODIFIED>
+<MODIFIED>2013-07-19</MODIFIED>
 <CREATED>2012-06-10</CREATED>
 <CREATED2></CREATED2>
 <PROJECTNAME></PROJECTNAME>
 <DESCRIPTION></DESCRIPTION>
 <AUTHOR></AUTHOR>
 <COPYRIGHT></COPYRIGHT>
-<LASTGENERATEDFILES>Y:\proj\bundles\databundles\databundles\support\configuration-pg.sql;Y:\proj\bundles\databundles\databundles\support\drop-configuration-pg.sql;C:\users\crossover\My Documents\CreateDBLog_201307155.txt</LASTGENERATEDFILES>
+<LASTGENERATEDFILES>configuration-pg.sql;drop-configuration-pg.sql;C:\users\crossover\My Documents\CreateDBLog_201307193.txt</LASTGENERATEDFILES>
 <PRINTORIENTATION>PORTRAIT</PRINTORIENTATION>
 <PRINTPAGETYPE>A4</PRINTPAGETYPE>
 <DEFTABLEOPTIONS></DEFTABLEOPTIONS>
@@ -46,8 +46,8 @@
 <ImpDB_Options>
 </ImpDB_Options>
 <GenDB_DBParams>
-<SQLCREATEFILE>Y:\proj\bundles\databundles\databundles\support\configuration-pg.sql</SQLCREATEFILE>
-<SQLDROPFILE>Y:\proj\bundles\databundles\databundles\support\drop-configuration-pg.sql</SQLDROPFILE>
+<SQLCREATEFILE>configuration-pg.sql</SQLCREATEFILE>
+<SQLDROPFILE>drop-configuration-pg.sql</SQLDROPFILE>
 <DBID>postgresql9</DBID>
 </GenDB_DBParams>
 <GenDB_Options>
@@ -921,7 +921,7 @@
 <NOTE></NOTE>
 <DOMAINID>-1</DOMAINID>
 <DT>
-<DTLISTNAME>BOOLEAN</DTLISTNAME>
+<DTLISTNAME>TEXT</DTLISTNAME>
 <SD>0</SD>
 <INC>1</INC>
 </DT>

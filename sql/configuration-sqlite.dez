@@ -5,14 +5,14 @@
 <PROJECTSETTINGS>
 <COMMONSETTINGS>
 <PROJECTFILENAME>\\psf\Storage\proj\github.com\databundles\configuration.dez</PROJECTFILENAME>
-<MODIFIED>2013-07-07</MODIFIED>
+<MODIFIED>2013-07-19</MODIFIED>
 <CREATED>2012-06-10</CREATED>
 <CREATED2></CREATED2>
 <PROJECTNAME></PROJECTNAME>
 <DESCRIPTION></DESCRIPTION>
 <AUTHOR></AUTHOR>
 <COPYRIGHT></COPYRIGHT>
-<LASTGENERATEDFILES>Y:\proj\Bundles\src\databundles\databundles\support\configuration-sqlite.sql;Y:\proj\Bundles\src\databundles\databundles\support\drop-configuration-sqlite.sql;C:\users\crossover\My Documents\CreateDBLog_201307067.txt</LASTGENERATEDFILES>
+<LASTGENERATEDFILES>configuration-sqlite.sql;drop-configuration-sqlite.sql;C:\users\crossover\My Documents\CreateDBLog_201307192.txt</LASTGENERATEDFILES>
 <PRINTORIENTATION>PORTRAIT</PRINTORIENTATION>
 <PRINTPAGETYPE>A4</PRINTPAGETYPE>
 <DEFTABLEOPTIONS></DEFTABLEOPTIONS>
@@ -46,8 +46,8 @@
 <ImpDB_Options>
 </ImpDB_Options>
 <GenDB_DBParams>
-<SQLCREATEFILE>Y:\proj\Bundles\src\databundles\databundles\support\configuration-sqlite.sql</SQLCREATEFILE>
-<SQLDROPFILE>Y:\proj\Bundles\src\databundles\databundles\support\drop-configuration-sqlite.sql</SQLDROPFILE>
+<SQLCREATEFILE>configuration-sqlite.sql</SQLCREATEFILE>
+<SQLDROPFILE>drop-configuration-sqlite.sql</SQLDROPFILE>
 <DBID>sqlite3</DBID>
 </GenDB_DBParams>
 <GenDB_Options>
@@ -923,7 +923,7 @@
 <NOTE></NOTE>
 <DOMAINID>-1</DOMAINID>
 <DT>
-<DTLISTNAME>INTEGER</DTLISTNAME>
+<DTLISTNAME>TEXT</DTLISTNAME>
 <SD>0</SD>
 <INC>1</INC>
 </DT>
