@@ -63,8 +63,7 @@ class Partition(object):
     @property
     def database(self):
         if self._database is None:
-            
-            
+
             source,  name_parts, partition_path = self._path_parts() #@UnusedVariable
 
             self._database = self._db_class(self.bundle, self, base_path=self.path)
@@ -176,6 +175,7 @@ class Partition(object):
         import geo.util
         return geo.util.extents(self.database,self.table.name, where=where)
         
+        
     def inserter(self, table_or_name=None,**kwargs):
         
         if not self.database.exists():
@@ -204,6 +204,8 @@ class HdfPartition(Partition):
             self._database = HdfDb(self)
           
         return self._database
+
+
 
 
 class GeoPartition(Partition):

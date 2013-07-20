@@ -475,8 +475,7 @@ class Database(DatabaseInterface):
         if post_create:
             self.add_post_create.append(post_create)
         
-        
-       
+    
         # For database bundles, where we have to pass in the whole file path
         base_path, ext = os.path.splitext(base_path)
         
@@ -516,9 +515,7 @@ class Database(DatabaseInterface):
         
         from sqlalchemy import MetaData   
         metadata = MetaData(bind=self.engine)
-       
-       
-       
+
         return metadata
     
     @property
@@ -629,6 +626,11 @@ class Database(DatabaseInterface):
    
     def exists(self):
         return os.path.exists( self.path)
+    
+    def is_empty(self):
+        
+        return not self.exists()
+        
     
     def delete(self):
         
@@ -1106,6 +1108,10 @@ class HdfDb(Hdf5File, DatabaseInterface):
     @property 
     def path(self):
         return self.make_path(self.container)
+   
+    def is_empty(self):
+        # If the file is open, it will exist, so we need to check for stuff inside. 
+        return not self.keys()
    
     def add_post_create(self, f):
         pass

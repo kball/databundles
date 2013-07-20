@@ -44,7 +44,8 @@ class Rest(object):
     def connection_info(self):
         '''Return  reference to this remote, excluding the connection secret'''
         return {'service':'remote', 'url':self.url}
-        
+       
+ 
     def upload_file(self, identity, path, ci=None, force=False):
         '''Upload  file to the object_store_config's object store'''
         from databundles.util import md5_for_file
@@ -112,7 +113,7 @@ class Rest(object):
         
         '''
         from databundles.util import bundle_file_type
-        from io  import BufferedReader
+
         try: id_or_name = id_or_name.id_ # check if it is actualy an Identity object
         except: pass
 

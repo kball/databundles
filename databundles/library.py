@@ -5,17 +5,18 @@ of the bundles that have been installed into it.
 # Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 # Revised BSD License, included in this distribution as LICENSE.txt
 
-from databundles.run import  get_runconfig
-
 import os.path
+
+import databundles
+import databundles.util
+from databundles.run import  get_runconfig #@UnresolvedImport
 from databundles.util import temp_file_name
 from databundles.dbexceptions import ConfigurationError, NotFoundError
 from databundles.filesystem import  Filesystem
-from  databundles.identity import new_identity
+from databundles.identity import new_identity
 from databundles.bundle import DbBundle
 from databundles.util import lru_cache
         
-import databundles
 
 from collections import namedtuple
 from sqlalchemy.exc import IntegrityError, ProgrammingError, OperationalError
@@ -235,6 +236,7 @@ class LibraryDb(object):
         self._session = None
         self._engine = None
         self._connection  = None
+           
                 
         self.logger = databundles.util.get_logger(__name__)
         import logging
@@ -1398,7 +1400,7 @@ class Library(object):
         
         rp = self.cache.get(p.identity.cache_key)
     
-        if not os.path.exists(p.database.path):
+        if not os.path.exists(p.database.path) or p.database.is_empty():
             if self.remote:
                 self._get_remote_partition(r,partition)
             else:
