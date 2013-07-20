@@ -317,6 +317,7 @@ class Resource(object):
             headers = {"Content-Type": "application/json"}
             body = json.dumps(body)
 
+
         self.conn.request(method, url, body, headers)
 
     

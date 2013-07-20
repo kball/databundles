@@ -1332,8 +1332,7 @@ class Library(object):
             m =( "Path mismatch in downloading partition: {} != {}"
                  .format(os.path.realpath(p_database_path),
                                 os.path.realpath(p_abs_path)))
-            
-                              
+                   
             self.logger.error(m)
             raise Exception(m)
 
@@ -1359,7 +1358,6 @@ class Library(object):
 
         # Try to get the file from the cache. 
         abs_path = self.cache.get(dataset.cache_key)
-
 
         # Not in the cache, try to get it from the remote library, 
         # if a remote was set. 

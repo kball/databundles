@@ -116,11 +116,12 @@ class Rest(object):
         try: id_or_name = id_or_name.id_ # check if it is actualy an Identity object
         except: pass
 
-        
+        uncompress = False
         response  = self.remote.datasets(id_or_name).get()
   
         if response.status == 404:
             raise NotFound("Didn't find a file for {}".format(id_or_name))
+        
         if response.status == 303 or response == 302:
             import requests
 
@@ -132,7 +133,7 @@ class Rest(object):
                 from xml.dom import minidom
                 o = minidom.parse(r.raw)
 
-                # Assuming the response is in XML because we are usually cal
+                # Assuming the response is in XML because we are usually calling s3
                 raise RestError("{} Error from server after redirect to {} : XML={}"
                                 .format(r.status_code,location,  o.toprettyxml()))
                 
@@ -143,6 +144,8 @@ class Rest(object):
         elif response.status != 200:
             raise RestError("Error from server: {} {}".format(response.status, response.reason))
   
+        
+        
         if file_path:
             
             if file_path is True:
@@ -173,11 +176,24 @@ class Rest(object):
 
                 os.rename(file_path+'_', file_path)
 
-    
             return file_path
         else:
-            # Read the damn thing yourself ... 
-            return response
+
+            if uncompress:
+                class br(object):
+                    def __init__(self, r):
+                        self.r = r
+                        self.iter = self.r.iter_content(1) 
+                      
+                    def read(self,n):
+                        try:
+                            return  next(self.iter)
+                        except StopIteration:
+                            return None
+                    
+                return br(r)
+            else:
+                return r.raw
             
     def get_partition(self, d_id_or_name, p_id_or_name, file_path=None):
         '''Get a partition by name or id and either return a file object, or

@@ -235,7 +235,6 @@ def library_command(args, rc, src):
                     
                     w.writerow(row)
             
-            
     elif args.subcommand == 'listremote':
         
         if args.datasets:
@@ -257,7 +256,7 @@ def library_command(args, rc, src):
             datasets = l.remote.list()
 
             for id_, data in datasets.items():
-                print "{0:4s} {1:11s} {2}".format('remote',id_,data['identity']['name'])
+                print "{0:4s} {1:50s} {2}".format('remote',id_,data['identity']['name'])
         
     else:
         print "Unknown subcommand"
