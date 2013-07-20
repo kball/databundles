@@ -193,6 +193,7 @@ class Rest(object):
                     
                 return br(r)
             else:
+                raise Exception('HERE')
                 return r.raw
             
     def get_partition(self, d_id_or_name, p_id_or_name, file_path=None):
