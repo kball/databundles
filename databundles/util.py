@@ -664,5 +664,24 @@ def zipdir(basedir, archivename):
                 absfn = os.path.join(root, fn)
                 zfn = absfn[len(basedir)+len(os.sep):] #XXX: relative path
                 z.write(absfn, zfn)
-    
+  
+# from https://github.com/kennethreitz/requests/issues/465  
+class FileLikeFromIter(object):
+    def __init__(self, content_iter):
+        self._iter = content_iter
+        self.data = ''
 
+    def __iter__(self):
+        return self._iter
+
+    def read(self, n=None):
+        if n is None:
+            return self.data + ''.join(l for l in self._iter)
+        else:
+            while len(self.data) < n:
+                try:
+                    self.data = ''.join((self.data, self._iter.next()))
+                except StopIteration:
+                    break
+            result, self.data = self.data[:n], self.data[n:]
+            return result

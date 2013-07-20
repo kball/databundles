@@ -116,7 +116,7 @@ class Rest(object):
         try: id_or_name = id_or_name.id_ # check if it is actualy an Identity object
         except: pass
 
-        uncompress = False
+       
         response  = self.remote.datasets(id_or_name).get()
   
         if response.status == 404:
@@ -144,7 +144,6 @@ class Rest(object):
         elif response.status != 200:
             raise RestError("Error from server: {} {}".format(response.status, response.reason))
   
-        
         
         if file_path:
             
@@ -180,20 +179,10 @@ class Rest(object):
         else:
 
             if uncompress:
-                class br(object):
-                    def __init__(self, r):
-                        self.r = r
-                        self.iter = self.r.iter_content(1) 
-                      
-                    def read(self,n):
-                        try:
-                            return  next(self.iter)
-                        except StopIteration:
-                            return None
-                    
-                return br(r)
+                from ..util import FileLikeFromIter
+                return FileLikeFromIter(r.iter_content())
             else:
-                raise Exception('HERE')
+            
                 return r.raw
             
     def get_partition(self, d_id_or_name, p_id_or_name, file_path=None):
