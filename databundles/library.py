@@ -1341,9 +1341,12 @@ class Library(object):
             raise NotFoundError("Failed to find partition {} in bundle {}"
                                 .format(identity.name, bundle.identity.name))
 
-        r = self.remote.get_partition(bundle.identity.id_, p.identity.id_)
-        # Store it in the local cache. 
+        if os.path.exists(p.database.path):
+            os.remove(p.database.path)
 
+        r = self.remote.get_partition(bundle.identity.id_, p.identity.id_)
+        
+        # Store it in the local cache. 
         p_abs_path = self.cache.put(r,p.identity.cache_key)
 
 
@@ -1425,8 +1428,12 @@ class Library(object):
                                     Partition found, but path {} ({}?) not in local library and remote not set. """
                                .format(r.identity.name, p.identity.id_,p.identity.name,
                                        p.database.path, rp))
-        p.library = self   
-
+        p.library = self  
+        
+        # Deleteing the database is particularly necessary for Hdf partitions where the file will get loaded when the partition
+        # is first created, which creates and empty file, and the empty file is carried forward after the file on 
+        # disk is changed.  
+        p.delete_database()
         r.partition = p
 
         return r

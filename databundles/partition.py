@@ -77,6 +77,9 @@ class Partition(object):
           
         return self._database
 
+    def delete_database(self):
+        self._database = None
+
     def query(self,*args, **kwargs):
         """Convience function for self.database.query()"""
      
