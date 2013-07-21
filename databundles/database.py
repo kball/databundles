@@ -845,6 +845,7 @@ class Database(DatabaseInterface):
         
         '''
         from databundles.schema import Schema
+        
         table = Schema.get_table_from_database(source_db, table_name)
         
         s = self.session

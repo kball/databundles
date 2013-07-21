@@ -811,12 +811,13 @@ class FsCache(object):
         
         sink.close()
 
-        return sink.repo_path
+        return os.path.join(self.cache_dir, rel_path)
 
     def put_stream(self,rel_path, metadata=None):
         """return a file object to write into the cache. The caller
         is responsibile for closing the stream
         """
+        from io import IOBase
         
         if isinstance(rel_path, Identity):
             rel_path = rel_path.cache_key
@@ -826,28 +827,42 @@ class FsCache(object):
         if not os.path.isdir(os.path.dirname(repo_path)):
             os.makedirs(os.path.dirname(repo_path))
         
-        sink = open(repo_path,'w+')
+        if os.path.exists(repo_path):
+            os.remove(repo_path)
+        
+        sink = open(repo_path,'wb')
+        
         upstream = self.upstream
         
-        class flo:
+        class flo(IOBase):
             '''This File-Like-Object class ensures that the file is also
             sent to the upstream after it is stored in the FSCache. '''
-            def __init__(self):
-                pass 
+            def __init__(self, sink, upstream, repo_path, rel_path):
+                
+                self._sink = sink
+                self._upstream = upstream
+                self._repo_path = repo_path
+                self._rel_path = rel_path
             
             @property
             def repo_path(self):
-                return repo_path
+                return self._repo_path
             
             def write(self, str_):
-                sink.write(str_)
+                
+                self._sink.write(str_)
             
             def close(self):
-                sink.close()
-                if upstream and not upstream.readonly and not upstream.usreadonly:
-                    upstream.put(repo_path, rel_path) 
-                
-        return flo()
+                if not self._sink.closed:
+                    #print "Closing put_stream.flo {} is_closed={}!".format(self._repo_path, self._sink.closed)
+
+                    self._sink.close()
+                    
+                    if self._upstream and not self._upstream.readonly and not self._upstream.usreadonly:
+                        self._upstream.put(self._repo_path, self._rel_path) 
+
+      
+        return sink #flo(sink, upstream, repo_path, rel_path)
     
     def find(self,query):
         '''Passes the query to the upstream, if it exists'''
@@ -1821,11 +1836,19 @@ def copy_file_or_flo(input_, output):
     output_opened = False
     try:
         if isinstance(input_, basestring):
+            
+            if not os.path.isdir(os.path.dirname(input_)):
+                os.makedirs(os.path.dirname(input_))
+            
             input_ = open(input_,'r')
             input_opened = True
     
         if isinstance(output, basestring):
-            output = open(output,'w+')   
+            
+            if not os.path.isdir(os.path.dirname(output)):
+                os.makedirs(os.path.dirname(output))
+            
+            output = open(output,'wb')   
             output_opened = True 
             
         shutil.copyfileobj(input_,  output)

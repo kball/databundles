@@ -98,6 +98,65 @@ class Rest(object):
         
         return response.object
   
+    def _process_get_response(self, id_or_name, response, file_path=None, uncompress=False):
+        
+
+        if response.status == 404:
+            raise NotFound("Didn't find a file for {}".format(id_or_name))
+        
+        if response.status == 303 or response == 302:
+            import requests
+
+            location = response.get_header('location')
+
+            r = requests.get(location, verify=False, stream=True)
+
+            if r.status_code != 200:
+                from xml.dom import minidom
+                o = minidom.parse(r.raw)
+
+                # Assuming the response is in XML because we are usually calling s3
+                raise RestError("{} Error from server after redirect to {} : XML={}"
+                                .format(r.status_code,location,  o.toprettyxml()))
+                
+            if r.headers['content-encoding'] == 'gzip':
+                from ..util import FileLikeFromIter   
+               
+                response = FileLikeFromIter(r.iter_content()) # In  the requests library, iter_content will auto-decompress
+            else:
+                response = r.raw
+
+            
+        elif response.status != 200:
+            raise RestError("Error from server: {} {}".format(response.status, response.reason))
+        
+        if file_path:
+            
+            if file_path is True:
+                import uuid,tempfile,os
+        
+                file_path = os.path.join(tempfile.gettempdir(),'rest-downloads',str(uuid.uuid4()))
+                if not os.path.exists(os.path.dirname(file_path)):
+                    os.makedirs(os.path.dirname(file_path))  
+               
+            if uncompress:
+                # Implement uncompression with zli, 
+                # see http://pymotw.com/2/zlib/
+                
+                raise NotImplementedError()
+               
+            chunksize = 8192  
+            with open(file_path,'w') as file_:
+                
+                chunk =  response.read(chunksize) #@UndefinedVariable
+                while chunk:
+                    file_.write(chunk)
+                    chunk =  response.read(chunksize) #@UndefinedVariable
+
+            return file_path
+        else:
+            return response
+           
     def get(self, id_or_name, file_path=None, uncompress=False):
         '''Get a bundle by name or id and either return a file object, or
         store it in the given file object
@@ -117,76 +176,11 @@ class Rest(object):
         try: id_or_name = id_or_name.id_ # check if it is actualy an Identity object
         except: pass
 
-       
         response  = self.remote.datasets(id_or_name).get()
-  
-        if response.status == 404:
-            raise NotFound("Didn't find a file for {}".format(id_or_name))
-        
-        if response.status == 303 or response == 302:
-            import requests
 
-            location = response.get_header('location')
-            
-            r = requests.get(location, verify=False, stream=True)
-
-            if r.status_code != 200:
-                from xml.dom import minidom
-                o = minidom.parse(r.raw)
-
-                # Assuming the response is in XML because we are usually calling s3
-                raise RestError("{} Error from server after redirect to {} : XML={}"
-                                .format(r.status_code,location,  o.toprettyxml()))
+        return self._process_get_response(id_or_name, response, file_path, uncompress)
                 
-            uncompress =  r.headers['content-encoding'] == 'gzip'
-              
-            response = r.raw
-            
-        elif response.status != 200:
-            raise RestError("Error from server: {} {}".format(response.status, response.reason))
-  
-        
-        if file_path:
-            
-            if file_path is True:
-                import uuid,tempfile,os
-        
-                file_path = os.path.join(tempfile.gettempdir(),'rest-downloads',str(uuid.uuid4()))
-                if not os.path.exists(os.path.dirname(file_path)):
-                    os.makedirs(os.path.dirname(file_path))  
-               
-            chunksize = 8192  
-            with open(file_path,'w') as file_:
-                
-                chunk =  response.read(chunksize) #@UndefinedVariable
-                while chunk:
-                    file_.write(chunk)
-                    chunk =  response.read(chunksize) #@UndefinedVariable
-    
-            if uncompress:
-                # Would like to use gzip as a filter, but the response only has read(), 
-                # and gzip requires tell() and seek()
-                import gzip
-                import os
-                with gzip.open(file_path) as zf, open(file_path+'_', 'wb') as of:
-                    chunk = zf.read(chunksize)
-                    while chunk:
-                        of.write(chunk)
-                        chunk = zf.read(chunksize)
-
-                os.rename(file_path+'_', file_path)
-
-            return file_path
-        else:
-
-            if uncompress:
-                from ..util import FileLikeFromIter
-                return FileLikeFromIter(r.iter_content())
-            else:
-            
-                return r.raw
-            
-    def get_partition(self, d_id_or_name, p_id_or_name, file_path=None):
+    def get_partition(self, d_id_or_name, p_id_or_name, file_path=None, uncompress=False):
         '''Get a partition by name or id and either return a file object, or
         store it in the given file object
         
@@ -201,32 +195,9 @@ class Rest(object):
         
         '''
         response  = self.remote.datasets(d_id_or_name).partitions(p_id_or_name).get()
-  
-        if response.status == 404:
-            raise NotFound("Didn't find a file for {} / {}".format(d_id_or_name, p_id_or_name))
-        elif response.status != 200:
-            raise RestError("Error from server: {} {}".format(response.status, response.reason))
-  
-        if file_path:
-            
-            if file_path is True:
-                    import uuid,tempfile,os
-            
-                    file_path = os.path.join(tempfile.gettempdir(),'rest-downloads',str(uuid.uuid4()))
-                    if not os.path.exists(os.path.dirname(file_path)):
-                        os.makedirs(os.path.dirname(file_path))  
-               
-            with open(file_path,'w') as file_:
-                chunksize = 8192
-                chunk =  response.read(chunksize) #@UndefinedVariable
-                while chunk:
-                    file_.write(chunk)
-                    chunk =  response.read(chunksize) #@UndefinedVariable
-    
-            return file_path
-        else:
-            # Read the damn thing yourself ... 
-            return response
+        
+        return self._process_get_response(p_id_or_name, response, file_path, uncompress)
+
                     
     def _put(self, source, identity):
         '''Put the source to the remote, creating a compressed version if

@@ -443,6 +443,23 @@ class LibraryDb(object):
             self.session.add(o)
             self.session.commit()  
              
+    def _clean_config_root(self):
+        '''Hack need to clean up some installed databases'''
+        from databundles.orm import Dataset
+
+        ds = self.session.query(Dataset).filter(Dataset.vid==ROOT_CONFIG_NAME).one()
+
+        ds.id_=ROOT_CONFIG_NAME
+        ds.name=ROOT_CONFIG_NAME
+        ds.vname=ROOT_CONFIG_NAME
+        ds.source=ROOT_CONFIG_NAME
+        ds.dataset = ROOT_CONFIG_NAME
+        ds.creator=ROOT_CONFIG_NAME
+        ds.revision=1
+                   
+        self.session.merge(ds)
+        self.session.commit()          
+             
     
     def _drop(self, s):
         
@@ -1313,7 +1330,7 @@ class Library(object):
       
     def _get_remote_partition(self, bundle, partition):
         
-        from databundles.identity import  PartitionIdentity, new_identity 
+        from databundles.identity import PartitionIdentity, new_identity 
 
         identity = new_identity(partition.to_dict(), bundle=bundle) 
 
@@ -1323,16 +1340,16 @@ class Library(object):
             from databundles.dbexceptions import NotFoundError
             raise NotFoundError("Failed to find partition {} in bundle {}"
                                 .format(identity.name, bundle.identity.name))
-        
-        p_database_path = p.database.path
-      
+
         r = self.remote.get_partition(bundle.identity.id_, p.identity.id_)
         # Store it in the local cache. 
+
         p_abs_path = self.cache.put(r,p.identity.cache_key)
 
-        if os.path.realpath(p_database_path) != os.path.realpath(p_abs_path):
+
+        if os.path.realpath(p.database.path) != os.path.realpath(p_abs_path):
             m =( "Path mismatch in downloading partition: {} != {}"
-                 .format(os.path.realpath(p_database_path),
+                 .format(os.path.realpath(p.database.path),
                                 os.path.realpath(p_abs_path)))
                    
             self.logger.error(m)
@@ -1634,6 +1651,9 @@ class Library(object):
         backup_file = self.cache.get('_/library.db')
 
         self.database.restore(backup_file)
+
+        # HACK, fix the dataset root
+        self.database._clean_config_root()
 
         os.remove(backup_file)   
 

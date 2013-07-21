@@ -10,7 +10,6 @@ from bottle import run, debug #@UnresolvedImport
 
 from decorator import  decorator #@UnresolvedImport
 import databundles.library 
-import databundles.run
 import databundles.util
 from databundles.bundle import DbBundle
 import logging
@@ -457,14 +456,21 @@ def get_dataset_partitions( did, pid, library):
         logger.info("Didn't find partition")
         raise NotFound("Didn't find partition associated with id {}".format(pid))
     
-    try:
-        # Realize the partition file in the top level cache. 
-        r = library.get(partition.identity.id_)
-    except NotFoundError as e:
-        raise NotFound("Found partition record, but not partition in library for {}. Original Exception: {}"
-                       .format(partition.identity.name, e.message))
+    if library.remote:
+        url = library.remote.public_url_f()(partition.identity.cache_key)
+        logger.debug("Redirect partition, {}".format(url))
+        redirect(url)
+    else:
         
-    return static_file(r.partition.database.path, root='/', mimetype="application/octet-stream")    
+        try:
+            # Realize the partition file in the top level cache. 
+            r = library.get(partition.identity.id_)
+        except NotFoundError as e:
+            raise NotFound("Found partition record, but not partition in library for {}. Original Exception: {}"
+                           .format(partition.identity.name, e.message))
+        
+        logger.debug("Send file directly, {}".format(url))
+        return static_file(r.partition.database.path, root='/', mimetype="application/octet-stream")    
 
 @get('/info/objectstore')
 @CaptureException
