@@ -18,6 +18,7 @@ ogr_type_map = {
         Column.DATATYPE_DATE:ogr.OFTDate, 
         Column.DATATYPE_TIME: ogr.OFTTime, 
         Column.DATATYPE_TIMESTAMP: ogr.OFTDateTime, 
+        Column.DATATYPE_DATETIME: ogr.OFTDateTime, 
         }
 
 class TableShapefile(object):
@@ -215,8 +216,13 @@ class TableShapefile(object):
                     v = row.get(c.name, False)
                   
                     if v is not False and  not isinstance(v, (int, float)):
-                        v = str(v)
-
+                        try:
+                            v = str(v.decode('latin1').encode('utf_8') if v else None)
+                        except Exception :
+                            print '!!!', type(v), v.decode('latin1')
+                            print row
+                            raise
+                    
                     if v is not False:
                         feature.SetField(str(c.name), v)
                     elif c.default:

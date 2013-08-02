@@ -32,14 +32,14 @@ def new_identity(d, bundle=None):
         try : return Identity(**d)
         except Exception as e:
             raise Exception("Failed for {}: {}".format(d, e))
-        
-    
-
 
 class Identity(object):
 
     is_bundle = True
     is_partition = False
+
+    NONE = '<none>'
+    ANY = '<any>'
 
     def __init__(self, *args, **kwargs):
         self.from_dict(kwargs)
@@ -74,6 +74,23 @@ class Identity(object):
              }
 
         return { k:v for k,v in d.items() if v}
+ 
+    def clone(self):
+        return self.__class__(**self.to_dict())
+ 
+    def as_revision(self, revision):
+        '''Clone and change the revision'''
+ 
+        if revision < 0:
+            revision = self.revision-1
+            
+        c = self.clone()
+        
+        c.revision = revision
+        
+        return c
+        
+        
  
     @property
     def vid(self):

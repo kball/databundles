@@ -67,7 +67,7 @@ class Bundle(object):
     @property
     def identity(self):
         '''Return an identity object. '''
-  
+
         if not self._identity:
             
             self._identity =  Identity(**self.config.identity)
@@ -92,7 +92,7 @@ class Bundle(object):
         import library
         
         if self._library:
-            l = self._libarary
+            l = self._library
         else:
             l =  library.get_library()
             
@@ -213,6 +213,7 @@ class BuildBundle(Bundle):
             sys.path.append(lib_dir)
 
         self._build_time = None
+        self._update_time = None
 
 
     @property
@@ -407,7 +408,6 @@ class BuildBundle(Bundle):
     def prepare(self):
 
         if not self.database.exists():
-
             self.database.create()
 
         sf  = self.filesystem.path(self.config.build.get('schema_file', 'meta/schema.csv'))
@@ -451,7 +451,7 @@ class BuildBundle(Bundle):
         return True
         
     def build(self):
-        return True
+        return False
     
     def post_build(self):
         from datetime import datetime
@@ -461,6 +461,31 @@ class BuildBundle(Bundle):
         self.update_configuration()
         return True
     
+        
+    ### Update is like build, but calls into an earlier version of the package. 
+
+    def pre_update(self):
+        from time import time
+        if not self.database.exists():
+            raise ProcessError("Database does not exist yet. Was the 'prepare' step run?")
+        
+        if not self.db_config.get_value('process','prepared'):
+            raise ProcessError("Update called before prepare completed")
+        
+        self._update_time = time()
+        
+        return True
+        
+    def update(self):
+        return False
+    
+    def post_update(self):
+        from datetime import datetime
+        from time import time
+        self.db_config.set_value('process', 'updated', datetime.now().isoformat())
+        self.db_config.set_value('process', 'updatetime',time()-self._update_time)
+        self.update_configuration()
+        return True
         
     ### Submit the package to the library
  
@@ -642,7 +667,15 @@ class BuildBundle(Bundle):
                             default = None,
                             const = multiprocessing.cpu_count(),
                             help='Run the build process on multiple processors, if the build method supports it')
-        
+
+        #
+        # Build Command
+        #
+        command_p = cmd.add_parser('update', help='Build the data bundle and partitions from an earlier version')
+        command_p.set_defaults(command='update')   
+        command_p.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')
+
+
         #
         # Extract Command
         #
@@ -719,6 +752,7 @@ class BuildBundle(Bundle):
                   'meta': ['clean'],
                   'prepare': ['clean'],
                   'build' : ['clean', 'prepare'],
+                  'update' : ['clean', 'prepare'],
                   'install' : ['clean', 'prepare', 'build'],
                   'submit' : ['clean', 'prepare', 'build'],
                   'extract' : ['clean', 'prepare', 'build']
@@ -786,8 +820,7 @@ class BuildBundle(Bundle):
                     return False
             else:
                 b.log("---- Skipping Meta ---- ")
-        else:
-            b.log("---- Skipping Meta ---- ") 
+
                    
             
         if 'prepare' in phases:
@@ -801,8 +834,7 @@ class BuildBundle(Bundle):
                     return False
             else:
                 b.log("---- Skipping prepare ---- ")
-        else:
-            b.log("---- Skipping prepare ---- ") 
+
             
         if 'build' in phases:
             
@@ -823,9 +855,20 @@ class BuildBundle(Bundle):
                     return False
             else:
                 b.log("---- Skipping Build ---- ")
-        else:
-            b.log("---- Skipping Build ---- ") 
-        
+
+        if 'update' in phases:
+                
+            if b.pre_update():
+                b.log("---- Update ---")
+                if b.update():
+                    b.post_update()
+                    b.log("---- Done Updating ---")
+                else:
+                    b.log("---- Update exited with failure ---")
+                    return False
+            else:
+                b.log("---- Skipping Update ---- ")
+
         if 'install' in phases:
             if b.pre_install():
                 b.log("---- Install ---")
@@ -836,9 +879,7 @@ class BuildBundle(Bundle):
                     b.log("---- Install exited with failure ---")
             else:
                 b.log("---- Skipping Install ---- ")
-        else:
-            b.log("---- Skipping Install ---- ")      
-         
+
         if 'extract' in phases:
             if b.pre_extract():
                 b.log("---- Extract ---")
@@ -849,9 +890,7 @@ class BuildBundle(Bundle):
                     b.log("---- Extract exited with failure ---")
             else:
                 b.log("---- Skipping Extract ---- ")
-        else:
-            b.log("---- Skipping Extract ---- ")        
-         
+
         # Submit puts information about the the bundles into a catalog
         # and may store extracts of the data in the catalog. 
         if 'submit' in phases:
@@ -864,10 +903,7 @@ class BuildBundle(Bundle):
                     b.log("---- Submit exited with failure ---")
             else:
                 b.log("---- Skipping Submit ---- ")
-        else:
-            b.log("---- Skipping Submit ---- ")            
-          
-    
+       
         if 'test' in phases:
             ''' Run the unit tests'''
             import nose, unittest, sys

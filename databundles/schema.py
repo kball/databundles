@@ -582,7 +582,7 @@ class {name}(Base):
             if col.sql:
                 sql = col.sql
             else:
-                continue
+                sql = col.name
 
             lines.append("CAST({sql} AS {type}) AS {col}".format(sql=sql, col=col.name,type=col.schema_type))
             

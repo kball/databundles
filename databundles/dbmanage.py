@@ -12,6 +12,10 @@ import shutil
 from databundles.run import  get_runconfig
 from databundles import __version__
 
+def prt(template, *args, **kwargs):
+    print template.format(*args, **kwargs)
+
+
 def bundle_command(args, rc, src):
   
     from databundles.identity import Identity
@@ -157,6 +161,65 @@ def library_command(args, rc, src):
 
     elif args.subcommand == 'find':
      
+        from databundles.library import QueryCommand
+
+        terms = []
+        for t in args.term:
+            if ' ' in t or '%' in t:
+                terms.append("'{}'".format(t))
+            else:
+                terms.append(t)
+
+
+        qc = QueryCommand.parse(' '.join(terms))
+        
+        identities = l.find(qc)
+       
+        first = identities[0]
+        
+        t = ['{id:<8s}','{vname:20s}']
+        header = {'id': 'ID', 'vname' : 'Versioned Name'}
+        
+        multi = False
+        if 'column' in first:
+            multi = True
+            t.append('{column:12s}')
+            header['column'] = 'Column'
+
+        ts = ' '.join(t)
+        
+        dashes = { k:'-'*len(v) for k,v in header.items() }
+       
+        prt(ts, **header)
+        prt(ts, **dashes)
+       
+        last_rec = None
+        first_rec_line = True
+        for r in identities:
+            if not last_rec or last_rec['id'] != r['identity'].id_:
+                rec = {'id': r['identity'].id_, 'vname':r['identity'].vname}
+                last_rec = rec
+                first_rec_line = True
+            else:
+                rec = {'id':'', 'vname':''}
+       
+            if 'column' in r:
+                rec['column'] = ''
+                
+               
+            if multi and first_rec_line:
+                prt(ts, **rec)
+                rec = {'id':'', 'vname':''}
+                first_rec_line = False
+               
+            if 'column' in r:
+                rec['id'] = r['column'].id_
+                rec['column'] = r['column'].name
+
+            prt(ts, **rec)
+
+
+        return 
         dataset, partition = l.get_ref(args.term)
 
         if not dataset:
@@ -365,7 +428,6 @@ def source_command(args,rc, src):
                     except:
                         pass
 
-        import pprint
         
         for group  in  toposort(topo):
             print group
@@ -509,7 +571,7 @@ def main():
 
     sp = asp.add_parser('find', help='Search for the argument as a bundle or partition name or id')
     sp.set_defaults(subcommand='find')   
-    sp.add_argument('term', type=str,help='Query term')
+    sp.add_argument('term', type=str, nargs=argparse.REMAINDER,help='Query term')
 
     sp = asp.add_parser('listremote', help='List the datasets stored on the remote')
     sp.set_defaults(subcommand='listremote')   

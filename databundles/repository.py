@@ -148,7 +148,7 @@ class Repository(object):
         import csv
 
         p = extract_data['_partition'] # Set in _make_partition_dict
-     
+
         file_name = extract_data.get('name', None)
         
         if file_name:
@@ -169,6 +169,7 @@ class Repository(object):
             query = extract_data['query']
        
         self.bundle.log("Extracting {} to {}".format(extract_data['name'],file_))
+        #self.bundle.log(query)
 
         conn = sqlite3.connect(p.database.path)
 
@@ -193,7 +194,7 @@ class Repository(object):
 
             writer.writerow(first.keys())
             writer.writerow(tuple(first))
-            
+    
             for row in rows:
                 lr()
                 writer.writerow(tuple(row))
@@ -231,7 +232,8 @@ class Repository(object):
                     description=extract_data['description'],
                     content_type = content_type, 
                     format=format,
-                    hash=md5
+                    hash=md5,
+                    rel_path=path
                     )
         else:
             r = self.remote.add_file_resource(package, file_, 
@@ -313,9 +315,11 @@ class Repository(object):
             partitions = [self.bundle] + partitions
         else:
             partition = self.partitions.get(partition_name)
+            
             if partition:
                 partitions = [partition]
             else:
+                raise Exception("Bad idea: this could generate extracts from old data. Failed for {}".format(partition_name))
                 l = self.bundle.library
                
                 r = l.get(partition_name)

@@ -395,8 +395,6 @@ class Ckan(object):
         import os
         import mimetypes
 
-
-
         r = requests.head(url)
         size = r.headers.get('content-length',None)
         content_type = r.headers.get('content-type',None)
@@ -411,7 +409,8 @@ class Ckan(object):
                 mimetype=content_type,
                 size=size, 
                 hash=kwargs.get('hash', None),
-                url=url)
+                url=url
+                )
         
         for k,v in kwargs.items():
             if v is not None:

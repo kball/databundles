@@ -2,6 +2,7 @@
 
 '''
 
+from ..util import  lru_cache
 
 class Geocoder(object):
 
@@ -34,6 +35,7 @@ class Geocoder(object):
     def get_srs(self):
         return self.addresses.get_srs() 
         
+    @lru_cache(maxsize=2000)
     def geocode(self, street):
         """Calls either geocode_street() geocode_intersection()"""
         

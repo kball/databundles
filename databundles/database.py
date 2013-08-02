@@ -11,11 +11,11 @@ from databundles.geo.sfschema import TableShapefile
 from .hdf5 import Hdf5File
 
 class FeatureInserter(object):
-    def __init__(self, partition, table, dest_srs=4326, source_srs=None):
+    def __init__(self, partition, table, dest_srs=4326, source_srs=None, layer_name = None):
 
         self.bundle = partition.bundle
         
-        self.sf = TableShapefile(self.bundle, partition.database.path, table, dest_srs, source_srs)
+        self.sf = TableShapefile(self.bundle, partition.database.path, table, dest_srs, source_srs, name=layer_name)
         
     
     def __enter__(self):
@@ -77,7 +77,7 @@ class ValueWriter(object):
                     self.transaction = None
                 raise
             except Exception as e:
-                self.bundle.error("Exception during ValueInserter.insert: "+str(e))
+                self.bundle.error("Exception during ValueWriter.insert: "+str(e))
                 if self.transaction:
                     self.transaction.rollback()
                     self.transaction = None
@@ -91,7 +91,8 @@ class ValueWriter(object):
         self.close()
                
         if type_ is not None:
-            self.bundle.error("Got Exception: "+str(value))
+            try: self.bundle.error("Got Exception: "+str(value))
+            except:  print "ERROR: Got Exception {}: {}".format(type_, str(value))
             return False
                 
         return self
@@ -198,7 +199,7 @@ class ValueUpdater(ValueWriter):
             self.cache = []
             raise
         except Exception as e:
-            self.bundle.error("Exception during ValueInserter.insert: "+str(e))
+            self.bundle.error("Exception during ValueUpdater.insert: "+str(e))
             self.transaction.rollback()
             self.transaction = None
             self.cache = []
@@ -522,9 +523,13 @@ class Database(DatabaseInterface):
     def engine(self):
         '''return the SqlAlchemy engine for this database'''
         from sqlalchemy import create_engine  
+        import sqlite3
         
         if not self._engine:
-            self._engine = create_engine('sqlite:///'+self.path, echo=False) 
+            self._engine = create_engine('sqlite:///'+self.path,
+                                         connect_args={'detect_types': sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES},
+                                         native_datetime=True,
+                                         echo=False) 
             #self._engine = create_engine('sqlite://') 
             from sqlalchemy import event
             event.listen(self._engine, 'connect', _pragma_on_connect)
@@ -1079,12 +1084,12 @@ class GeoDb(PartitionDb):
 
         self.add_post_create(load_spatialite)
    
-    def inserter(self,  table = None, dest_srs=4326, source_srs=None):
+    def inserter(self,  table = None, dest_srs=4326, source_srs=None, layer_name=None):
         
         if table is None and self.partition.identity.table:
             table = self.partition.identity.table
         
-        return FeatureInserter(self.partition,  table, dest_srs, source_srs)
+        return FeatureInserter(self.partition,  table, dest_srs, source_srs, layer_name = layer_name)
    
 class HdfDb(Hdf5File, DatabaseInterface):
     

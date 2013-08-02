@@ -681,7 +681,8 @@ class LibraryDb(object):
 
         if isinstance(bp_id, PartitionNumber):
             queries.append((2, s.query(Dataset, Partition).join(Partition).filter(Partition.vid == str(bp_id))))
-            queries.append((2, s.query(Dataset, Partition).join(Partition).filter(Partition.id_ == str(bp_id))))
+            queries.append((2, s.query(Dataset, Partition).join(Partition).filter(Partition.id_ == str(bp_id)) ))
+            
             
         else:
             queries.append((1, s.query(Dataset).filter(Dataset.vid == str(bp_id))))
@@ -692,20 +693,17 @@ class LibraryDb(object):
             
             try:
                 if c == 1:
-                    dataset = q.first()
                     
+                    dataset = q.first()
                     if dataset:
                         break
                     
                 else:
                     r = q.first()
-                    
                     if r:
                         dataset, partition = r
                         break
-                
-                
-                
+
             except sqlalchemy.orm.exc.NoResultFound as e: #@UnusedVariable
                 pass
 
@@ -723,11 +721,20 @@ class LibraryDb(object):
 
             
         '''
-      
+
         from databundles.orm import Dataset
         from databundles.orm import Partition
         from databundles.identity import Identity
-        from databundles.orm import Table
+        from databundles.orm import Table, Column
+        
+        def like_or_eq(c,v):
+            
+            if '%' in v:
+                return c.like(v)
+            else:
+                return c == v
+            
+        
         s = self.session
         has_partition = False
         
@@ -739,20 +746,30 @@ class LibraryDb(object):
                 d.path = os.path.join(self.cache,id_.cache_key)
                 out.append(d)
 
-        if len(query_command.partition) == 0:
-            query = s.query(Dataset, Dataset.id_) # Dataset.id_ is included to ensure result is always a tuple
-        else:
-            query = s.query(Dataset, Partition, Dataset.id_)
+        tables = [Dataset]
         
+        if len(query_command.partition) > 0:
+            tables.append(Partition)
+            
+        if len(query_command.table) > 0:
+            tables.append(Table)      
+                  
+        if len(query_command.column) > 0:
+            tables.append(Column)               
+
+        tables.append(Dataset.id_) # Dataset.id_ is included to ensure result is always a tuple)
+
+        query = s.query(*tables) # Dataset.id_ is included to ensure result is always a tuple
+    
         if len(query_command.identity) > 0:
             for k,v in query_command.identity.items():
+               
                 try:
-                    query = query.filter( getattr(Dataset, k) == v )
+                    query = query.filter( like_or_eq(getattr(Dataset, k),v) )
                 except AttributeError:
                     # Dataset doesn't have the attribute, so ignore it. 
                     pass
-                
-        
+
         if len(query_command.partition) > 0:     
             query = query.join(Partition)
             has_partition = True
@@ -766,29 +783,50 @@ class LibraryDb(object):
                     # or a table name
                     query = query.join(Table)
                     query = query.filter( or_(Partition.t_id  == v,
-                                              Table.name == v))
+                                              like_or_eq(Table.name,v)))
                 elif k == 'space':
-                    query = query.filter( or_(Partition.space  == v))
+                    query = query.filter( or_( like_or_eq(Partition.space,v)))
                     
                 else:
-                    query = query.filter(  getattr(Partition, k) == v )
+                    query = query.filter(  like_or_eq(getattr(Partition, k),v) )
         
         if len(query_command.table) > 0:
             query = query.join(Table)
             for k,v in query_command.table.items():
-                query = query.filter(  getattr(Table, k) == v )
+                query = query.filter(  like_or_eq(getattr(Table, k),v) )
+
+        if len(query_command.column) > 0:
+            query = query.join(Table)
+            query = query.join(Column)
+            for k,v in query_command.column.items():
+                query = query.filter(  like_or_eq(getattr(Column, k),v) )
+
+        
+
+        query = query.distinct().order_by(Dataset.revision.desc())
 
         out = []
-
-        query = query.order_by(Dataset.revision.desc())
-
         for r in query.all():
-            if has_partition:
-                out.append(r.Partition.identity)
-            else:
-                out.append(r.Dataset.identity)
+            o = {}
 
+            o['dataset'] = r.Dataset
             
+            try: 
+                o['identity'] = r.Partition.identity
+                o['partition'] = r.Partition
+               
+            except: 
+                o['identity'] =  r.Dataset.identity
+
+
+            try: o['table'] = r.Table
+            except: pass
+            
+            try: o['column'] = r.Column 
+            except: pass
+            
+            out.append(o)
+
         return out
         
     def queryByIdentity(self, identity):
@@ -993,6 +1031,8 @@ class QueryCommand(object):
     
     Identity
         id
+        name
+        vname
         source
         dataset
         subset
@@ -1016,6 +1056,9 @@ class QueryCommand(object):
         keywords
     
     Partition
+        id
+        name
+        vname
         time
         space
         table
@@ -1060,6 +1103,80 @@ class QueryCommand(object):
         query = self
 
         return _qc_attrdict(inner, query)
+
+    class ParseError(Exception):
+        pass
+        
+    @classmethod
+    def parse(cls, s):
+
+        from io import StringIO
+        import tokenize, token
+        
+        state = 'name_start'
+        n1 = None
+        n2 = None
+        value = None
+
+        qc = QueryCommand()
+
+        for tt in tokenize.generate_tokens(StringIO(unicode(s)).readline):
+            t_type =  tt[0]
+            t_string = tt[1]
+            pos = tt[2][0]
+            
+            line = tt[4]
+
+            def err(expected):
+                raise cls.ParseError("Expected {} in {} at char {}, got {}, '{}' ".format(expected, line, pos, token.tok_name[t_type], t_string))
+
+            if state == 'name_start':
+                # First part of name
+                if t_type == token.NAME:
+                    n1 = t_string
+                    state = 'name_sep'
+                elif t_type == token.OP and t_string == ',':
+                    state = 'name_start'
+                elif t_type == token.ENDMARKER:
+                    state = 'done'
+                else:
+                    err( "NAME or ',' ")
+            elif state == 'name_sep':
+                # '.' that serpates names
+                if t_type == token.OP and t_string == '.':
+                    state = 'name_2'
+                else:
+                    raise err("'.'")
+            elif state == 'name_2':
+                # Second part of name
+                if t_type == token.NAME:
+                    state = 'value_sep'
+                    n2 = t_string
+                else:
+                    raise err("NAME")  
+            elif state == 'value_sep':
+                # The '=' that seperates name from values
+                if t_type == token.OP and t_string == '=':
+                    state = 'value'
+                else:
+                    raise err("'='")                            
+            elif state == 'value':
+                # The Value
+                if t_type == token.NAME or t_type == token.STRING:
+                    value = t_string
+                    state = 'name_start'
+                   
+                    qc.getsubdict(n1).__setattr__(n2,value.strip("'").strip('"'))
+                   
+                else:
+                    raise err("NAME or STRING")
+            elif state == 'done':
+                raise cls.ParseError("Got token after end")         
+            else:
+                raise cls.ParseError("Unknown state: {} at char {}".format(state))                                      
+                    
+        return qc
+        
 
     @property
     def identity(self):
@@ -1190,20 +1307,6 @@ class Library(object):
         '''Return databundles.database.Database object'''
         return self._database
   
-    def _get_bundle_path_from_id(self, bp_id):
-        
-        try:
-            # Assume it is an Identity, or Identity-like
-            dataset, partition = self.database.get(bp_id.vid)
-            
-            return  dataset, partition
-        except AttributeError:
-            pass
-        
-        # A string, either a name or an id
-        dataset, partition = self.database.get(bp_id)
-
-        return dataset, partition
             
     def get_ref(self,bp_id):
         from databundles.identity import ObjectNumber, DatasetNumber, PartitionNumber, Identity, PartitionIdentity
@@ -1237,33 +1340,40 @@ class Library(object):
                     
         # If dataset is not None, it means the file already is in the cache.
         dataset = None
+
         
         queries = []
         
+        queries.append(QueryCommand().partition(name = term))
+        queries.append(QueryCommand().partition(vname = term))
+        
         queries.append(QueryCommand().identity(name = term) )
         queries.append(QueryCommand().identity(vname = term) )
+        
+        queries.append(QueryCommand().partition(id_ = term))
+        queries.append(QueryCommand().partition(vid = term))
+        
         queries.append(QueryCommand().identity(id_ = term) )
         queries.append(QueryCommand().identity(vid = term) )
                               
-        queries.append(QueryCommand().partition(name = term))
-        queries.append(QueryCommand().partition(vname = term))
-        queries.append(QueryCommand().partition(id_ = term))
-        queries.append(QueryCommand().partition(vid = term))
 
         for q in queries:
+          
             r = self.find(q)
-            
+         
             if len(r) > 1:
                 # Names aren't unique ( vnames are )  and they are ordered so the highest 
                 # version is first, so return that one
-                r = r.pop()
+                r = r.pop(0)
             elif len(r) == 0:
                 r = None
             else:
-                r = r.pop()            
+                r = r.pop(0)            
             
             if r:
-                dataset, partition  = self._get_bundle_path_from_id(r.vid)   
+                
+                dataset, partition  = self.database.get(r.vid)
+
                 break
                     
         # No luck so far, so now try to get it from the remote library
@@ -1289,6 +1399,7 @@ class Library(object):
         elif dataset:
             from identity import new_identity
             dataset = Identity(**dataset.to_dict())
+            
             partition = new_identity(partition.to_dict()) if partition else None
             
         if not dataset:
@@ -1371,6 +1482,7 @@ class Library(object):
 
         dataset, partition = self.get_ref(bp_id)
 
+
         if partition:
             return self._get_partition(dataset, partition)
         elif dataset:
@@ -1406,6 +1518,8 @@ class Library(object):
     
     def _get_partition(self,  dataset, partition):
         from databundles.dbexceptions import NotFoundError
+        
+
         
         r = self._get_dataset(dataset)
 

@@ -539,7 +539,7 @@ def segment_points(areas,table_name=None,  query_template=None, places_query=Non
             bb_clause = "x BETWEEN {x1} AND {x2} AND y BETWEEN {y1} and {y2}"
         else:
             raise ValueError("Must use 'll' or 'xy' for bb_type. got: {}".format(bb_type))
-    
+   
     for area in areas.query(places_query):
      
         g = ogr.CreateGeometryFromWkt(area['wkt'])

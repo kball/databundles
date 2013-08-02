@@ -404,6 +404,8 @@ class Test(TestBase):
         
         f1 = l1.get('tf1')
         
+        self.assertIsNotNone(f1)
+        
         self.assertTrue(os.path.exists(f1))  
         
 
@@ -512,6 +514,33 @@ class Test(TestBase):
         self.assertTrue(os.path.exists(os.path.join(repo_dir, 'many3')))      
         self.assertFalse(os.path.exists(os.path.join(repo_dir, 'many7'))) 
  
+    def test_query(self):
+        from databundles.library import QueryCommand
+        
+        tests = [
+            "column.name='column.name', identity.id='identity',  "
+            "column.name='column.name', identity.id='identity' ",
+            "column.name = 'column.name' identity.id = 'identity' ",
+            "partition.vname='partition.vname'",
+            "partition.vname= '%partition.vname%'",
+            "identity.name = '%clarinova foo bar%'"
+            
+            ]
+        
+        fails = [
+            "column.name='foobar"
+        ]
+        
+        for s in tests:
+            qc = QueryCommand.parse(s)
+            print qc
+    
+        for s in fails:
+
+            self.assertRaises(QueryCommand.ParseError, QueryCommand.parse, s)
+       
+       
+       
 
 def suite():
     suite = unittest.TestSuite()

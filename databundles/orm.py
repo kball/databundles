@@ -314,6 +314,7 @@ class Column(Base):
     DATATYPE_DATE = 'date'
     DATATYPE_TIME = 'time'
     DATATYPE_TIMESTAMP = 'timestamp'
+    DATATYPE_DATETIME = 'datetime'
     DATATYPE_POINT = 'point' # Spatalite, sqlite extensions for geo
     DATATYPE_LINESTRING = 'linestring' # Spatalite, sqlite extensions for geo
     DATATYPE_POLYGON = 'polygon' # Spatalite, sqlite extensions for geo
@@ -334,6 +335,7 @@ class Column(Base):
         DATATYPE_DATE:(sqlalchemy.types.Date,str,'DATE'),
         DATATYPE_TIME:(sqlalchemy.types.Time,str,'TIME'),
         DATATYPE_TIMESTAMP:(sqlalchemy.types.DateTime,str,'TIMESTAMP'),
+        DATATYPE_DATETIME:(sqlalchemy.types.DateTime,str,'DATETIME'),
         DATATYPE_POINT:(sqlalchemy.types.LargeBinary,buffer,'POINT'),
         DATATYPE_LINESTRING:(sqlalchemy.types.LargeBinary,buffer,'LINESTRING'),
         DATATYPE_POLYGON:(sqlalchemy.types.LargeBinary,buffer,'POLYGON'),
@@ -424,10 +426,7 @@ class Column(Base):
             target.id_ = str(ColumnNumber(table_on, target.sequence_id))
    
     def __repr__(self):
-        try :
-            return "<columns: {}>".format(self.oid)
-        except:
-            return "<columns: {}>".format(self.name)
+        return "<column: {}, {}>".format(self.name, self.vid)
  
 event.listen(Column, 'before_insert', Column.before_insert)
 event.listen(Column, 'before_update', Column.before_update)
@@ -626,6 +625,18 @@ class Table(Base):
                     self._null_row.append(col.default)
                 else:
                     self._null_row.append(None)
+            
+        return self._null_row
+
+    @property
+    def null_dict(self):
+        if self._null_row is None:
+            self._null_row = {}
+            for col in self.columns:
+                if col.default:
+                    self._null_row[col.name] = col.default
+                else:
+                    self._null_row[col.name] = None
             
         return self._null_row
 

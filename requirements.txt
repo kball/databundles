@@ -6,7 +6,7 @@ simplejson
 nose
 beautifulsoup4
 ckanclient
-requests
+requests==1.2.0
 boto
 python-dateutil
 fuzzy

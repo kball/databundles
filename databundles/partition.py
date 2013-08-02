@@ -77,6 +77,10 @@ class Partition(object):
           
         return self._database
 
+    @property
+    def tables(self):
+        return self.data.get('tables',[])
+
     def delete_database(self):
         self._database = None
 
@@ -177,6 +181,8 @@ class Partition(object):
         '''
         import geo.util
         return geo.util.extents(self.database,self.table.name, where=where)
+        
+        
         
         
     def inserter(self, table_or_name=None,**kwargs):
@@ -485,7 +491,7 @@ class Partitions(object):
             q = (self.bundle.database.session
              .query(OrmPartition)
              .filter(OrmPartition.name==id_.encode('ascii')))
-            
+
             try:
                 orm_partition = q.one()
               
@@ -513,7 +519,17 @@ class Partitions(object):
             partitions = [ self.partition(op) for op in self.find_orm(pid, **kwargs).all()];
             
             if len(partitions) == 1:
-                return partitions.pop()
+                p =  partitions.pop()
+                if p.database.exists():
+                    return p
+                else:
+                    b = self.bundle.library.get(p.identity.vname)
+                    
+                    if not b or not b.partition:
+                        return None
+                    else:
+                        return b.partition
+                    
             elif len(partitions) > 1 :
                 from databundles.dbexceptions import ResultCountError
                 
@@ -552,6 +568,7 @@ class Partitions(object):
         '''Return a Partition object from the database based on a PartitionId.
         An ORM object is returned, so changes can be persisted. '''
         import sqlalchemy.orm.exc
+        from databundles.identity import Identity
 
         pid, name = self._pid_or_args_to_pid(self.bundle, pid, kwargs)
         
@@ -561,19 +578,19 @@ class Partitions(object):
         if name is not None:
             q = q.filter(OrmPartition.name==name)
         else:       
-            if pid.time is not None:
+            if pid.time is not Identity.ANY:
                 q = q.filter(OrmPartition.time==pid.time)
     
-            if pid.space is not None:
-                q = q.filter(OrmPartition.space==pid.space)
+            if pid.space is not Identity.ANY:
+                    q = q.filter(OrmPartition.space==pid.space)
         
-            if pid.grain is not None:
+            if pid.grain is not Identity.ANY:
                 q = q.filter(OrmPartition.grain==pid.grain)
        
             #if format is not None:
             #    q = q.filter(OrmPartition.format==pid.format)
         
-            if pid.table is not None:
+            if pid.table is not Identity.ANY:
             
                 tr = self.bundle.schema.table(pid.table)
                 
@@ -657,7 +674,7 @@ class Partitions(object):
         s = self.bundle.database.session
         s.add(op)   
         s.commit()     
-        
+
         p = self.partition(op, db_type=kwargs.get('db_type',None))
         return p
 
