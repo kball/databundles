@@ -414,7 +414,6 @@ class BuildBundle(Bundle):
 
         if os.path.exists(sf):
             with open(sf, 'rbU') as f:
-                
                 self.schema.clean()
                 self.schema.schema_from_file(f)      
                 self.schema.create_tables()
@@ -426,8 +425,6 @@ class BuildBundle(Bundle):
         from datetime import datetime
         self.db_config.set_value('process','prepared',datetime.now().isoformat())
         self.update_configuration()
-        
-        #sf  = self.filesystem.path(self.config.build.get('schema_file', 'meta/schema-revised.csv'))
 
         sf  = self.filesystem.path('meta','schema-revised.csv')
 
@@ -1126,6 +1123,9 @@ class BundleDbConfig(BundleConfig):
         return  (s.query(Dataset).one())
 
    
-
+if __name__ == '__main__':
+    import databundles.run
+    import sys
+    databundles.run.run(sys.argv[1:], Bundle)  
 
     

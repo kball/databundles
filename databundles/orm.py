@@ -7,12 +7,13 @@ Revised BSD License, included in this distribution as LICENSE.txt
 import sqlalchemy
 from sqlalchemy import orm
 from sqlalchemy import event
-from sqlalchemy import Column as SAColumn, Integer, Boolean
-from sqlalchemy import Float as Real,  Text, ForeignKey
+from sqlalchemy import Column as SAColumn, Integer, Boolean, UniqueConstraint
+from sqlalchemy import Float as Real,  Text, String, ForeignKey
 from sqlalchemy.orm import relationship, deferred
 from sqlalchemy.types import TypeDecorator, TEXT, PickleType
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.ext.mutable import Mutable
+from sqlalchemy.exc import OperationalError
 
 from sqlalchemy.sql import text
 from databundles.identity import  DatasetNumber, ColumnNumber
@@ -195,10 +196,10 @@ class SavableMixin(object):
 class Dataset(Base):
     __tablename__ = 'datasets'
     
-    vid = SAColumn('d_vid',Text, primary_key=True)
-    id_ = SAColumn('d_id',Text, )
-    name = SAColumn('d_name',Integer, unique=False, nullable=False)
-    vname = SAColumn('d_vname',Integer, unique=True, nullable=False)
+    vid = SAColumn('d_vid',String(16), primary_key=True)
+    id_ = SAColumn('d_id',String(16), )
+    name = SAColumn('d_name',String(200), unique=False, nullable=False)
+    vname = SAColumn('d_vname',String(200), unique=True, nullable=False)
     source = SAColumn('d_source',Text, nullable=False)
     dataset = SAColumn('d_dataset',Text, nullable=False)
     subset = SAColumn('d_subset',Text)
@@ -276,12 +277,12 @@ def _clean_flag( in_flag):
 class Column(Base):
     __tablename__ = 'columns'
 
-    vid = SAColumn('c_vid',Text, primary_key=True)
-    id_ = SAColumn('c_id',Text)
+    vid = SAColumn('c_vid',String(16), primary_key=True)
+    id_ = SAColumn('c_id',String(16))
     sequence_id = SAColumn('c_sequence_id',Integer)
-    t_vid = SAColumn('c_t_vid',Text,ForeignKey('tables.t_vid'))
-    t_id = SAColumn('c_t_id',Text)
-    name = SAColumn('c_name',Text, unique=True)
+    t_vid = SAColumn('c_t_vid',String(16),ForeignKey('tables.t_vid'))
+    t_id = SAColumn('c_t_id',String(16))
+    name = SAColumn('c_name',Text)
     altname = SAColumn('c_altname',Text)
     datatype = SAColumn('c_datatype',Text)
     size = SAColumn('c_size',Integer)
@@ -294,16 +295,25 @@ class Column(Base):
     measure = SAColumn('c_measure',Text)
     units = SAColumn('c_units',Text)
     universe = SAColumn('c_universe',Text)
-    _scale = SAColumn('c_scale',Real)
+    scale = SAColumn('c_scale',Real)
     data = SAColumn('c_data',MutationDict.as_mutable(JSONEncodedObj))
 
     is_primary_key = SAColumn('c_is_primary_key',Boolean, default = False)
-    foreign_key = SAColumn('c_is_foreign_key',Text, default = '')
+    
+    
+    # Deferred because it is a new column. can remove deferral after
+    # all old files are updated. 
+    _is_foreign_key = deferred(SAColumn('c_is_foreign_key',Boolean, default = False))
+    _foreign_key = deferred(SAColumn('c_foreign_key',String(16),ForeignKey('columns.c_vid'), nullable=True))
+    
     unique_constraints = SAColumn('c_unique_constraints',Text)
     indexes = SAColumn('c_indexes',Text)
     uindexes = SAColumn('c_uindexes',Text)
     default = SAColumn('c_default',Text)
     illegal_value = SAColumn('c_illegal_value',Text)
+
+    __table_args__ = (UniqueConstraint('c_sequence_id', 'c_t_vid', name='_uc_columns_1'),
+                     )
 
     DATATYPE_TEXT = 'text'
     DATATYPE_INTEGER ='integer' 
@@ -319,14 +329,14 @@ class Column(Base):
     DATATYPE_LINESTRING = 'linestring' # Spatalite, sqlite extensions for geo
     DATATYPE_POLYGON = 'polygon' # Spatalite, sqlite extensions for geo
     DATATYPE_MULTIPOLYGON = 'multipolygon' # Spatalite, sqlite extensions for geo
-    DATATYPE_CHAR = 'text'
-    DATATYPE_VARCHAR = 'text'
+    DATATYPE_CHAR = 'varchar'
+    DATATYPE_VARCHAR = 'varchar'
     DATATYPE_BLOB = 'blob'
 
     types  = {
         DATATYPE_TEXT:(sqlalchemy.types.Text,str,'TEXT'),
-        DATATYPE_VARCHAR:(sqlalchemy.types.Text,str,'TEXT'),
-        DATATYPE_CHAR:(sqlalchemy.types.Text,str,'TEXT'),
+        DATATYPE_VARCHAR:(sqlalchemy.types.String,str,'VARCHAR'),
+        DATATYPE_CHAR:(sqlalchemy.types.String,str,'VARCHAR'),
         DATATYPE_INTEGER:(sqlalchemy.types.Integer,int,'INTEGER'),
         DATATYPE_INTEGER64:(sqlalchemy.types.Integer,int,'INTEGER'),
         DATATYPE_REAL:(sqlalchemy.types.Float,float,'REAL'),
@@ -355,6 +365,25 @@ class Column(Base):
     def schema_type(self):
         return self.types[self.datatype][2]
         
+    @property
+    def foreign_key(self):
+        try:
+            return self._foreign_key
+        except OperationalError:
+            return self._is_foreign_key if bool(self._is_foreign_key) else None
+    
+    @foreign_key.setter
+    def foreign_key(self, value):
+        try:
+            self._foreign_key  = value
+        except OperationalError:
+            self._is_foreign_key  = value     
+       
+    @property
+    def is_foreign_key(self): raise NotImplementedError("Use foreign_key instead")
+    
+    @is_foreign_key.setter
+    def is_foreign_key(self, value): raise NotImplementedError("Use foreign_key instead")
         
     def __init__(self,table, **kwargs):
 
@@ -373,7 +402,7 @@ class Column(Base):
         self.measure = kwargs.get("measure",None) 
         self.units = kwargs.get("units",None) 
         self.universe = kwargs.get("universe",None) 
-        self._scale = kwargs.get("_scale",None) 
+        self.scale = kwargs.get("scale",None) 
         self.data = kwargs.get("data",None) 
 
         # the table_name attribute is not stored. It is only for
@@ -434,16 +463,19 @@ event.listen(Column, 'before_update', Column.before_update)
 class Table(Base):
     __tablename__ ='tables'
 
-    vid = SAColumn('t_vid',Text, primary_key=True)
-    id_ = SAColumn('t_id',Text, primary_key=False)
-    d_id = SAColumn('t_d_id',Text)
-    d_vid = SAColumn('t_d_vid',Text,ForeignKey('datasets.d_vid'), nullable = False)
+    vid = SAColumn('t_vid',String(16), primary_key=True)
+    id_ = SAColumn('t_id',String(16), primary_key=False)
+    d_id = SAColumn('t_d_id',String(16))
+    d_vid = SAColumn('t_d_vid',String(16),ForeignKey('datasets.d_vid'), nullable = False)
     sequence_id = SAColumn('t_sequence_id',Integer, nullable = False)
-    name = SAColumn('t_name',Text, unique=True, nullable = False)
+    name = SAColumn('t_name',String(200), unique=True, nullable = False)
     altname = SAColumn('t_altname',Text)
     description = SAColumn('t_description',Text)
     keywords = SAColumn('t_keywords',Text)
     data = SAColumn('t_data',MutationDict.as_mutable(JSONEncodedObj))
+    
+    __table_args__ = (UniqueConstraint('t_sequence_id', 't_d_vid', name='_uc_tables_1'),
+                     )
     
     columns = relationship(Column, backref='table', cascade="all, delete-orphan")
 
@@ -519,6 +551,7 @@ class Table(Base):
     def add_column(self, name, **kwargs):
 
         import sqlalchemy.orm.session
+        
         s = sqlalchemy.orm.session.Session.object_session(self)
         
         name = Column.mangle_name(name)
@@ -534,6 +567,7 @@ class Table(Base):
                      )
          
         for key, value in kwargs.items():
+            
             if key[0] != '_' and key not in ['d_id','t_id','name']:
                 setattr(row, key, value)
             
@@ -727,14 +761,14 @@ event.listen(Table, 'before_update', Table.before_update)
 class Config(Base):
     __tablename__ = 'config'
 
-    d_vid = SAColumn('co_d_vid',Text, primary_key=True)
-    group = SAColumn('co_group',Text, primary_key=True)
-    key = SAColumn('co_key',Text, primary_key=True)
+    d_vid = SAColumn('co_d_vid',String(16), primary_key=True)
+    group = SAColumn('co_group',String(200), primary_key=True)
+    key = SAColumn('co_key',String(200), primary_key=True)
     #value = SAColumn('co_value', PickleType(protocol=0))
     
     value = SAColumn('co_value', JSONAlchemy(Text()))
 
-    source = SAColumn('co_source',Text)
+    source = SAColumn('co_source',String(200))
 
     def __init__(self,**kwargs):
         self.d_vid = kwargs.get("d_vid",None) 
@@ -779,21 +813,24 @@ class File(Base, SavableMixin):
 class Partition(Base):
     __tablename__ = 'partitions'
 
-    vid = SAColumn('p_vid',Text, primary_key=True, nullable=False)
-    id_ = SAColumn('p_id',Text, nullable=False)
-    name = SAColumn('p_name',Text, nullable=False)
-    vname = SAColumn('p_vname',Integer, unique=True, nullable=False)
+    vid = SAColumn('p_vid',String(16), primary_key=True, nullable=False)
+    id_ = SAColumn('p_id',String(16), nullable=False)
+    name = SAColumn('p_name',String(200), nullable=False)
+    vname = SAColumn('p_vname',String(200), unique=True, nullable=False)
     sequence_id = SAColumn('p_sequence_id',Integer)
-    t_vid = SAColumn('p_t_vid',Integer,ForeignKey('tables.t_vid'))
-    t_id = SAColumn('p_t_id',Text)
-    d_vid = SAColumn('p_d_vid',Text,ForeignKey('datasets.d_vid'))
-    d_id = SAColumn('p_d_id',Text)
-    time = SAColumn('p_time',Text)
-    space = SAColumn('p_space',Text)
-    grain = SAColumn('p_grain',Text)
+    t_vid = SAColumn('p_t_vid',String(16),ForeignKey('tables.t_vid'))
+    t_id = SAColumn('p_t_id',String(16))
+    d_vid = SAColumn('p_d_vid',String(16),ForeignKey('datasets.d_vid'))
+    d_id = SAColumn('p_d_id',String(16))
+    time = SAColumn('p_time',String(20))
+    space = SAColumn('p_space',String(50))
+    grain = SAColumn('p_grain',String(50))
     #format = SAColumn('p_format',Text)
-    state = SAColumn('p_state',Text)
+    state = SAColumn('p_state',String(50))
     data = SAColumn('p_data',MutationDict.as_mutable(JSONEncodedObj))
+
+    __table_args__ = (UniqueConstraint('p_sequence_id', 'p_t_vid', name='_uc_partitions_1'),
+                     )
 
     table = relationship('Table', backref='partitions')
     

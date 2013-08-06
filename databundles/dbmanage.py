@@ -75,6 +75,31 @@ def install_command(args, rc, src):
             with open(rc.ROOT_CONFIG,'w') as f:
                 f.write(s)
 
+def warehouse_command(args, rc, src):
+    from databundles.library import get_warehouse
+
+    w = get_warehouse(rc, args.name)
+
+
+    if args.subcommand == 'install':
+        pass
+    elif args.subcommand == 'remove':
+        pass
+    elif args.subcommand == 'sync':
+        pass
+    elif args.subcommand == 'info':
+        
+        config = w.info()
+        
+        for k,v in config.item():
+            prt("{:10s}: {:s}",k,v)
+        
+    elif args.subcommand == 'connect':
+        pass
+
+    else:
+        pass
+    
 
 def library_command(args, rc, src):
     import library
@@ -218,27 +243,8 @@ def library_command(args, rc, src):
 
             prt(ts, **rec)
 
-
         return 
-        dataset, partition = l.get_ref(args.term)
 
-        if not dataset:
-            print "{}: Not found".format(args.term)
-        else:
-            print "--- Dataset ---"
-            print "Dataset   : ",dataset.id_, dataset.name
-            print "Is Local: ",l.cache.has(dataset.cache_key) is not False
-            print "Rel Path  : ",dataset.cache_key
-            print "Abs Path  : ",l.cache.has(dataset.cache_key)   
-              
-            if partition:
-                print "--- Partition ---"
-                print "Partition : ",(partition.id_, partition.name ) if partition else ''
-                print "Is Local: ",(l.cache.has(partition.cache_key) is not False) if partition else ''
-                print "Rel Path  : ",partition.cache_key
-                print "Abs Path  : ",l.cache.has(partition.cache_key)
-
-                
     elif args.subcommand == 'get':
      
         # This will fetch the data, but the return values aren't quite right
@@ -577,6 +583,33 @@ def main():
     sp.set_defaults(subcommand='listremote')   
     sp.add_argument('datasets', nargs=argparse.REMAINDER)
    
+    #
+    # warehouse  Command
+    #
+    
+    whr_p = cmd.add_parser('warehouse', help='Manage a warehouse')
+    whr_p.set_defaults(command='warehouse')
+    whp = whr_p.add_subparsers(title='warehouse commands', help='command help')
+    
+    whr_p.add_argument('-n','--name',  default='default',  help='Select a different name for the warehouse')
+
+    whsp = whp.add_parser('install', help='Install a bundle or partition to a warehouse')
+    whsp.set_defaults(subcommand='install')
+    whsp.add_argument('name', type=str,help='Name of bundle or partition')
+
+    whsp = whp.add_parser('remove', help='Remove a bundle or partition from a warehouse')
+    whsp.set_defaults(subcommand='remove')
+    whsp.add_argument('name', type=str,help='Name of bundle or partition')
+    
+    
+    whsp = whp.add_parser('sync', help='Syncronize database to a list of names')
+    whsp.set_defaults(subcommand='sync')
+    whsp.add_argument('file', type=str,help='Name of file containing a list of names')
+    
+    whsp = whp.add_parser('connect', help='Test connection to a warehouse')
+    whsp.set_defaults(subcommand='connect')
+
+   
  
     #
     # ckan Command
@@ -671,6 +704,7 @@ def main():
     funcs = {
         'bundle': bundle_command,
         'library':library_command,
+        'warehouse':warehouse_command,
         'remote':remote_command,
         'test':test_command,
         'install':install_command,

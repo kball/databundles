@@ -9,29 +9,19 @@ import petl.fluent as petl
 
 class Bundle(BuildBundle):
     
-    def __init__(self, directory=None):
-
-        self.super_ = super(Bundle, self)
-        
-        self.super_.__init__(directory)
-        
-        bg = self.config.build
-       
-        self.geoheaders_file = self.filesystem.path(bg.geoheaderFile)
 
     def prepare(self):
         from databundles.partition import PartitionIdentity 
-        
-        self.database.create()
-        self.schema.schema_from_file(open(self.geoheaders_file, 'rbU'))
-        self.schema.create_tables()
-        self.database.commit()
+
+        super(self.__class__, self).prepare()
      
         for table in self.schema.tables:   
             pid = PartitionIdentity(self.identity, table=table.name)
             if table.data.get('make_partition', False):
                 partition = self.partitions.new_partition(pid)  
                 partition.create_with_tables(table.name)
+  
+        return True
   
     def build(self):
         import random
@@ -99,5 +89,7 @@ class Bundle(BuildBundle):
     
     def fetch(self):
         pass
+
+
 
         

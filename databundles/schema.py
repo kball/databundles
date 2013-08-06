@@ -162,7 +162,13 @@ class Schema(object):
             if column.datatype == Column.DATATYPE_NUMERIC:
                 return sqlalchemy.types.Numeric(column.precision, column._scale)
             else:
-                return Column.types[column.datatype][0]
+                type =  Column.types[column.datatype][0]
+                
+                if column.size:
+                    return type(column.size)
+                else:
+                    return type
+                
         
         metadata = MetaData()
         
@@ -372,8 +378,9 @@ class Schema(object):
             description = row.get('description','').strip()
 
             self.add_column(t,row['column'],
+                                   sequence_id = row.get('seq',None),
                                    is_primary_key= True if row.get('is_pk', False) else False,
-                                   foreign_key= row['is_fk'] if row.get('is_fk', False) else False,
+                                   foreign_key= row['is_fk'] if row.get('is_fk', False) else None,
                                    description=description,
                                    datatype=datatype,
                                    unique_constraints = ','.join(uniques),
@@ -384,9 +391,15 @@ class Schema(object):
                                    size = size,
                                    width = width,
                                    data=data,
-                                   sql=row.get('sql',None)
+                                   sql=row.get('sql',None),
+                                   precision=int(row['precision']) if row.get('precision',False) else None,
+                                   scale=float(row['scale']) if row.get('scale',False) else None,
+                                   flags=row.get('flags',None),
+                                   keywords=row.get('keywords',None),
+                                   measure=row.get('measure',None),
+                                   units=row.get('units',None),
+                                   universe=row.get('universe',None)
                                    )
-
 
     def as_csv(self, f=None):
         """Return the current schema as a CSV file
@@ -401,12 +414,15 @@ class Schema(object):
         if f is None:
             f = sys.stdout
 
-
         w = None
         
         # Collect indexes
         indexes = {}
 
+        all_opt_col_fields = ["size", "precision","scale", "default","width", "description","sql","flags","keywords","measure","units","universe"]
+        
+        opt_col_fields = []
+        
         for table in self.tables:
             for col in table.columns: 
                 for index_set in [col.indexes, col.uindexes, col.unique_constraints]:
@@ -417,33 +433,46 @@ class Schema(object):
                             indexes[idx] = set()
                             
                         indexes[idx].add(col)
-                 
+                        
+                        for field in all_opt_col_fields:
+                            v = getattr(col, field)
+                            if v and field not in opt_col_fields:
+                                opt_col_fields.append(field)
+                                
+                     
+        # Put back into same order as in app_opt_col_fields            
+        opt_col_fields = [ field for field in all_opt_col_fields if field in opt_col_fields]
+
         indexes = OrderedDict(sorted(indexes.items(), key=lambda t: t[0]))
 
-        
         for table in self.tables:
             for col in table.columns:
                 row = OrderedDict()
                 row['table'] = table.name
+                row['seq'] = col.sequence_id
                 row['column'] = col.name
-                row['id'] = col.id_
-                row['vid'] = col.vid
                 row['is_pk'] = 1 if col.is_primary_key else ''
-                row['is_fk'] = col.foreign_key if col.foreign_key else ''
+                row['is_fk'] = col.foreign_key if col.foreign_key else None
                 
                 for idx,s in indexes.items():
                     if idx:
                         row[idx] = 1 if col in s else None
                    
                 row['type'] = col.datatype.upper()
-                row['default'] = col.default
-                row['description'] = col.description
+                
+
+                for field in opt_col_fields:
+                    row[field] = getattr(col, field)
+
+                for k,v in col.data.items():
+                    row['d_'+k]=v
 
                 if not w:
                     w = csv.DictWriter(f,row.keys())
                     w.writeheader()
                 
                 w.writerow(row)
+            w.writerow({})
                 
     def as_orm(self):
         """Return a string that holds the schema represented as Sqlalchemy

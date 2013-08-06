@@ -62,17 +62,46 @@ class Test(TestBase):
         
     def test_install(self):
         from databundles.library import get_warehouse
-        
-        print "Installing"
-        w = get_warehouse(self.rc)
+        from functools import partial
+        print "Getting warehouse"
+        w = get_warehouse(self.rc, 'sqlite')
 
+        print "Re-create database"
         w.drop()
         w.create()
         
-        w.install(self.bundle)
+        
+        def resolver(name):
+            if name == self.bundle.identity.name or name == self.bundle.identity.vname:
+                return self.bundle
+            else:
+                return False
+                
+        
+        w.resolver = resolver
         
         for p in self.bundle.partitions:
             w.install(p)
+        
+        print w.get(self.bundle.identity.name)
+        print w.get(self.bundle.identity.vname)
+        print w.get(self.bundle.identity.id_)
+        
+        w.install(self.bundle)
+         
+        print w.get(self.bundle.identity.name)
+        print w.get(self.bundle.identity.vname)
+        print w.get(self.bundle.identity.id_)
+        
+        def progress_cb(lr, type,name,n):
+            if n:
+                lr("{} {}: {}".format(type, name, n))
+            else:
+                self.bundle.log("{} {}".format(type, name))
+
+        for p in self.bundle.partitions:
+            lr = self.bundle.init_log_rate(10000)
+            w.install(p, progress_cb = partial(progress_cb, lr))
              
 
 def suite():

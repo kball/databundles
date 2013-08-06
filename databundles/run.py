@@ -104,5 +104,25 @@ def run(argv, bundle_class):
 
     bundle_class().run(argv)
                 
+if __name__ == '__main__':
+
+    import sys, os, runpy
+
+    args = list(sys.argv)
+
+    bundle_file = sys.argv[1]
+    
+    rp = os.path.realpath(os.path.join(os.getcwd(), bundle_file))
+
+    context = runpy.run_path(rp, run_name='__name__')
+    
+    #import pprint
+    #pprint.pprint(context)
+    
+    dir_ = os.path.dirname(rp)
+    
+    context['Bundle'](dir_).run(args[2:])
+    
+   
     
     

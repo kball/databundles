@@ -16,7 +16,7 @@ build:
         extents: clarinova.com-extents-2012-7ba4
         geocoder: clarinova.com-geocode-casnd-429e.segments
         usgeo: census.gov-geography-dim-orig-a7d9
-    geoheaderFile: meta/geoschema.csv
+    geoheaderFile: meta/schema.csv
 extracts:
 -   description: 'This is a multi-line description for the extract of {p_name}, with
         the table named {p_table}
@@ -53,6 +53,3 @@ partitions:
 - source-dataset-subset-variation-ca0d.ttwo
 - source-dataset-subset-variation-ca0d.tthree
 - source-dataset-subset-variation-ca0d.all
-- source-dataset-subset-variation-ca0d.geot1
-- source-dataset-subset-variation-ca0d.geot2
-- source-dataset-subset-variation-ca0d.hdf5

@@ -10,6 +10,7 @@ from databundles.dbexceptions import ConfigurationError
 ogr_type_map = { 
         None: ogr.OFTString,
         Column.DATATYPE_TEXT: ogr.OFTString,
+        Column.DATATYPE_VARCHAR: ogr.OFTString,
         Column.DATATYPE_INTEGER: ogr.OFTInteger,
         Column.DATATYPE_INTEGER64: ogr.OFTInteger,
         Column.DATATYPE_NUMERIC: ogr.OFTReal,       

@@ -59,6 +59,7 @@ class ValueWriter(object):
             self.db.engine.raw_connection().connection.text_factory = text_factory
 
     def __enter__(self): 
+       
         self.transaction = self.connection.begin()
         return self
         
@@ -87,7 +88,7 @@ class ValueWriter(object):
                 self.transaction.commit()    
                     
     def __exit__(self, type_, value, traceback):
-        
+
         self.close()
                
         if type_ is not None:
@@ -768,8 +769,8 @@ class Database(DatabaseInterface):
         self.dbapi_close()
     
     def create(self):
-        
         """Create the database from the base SQL"""
+        from databundles.orm import  Dataset, Partition, Table, Column, File, Config
         if not self.exists():    
             import databundles  #@UnresolvedImport
             from databundles.orm import Dataset
@@ -788,10 +789,19 @@ class Database(DatabaseInterface):
             if not os.path.isdir(dir_):
                 os.makedirs(dir_)
          
-            self.load_sql(script_str)
+            s =  self.session
+         
+            tables = [ Dataset, Partition, Table, Column, File, Config]
+    
+            #self.drop()
+    
+            for table in tables:
+                table.metadata.create_all(bind=self.engine)
+    
+            self.session.commit()
             
             # Create the Dataset
-            s =  self.session
+
             ds = Dataset(**self.bundle.config.identity)
             ds.name = Identity.name_str(ds)
             ds.vname = Identity.name_str(ds, use_revision=True)

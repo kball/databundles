@@ -17,7 +17,13 @@ library:
     port: 7979
     remote: http://localhost:7979
     filesystem: server
-    database: server      
+    database: server    
+    
+  production:
+      filesystem: client
+      database: client
+      remote: 'http://library.sandiegodata.org'     
+      
         
 database:
     client:

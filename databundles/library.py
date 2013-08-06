@@ -71,6 +71,9 @@ class DumperThread (threading.Thread):
             else:
                 self.library.logger.debug("No backup")
 
+class DependencyError(Exception):
+    """Required bundle dependencies not satisfied"""
+
 
 def get_database(config=None,name='library'):
     """Return a new `LibraryDb`, constructed from a configuration
@@ -98,7 +101,8 @@ def get_database(config=None,name='library'):
     if not db_config:
         raise ConfigurationError("Didn't get database.{} configuration value".format(name))
     
-    database = LibraryDb(**db_config)      
+    database = LibraryDb(**db_config)    
+    
     database.create() # creates if does not exist. 
     
     return database
@@ -194,8 +198,9 @@ def get_warehouse(config=None, name='default'):
         raise ConfigurationError("Failed to get name '{}' in configuration group 'warehouse' ".format(name))
     
     database = get_database(config, name=sc.database)
+ 
     
-    return Warehouse(database)
+    return Warehouse(database, sc)
     
 def copy_stream_to_file(stream, file_path):
     '''Copy an open file-list object to a file
@@ -219,7 +224,8 @@ class LibraryDb(object):
    
     DBCI = {
             'postgres':Dbci(dsn_template='postgresql+psycopg2://{user}:{password}@{server}/{name}',sql='support/configuration-pg.sql'), # Stored in the databundles module. 
-            'sqlite':Dbci(dsn_template='sqlite:///{name}',sql='support/configuration-sqlite.sql')
+            'sqlite':Dbci(dsn_template='sqlite:///{name}',sql='support/configuration-sqlite.sql'),
+            'mysql':Dbci(dsn_template='mysql://{user}:{password}@{server}/{name}',sql='support/configuration-sqlite.sql')
             }
     
     def __init__(self,  driver=None, server=None, dbname = None, username=None, password=None):
@@ -241,6 +247,9 @@ class LibraryDb(object):
         self.logger = databundles.util.get_logger(__name__)
         import logging
         self.logger.setLevel(logging.INFO) 
+        
+    def __del__(self):
+        pass # print  'closing LibraryDb'
         
     def clone(self):
         return self.__class__(self.driver, self.server, self.dbname, self.username, self.password)
@@ -287,6 +296,14 @@ class LibraryDb(object):
 
         return Inspector.from_engine(self.engine)
 
+    def inserter(self,table_name, **kwargs):
+        from databundles.database import ValueInserter
+        from sqlalchemy.schema import Table
+        
+        table = Table(table_name, self.metadata, autoload=True, autoload_with=self.engine)
+        
+        return ValueInserter(None, table , self,**kwargs)
+
     @property
     def session(self):
         '''Return a SqlAlchemy session'''
@@ -295,6 +312,7 @@ class LibraryDb(object):
         if not self._session:    
             self.Session = sessionmaker(bind=self.engine)
             self._session = self.Session()
+           
             
         return self._session
    
@@ -307,7 +325,7 @@ class LibraryDb(object):
         s.query(SAConfig).filter(SAConfig.group == group,
                                  SAConfig.key == key,
                                  SAConfig.d_vid == ROOT_CONFIG_NAME_V).delete()
-        
+
         o = SAConfig(group=group,
                      key=key,d_vid=ROOT_CONFIG_NAME_V,value = value)
         s.add(o)
@@ -337,7 +355,7 @@ class LibraryDb(object):
         
         d = {}
         
-        for config in s.query(SAConfig).filter(SAConfig.d_vid == ROOT_CONFIG_NAME).all():
+        for config in s.query(SAConfig).filter(SAConfig.d_vid == ROOT_CONFIG_NAME_V).all():
             d[(str(config.group),str(config.key))] = config.value
             
         return d
@@ -369,14 +387,19 @@ class LibraryDb(object):
           
         self.engine
         
-        if self.driver == 'sqlite':
-            return os.path.exists(self.dbname)
-        else :
-            try: 
-                self.session.query(Dataset).filter(Dataset.vid==ROOT_CONFIG_NAME).one()
-                return True; 
-            except :
+        if self.driver == 'sqlite' and not os.path.exists(self.dbname):
                 return False
+
+        
+        try: 
+            rows = self.engine.execute("SELECT * FROM datasets WHERE d_vid = ?",ROOT_CONFIG_NAME_V).fetchone()
+            if not rows:
+                return False
+            else:
+                return True
+        except:
+            raise
+            return False
 
     
     def clean(self, add_config_root=True):
@@ -434,7 +457,7 @@ class LibraryDb(object):
             o = Dataset(
                         id=ROOT_CONFIG_NAME,
                         name=ROOT_CONFIG_NAME, 
-                        vname=ROOT_CONFIG_NAME,
+                        vname=ROOT_CONFIG_NAME_V,
                         source=ROOT_CONFIG_NAME,
                         dataset = ROOT_CONFIG_NAME,
                         creator=ROOT_CONFIG_NAME,
@@ -464,46 +487,21 @@ class LibraryDb(object):
     def _drop(self, s):
         
         for table in reversed(self.metadata.sorted_tables): # sorted by foreign key dependency
-            print "TABLE: {}".format(str(table))
-            q = 'DROP TABLE IF EXISTS "{}"'.format(str(table))
-            s.execute(q)
+            print "Dropping {}".format(table.name)
+            table.drop(self.engine, checkfirst=True)
 
-    
     def drop(self):
         s = self.session
+
         self._drop(s)
-        
         s.commit()
 
 
     def load_sql(self, sql_text):
-        
-        #conn = self.engine.connect()
-        #conn.close()
-        
-        if self.driver == 'postgres':
-            import psycopg2 #@UnresolvedImport
-            
-            dsn = ("host={} dbname={} user={} password={} "
-                    .format(self.server, self.dbname, self.username, self.password))
-           
-            conn = psycopg2.connect(dsn)
-         
-            self.drop()
-         
-            cur = conn.cursor()
-          
-            #self._drop(cur)
-            
-            cur.execute("COMMIT")
-            cur.execute(sql_text) 
-            cur.execute("COMMIT")
-            
-            conn.close()
-        elif self.driver == 'sqlite':
-            
-            import sqlite3
-            
+        from databundles.orm import  Dataset, Partition, Table, Column, File, Config
+
+        if self.driver == 'sqlite':
+
             dir_ = os.path.dirname(self.dbname)
             if not os.path.exists(dir_):
                 try:
@@ -513,22 +511,15 @@ class LibraryDb(object):
                 
                 if not os.path.exists(dir_):
                     raise Exception("Couldn't create directory "+dir_)
-            
-            try:
-                conn = sqlite3.connect(self.dbname)
-            except:
-                self.logger.error("Failed to open Sqlite database: {}".format(self.dbname))
-                raise
-                
-            self._drop(conn)
+ 
+        tables = [ Dataset, Partition, Table, Column, File, Config]
 
-            conn.commit()
-            conn.executescript(sql_text)  
-        
-            conn.commit()
+        self.drop()
 
-        else:
-            raise RuntimeError("Unknown database driver: {} ".format(self.driver))
+        for table in tables:
+            table.metadata.create_all(bind=self.engine)
+
+        self.session.commit()
 
     def install_bundle_file(self, identity, bundle_file):
         """Install a bundle in the database, starting from a file that may
@@ -659,10 +650,16 @@ class LibraryDb(object):
         
         s = self.session
     
+        use_name = False
+    
         if isinstance(bp_id, basestring):
-            bp_id = ObjectNumber.parse(bp_id)
+            try:
+                bp_id = ObjectNumber.parse(bp_id)
+            except: # Not parsable
+                
+                identity = Identity.parse_name(bp_id) # Just checking that it is valid
+                use_name = True
 
-            
         elif isinstance(bp_id, ObjectNumber):
             pass
         elif isinstance(bp_id, Identity):
@@ -680,13 +677,19 @@ class LibraryDb(object):
         queries = []
 
         if isinstance(bp_id, PartitionNumber):
-            queries.append((2, s.query(Dataset, Partition).join(Partition).filter(Partition.vid == str(bp_id))))
-            queries.append((2, s.query(Dataset, Partition).join(Partition).filter(Partition.id_ == str(bp_id)) ))
-            
-            
+            if use_name:
+                queries.append((2, s.query(Dataset, Partition).join(Partition).filter(Partition.vname == str(bp_id)) ))
+                queries.append((2, s.query(Dataset, Partition).join(Partition).filter(Partition.name == str(bp_id)) ))
+            else:
+                queries.append((2, s.query(Dataset, Partition).join(Partition).filter(Partition.vid == str(bp_id)) ))
+                queries.append((2, s.query(Dataset, Partition).join(Partition).filter(Partition.id_ == str(bp_id)) ))
         else:
-            queries.append((1, s.query(Dataset).filter(Dataset.vid == str(bp_id))))
-            queries.append((1, s.query(Dataset).filter(Dataset.id_ == str(bp_id))))
+            if use_name:
+                queries.append((1, s.query(Dataset).filter(Dataset.vname == str(bp_id))))
+                queries.append((1, s.query(Dataset).filter(Dataset.name == str(bp_id))))
+            else:
+                queries.append((1, s.query(Dataset).filter(Dataset.vid == str(bp_id))))
+                queries.append((1, s.query(Dataset).filter(Dataset.id_ == str(bp_id))))
                 
         for c, q in queries:
             q = q.order_by(Dataset.revision.desc())
@@ -1291,6 +1294,9 @@ class Library(object):
 
         self.needs_update = False
     
+    def __del__(self):
+        pass # print  'closing Llibrary'
+    
     def clone(self):
         
         return self.__class__(self.cache, self.database.clone(), self._remote, self.sync, self.require_upload, self.host, self.port)
@@ -1371,8 +1377,7 @@ class Library(object):
                 r = r.pop(0)            
             
             if r:
-                
-                dataset, partition  = self.database.get(r.vid)
+                dataset, partition  = self.database.get(r['identity'].vid)
 
                 break
                     
@@ -1831,23 +1836,65 @@ class Library(object):
 
 class Warehouse(object):
     
-    def __init__(self, database):
+    def __init__(self, database,  config=None, resolver_cb = None):
         self.database = database
+        self.config = config # Just for info()
+        self.resolver_cb = resolver_cb # For fetching dependencies. 
+        
+    def __del__(self):
+        pass # print self.id, 'closing Warehouse'
+        
+    @property 
+    def resolver(self):
+        '''A Callback for resolving bundle dependencies. Usually attached to a library. '''
+        return self.resolver_cb
+    
+    @resolver.setter
+    def resolver(self, resolver_cb): #@DuplicatedSignature
+        self.resolver_cb = resolver_cb
         
     
-    def install(self, b_or_p):
+    def get(self, name_or_id):
+        """Return true if the warehouse already has the referenced bundle or partition"""
+        
+        return  self.database.get(name_or_id)
+        
+    def has(self, name_or_id):
+        dataset, partition = self.get(name_or_id)
+        
+        return bool(dataset)
+        
+    def install_dependency(self, name, progress_cb=None):
+        
+        if not self.resolver_cb:
+            raise Exception("Can't resolve a dependency without a resolver_cb defined")
+
+        b = self.resolver_cb(name)
+        
+        if not b:
+            raise DependencyError("Resolver failed to get {}".format(name))
+        
+        
+        self.install(b, progress_cb)
+      
+    
+    def install(self, b_or_p, progress_cb=None):
         from bundle import Bundle
         from partition import Partition, GeoPartition, HdfPartition
         
         if isinstance(b_or_p, Bundle):
             self._install_bundle( b_or_p)
         elif isinstance(b_or_p, Partition):
+            
+            if not self.has(b_or_p.bundle.identity.vname):
+                self.install_dependency(b_or_p.bundle.identity.vname, progress_cb)
+
             if isinstance(b_or_p, GeoPartition):
-                self._install_partition( b_or_p)
+                self._install_geo_partition( b_or_p)
             elif isinstance(b_or_p, HdfPartition):
                 self._install_hdf_partition( b_or_p)
             else:
-                self._install_partition( b_or_p)
+                self._install_partition( b_or_p, progress_cb)
         else:
             raise ValueError("Can only install a partition or bundle")
 
@@ -1856,7 +1903,7 @@ class Warehouse(object):
         
         self.database.install_bundle(bundle)
     
-    def _install_partition(self, partition):
+    def _install_partition(self, partition, progress_cb=None):
         
         print "Contemplating ", partition.database.path    
 
@@ -1864,18 +1911,40 @@ class Warehouse(object):
      
         tables = partition.data.get('tables',[])
 
-        for table_name in tables:
-            print "Look for {}".format(table_name)
-            if not table_name in self.database.inspector.get_table_names():
-                print "Creating {}".format(table_name)
-                t_meta, table = partition.bundle.schema.get_table_meta(table_name, use_id=True) #@UnusedVariable
-                t_meta.create_all(bind=self.database.engine)     
-     
-            
-     
+        if not progress_cb:
+            def progress_cb(type,name, n): pass
 
+        # Create the tables
+        for table_name in tables:
+            if not table_name in self.database.inspector.get_table_names():    
+                t_meta, table = partition.bundle.schema.get_table_meta(table_name, use_id=True) #@UnusedVariable
+                t_meta.create_all(bind=self.database.engine)   
+                progress_cb('create_table',table_name,None)
+        
         self.database.session.commit()
+        
+        for table_name in tables:
             
+            dest_t_meta, dest_table = partition.bundle.schema.get_table_meta(table_name, use_id=True)
+            src_t_meta, src_table = partition.bundle.schema.get_table_meta(table_name, use_id=False)
+
+            cache = []
+            cache_size = 100
+            progress_cb('populate_table',table_name,None)
+            with self.database.inserter(dest_table.name) as ins:
+                for i,row in enumerate(pdb.session.execute(src_table.select()).fetchall()):
+                    progress_cb('add_row',table_name,i)
+                    ins.insert(row)
+                    
+            
+        self.database.session.commit()
+        progress_cb('done',table_name,None)
+     
+    def _install_geo_partition(self, partition):
+        #
+        # Use ogr2ogr to copy. 
+        #
+        print "GEO Partition ", partition.database.path   
         
     
     def _install_hdf_partition(self, partition):
@@ -1896,9 +1965,14 @@ class Warehouse(object):
     def create(self):
         self.database.create()
         
+    def info(self):
+        config = dict(self.config)
+        del config['password']
+        return config
+        
 def _pragma_on_connect(dbapi_con, con_record):
     '''ISSUE some Sqlite pragmas when the connection is created'''
-    
+
     #dbapi_con.execute('PRAGMA foreign_keys = ON;')
     return # Not clear that there is a performance improvement. 
     dbapi_con.execute('PRAGMA journal_mode = MEMORY')

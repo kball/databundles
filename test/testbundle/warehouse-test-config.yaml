@@ -7,7 +7,17 @@ library:
 
 warehouse:
     default:
-      database: warehouse
+      database: postgres_warehouse
+
+    postgres:
+      database: postgres_warehouse
+
+    mysql:
+      database: mysql_warehouse
+ 
+    sqlite:
+      database: sqlite_warehouse
+
 
 database:
   
@@ -15,12 +25,23 @@ database:
         dbname: '/tmp/server/library.db'
         driver: sqlite  
   
-    warehouse:
+    postgres_warehouse:
         driver: postgres
         server: lorne
         dbname: test-library
         username: test
         password: test 
+        
+    mysql_warehouse:
+        driver: mysql
+        server: testdb.cnhz40f0cmdb.us-east-1.rds.amazonaws.com
+        dbname: test
+        username: test
+        password: samizdat 
+
+    sqlite_warehouse:
+        dbname: '/tmp/server/warehouse.db'
+        driver: sqlite  
 
 
 filesystem:  
