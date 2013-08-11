@@ -18,32 +18,24 @@ do
 done
 shift $((OPTIND-1))
 
-install_dir=$1
 
-if [ -z "$install_dir" ]; then
-    echo "ERROR: Must supply a directory name"
-    exit 1
+if grep --quiet Ubuntu /etc/issue; then
+    apt-get update
+    apt-get install -y pip git gcc g++  python-dev
+    apt-get install -y libhdf5-serial-dev hdf5-tools
+    apt-get install -y libgdal-dev gdal-bin python-gdal
 fi
 
-if [ ! -d $install_dir ]; then
-  mkdir -p $install_dir  
+if [ `uname` = 'Darwin' ]; then
+    pip install h5py
 fi
 
-# Basic virtualenv setup.
-echo "--- Building virtualenv"
-mkdir -p $install_dir/bin
-curl https://raw.github.com/pypa/virtualenv/master/virtualenv.py > $install_dir/bin/virtualenv.py
-/usr/bin/python $install_dir/bin/virtualenv.py --system-site-packages $install_dir
-  
-# Source the activate script to get it going
-. $install_dir/bin/activate
- 
 echo "--- Install the databundles package from github"
 # Download the data bundles with pip so the code gets installed. 
 pip install -e 'git+https://github.com/clarinova/databundles#egg=databundles'
 
-# Install the basic required packages
-pip install -r $install_dir/src/databundles/requirements.txt
+# Install the basic required packages. SHouldn't have to do this, but the setup.py is screwed up
+pip install numby
 
 if [ $? -ne 0 ]; then
     echo "ERROR: Requirements.txt installation failed!"
@@ -53,11 +45,12 @@ fi
 #
 # These packages don't install propertly in the virtualenv in  Ubunty, so we
 # install them at the start via apt-get, but they install OK on Mac OS X.
-if [ `uname` = 'Darwin' ]; then
-    pip install h5py
-fi 
 
-# The actual bundles don't need to be insta
+
+
+
+
+# The actual bundles don't need to be installed
 git clone https://github.com/clarinova/civicdata.git $install_dir/src/civicdata
 git clone https://github.com/clarinova/us-census-data.git $install_dir/src/us-census-data
 git clone https://github.com/sdrdl/data-projects.git $install_dir/src/data-projects
