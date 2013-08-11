@@ -316,13 +316,17 @@ class Schema(object):
                 t_meta, table = self.bundle.schema.get_table_meta(t.name) #@UnusedVariable
                 t_meta.create_all(bind=self.bundle.database.engine)
         
-    def schema_from_file(self, file_):
+    def schema_from_file(self, file_, progress_cb=None):
         '''Read a CSV file, in a particular format, to generate the schema'''
         from orm import Column
         import csv, re
         
         dlct = csv.Sniffer().sniff(file_.read(2024))
         file_.seek(0)
+
+        if not progress_cb:
+            def progress_cb(m):
+                pass
 
         reader  = csv.DictReader(file_, dialect=dlct)
 
@@ -344,6 +348,9 @@ class Schema(object):
                 last_table = row['table']
             
             if new_table and row['table']:
+                
+                progress_cb("Column: {}".format(row['table']))
+                
                 if self.table(row['table']):
                     self.bundle.log("schema_from_file found existing table, exiting. "+row['table'])
                     return
@@ -394,6 +401,9 @@ class Schema(object):
             
             description = row.get('description','').strip()
 
+            
+            progress_cb("Column: {}".format(row['column']))
+            
             self.add_column(t,row['column'],
                                    sequence_id = row.get('seq',None),
                                    is_primary_key= True if row.get('is_pk', False) else False,

@@ -156,7 +156,7 @@ def library_command(args, rc, src):
         print "Database: {}".format(l.database.dsn)
         print "Remote:   {}".format(l.remote.connection_info if l.remote else 'None')
         print "Cache:    {}".format(l.cache.cache_dir)
-        
+
     elif args.subcommand == 'push':
         
         if args.force:
