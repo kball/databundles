@@ -304,7 +304,7 @@ class Column(Base):
     # Deferred because it is a new column. can remove deferral after
     # all old files are updated. 
     _is_foreign_key = deferred(SAColumn('c_is_foreign_key',Boolean, default = False))
-    _foreign_key = deferred(SAColumn('c_foreign_key',String(16),ForeignKey('columns.c_vid'), nullable=True))
+    _foreign_key = deferred(SAColumn('c_foreign_key',String(16), nullable=True))
     
     unique_constraints = SAColumn('c_unique_constraints',Text)
     indexes = SAColumn('c_indexes',Text)
@@ -329,7 +329,7 @@ class Column(Base):
     DATATYPE_LINESTRING = 'linestring' # Spatalite, sqlite extensions for geo
     DATATYPE_POLYGON = 'polygon' # Spatalite, sqlite extensions for geo
     DATATYPE_MULTIPOLYGON = 'multipolygon' # Spatalite, sqlite extensions for geo
-    DATATYPE_CHAR = 'varchar'
+    DATATYPE_CHAR = 'char'
     DATATYPE_VARCHAR = 'varchar'
     DATATYPE_BLOB = 'blob'
 
@@ -468,13 +468,14 @@ class Table(Base):
     d_id = SAColumn('t_d_id',String(16))
     d_vid = SAColumn('t_d_vid',String(16),ForeignKey('datasets.d_vid'), nullable = False)
     sequence_id = SAColumn('t_sequence_id',Integer, nullable = False)
-    name = SAColumn('t_name',String(200), unique=True, nullable = False)
+    name = SAColumn('t_name',String(200), nullable = False)
     altname = SAColumn('t_altname',Text)
     description = SAColumn('t_description',Text)
     keywords = SAColumn('t_keywords',Text)
     data = SAColumn('t_data',MutationDict.as_mutable(JSONEncodedObj))
     
     __table_args__ = (UniqueConstraint('t_sequence_id', 't_d_vid', name='_uc_tables_1'),
+                      UniqueConstraint('t_name', 't_d_vid', name='_uc_tables_2'),
                      )
     
     columns = relationship(Column, backref='table', cascade="all, delete-orphan")

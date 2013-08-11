@@ -1,6 +1,21 @@
 identity:
     creator: null
     dataset: null
-    revision: null
+    revision: 1
     source: null
     subset: null
+    
+about:
+    author: name and email of author
+    description: Description, in Markdown format. 
+    groups:
+    - Group
+    license: odc-odbl
+    maintainer: Name and email of maintainer
+    tags:
+    - tag
+    title: Dataset Title
+    url: Url to more information about dataset. 
+build:
+    dependencies:
+        geocoder: clarinova.com-geocode-casnd-429e.segments

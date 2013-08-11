@@ -14,11 +14,3 @@ class Bundle(BuildBundle):
     def build(self):
         return True
 
-     
-import sys
-
-if __name__ == '__main__':
-    import databundles.run
-      
-    databundles.run.run(sys.argv[1:], Bundle)  
-    

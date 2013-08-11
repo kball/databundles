@@ -392,7 +392,9 @@ class LibraryDb(object):
 
         
         try: 
-            rows = self.engine.execute("SELECT * FROM datasets WHERE d_vid = ?",ROOT_CONFIG_NAME_V).fetchone()
+            try: rows = self.engine.execute("SELECT * FROM datasets WHERE d_vid = ?",ROOT_CONFIG_NAME_V).fetchone()
+            except: rows = False
+            
             if not rows:
                 return False
             else:
@@ -437,10 +439,7 @@ class LibraryDb(object):
 
         
         if not self.exists():    
-
-            sql = self._creation_sql()
-            self.load_sql(sql)
-            
+            self.create_tables()
             self._add_config_root()
 
             return True
@@ -487,7 +486,6 @@ class LibraryDb(object):
     def _drop(self, s):
         
         for table in reversed(self.metadata.sorted_tables): # sorted by foreign key dependency
-            print "Dropping {}".format(table.name)
             table.drop(self.engine, checkfirst=True)
 
     def drop(self):
@@ -497,7 +495,7 @@ class LibraryDb(object):
         s.commit()
 
 
-    def load_sql(self, sql_text):
+    def create_tables(self):
         from databundles.orm import  Dataset, Partition, Table, Column, File, Config
 
         if self.driver == 'sqlite':
@@ -1803,17 +1801,21 @@ class Library(object):
 
     def rebuild(self):
         '''Rebuild the database from the bundles that are already installed
-        in the repositry cache'''
+        in the repository cache'''
   
         from databundles.bundle import DbBundle
+   
+        self.database.drop()
+        self.database.create()
    
         bundles = []
         for r,d,f in os.walk(self.cache.cache_dir): #@UnusedVariable
             for file_ in f:
                 
                 if file_.endswith(".db"):
+                    path_ = os.path.join(r,file_)
                     try:
-                        b = DbBundle(os.path.join(r,file_))
+                        b = DbBundle(path_)
                         # This is a fragile hack -- there should be a flag in the database
                         # that diferentiates a partition from a bundle. 
                         f = os.path.splitext(file_)[0]
@@ -1823,9 +1825,9 @@ class Library(object):
                             bundles.append(b)
                             
                     except Exception as e:
-                        self.logger.error('Failed to process {} : {} '.format(file_, e))
+                        pass
+                        #self.logger.error('Failed to process {}, {} : {} '.format(file_, path_, e))
 
-        self.database.clean()
         
         for bundle in bundles:
             self.logger.info('Installing: {} '.format(bundle.identity.name))

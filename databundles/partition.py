@@ -155,6 +155,8 @@ class Partition(object):
         self.database.create(copy_tables = False)
 
         self.add_tables(tables)
+        
+        
 
     def add_tables(self,tables):
 
@@ -592,12 +594,15 @@ class Partitions(object):
         
             if pid.table is not Identity.ANY:
             
-                tr = self.bundle.schema.table(pid.table)
-                
-                if not tr:
-                    raise ValueError("Didn't find table named {} in {} bundle path = {}".format(pid.table, pid.vname, self.bundle.database.path))
-                
-                q = q.filter(OrmPartition.t_id==tr.id_)
+                if pid.table is None:
+                    q = q.filter(OrmPartition.t_id==None)
+                else:    
+                    tr = self.bundle.schema.table(pid.table)
+                    
+                    if not tr:
+                        raise ValueError("Didn't find table named {} in {} bundle path = {}".format(pid.table, pid.vname, self.bundle.database.path))
+                    
+                    q = q.filter(OrmPartition.t_id==tr.id_)
 
         return q
     
@@ -771,7 +776,7 @@ class Partitions(object):
         return partition
 
 
-    def find_or_new(self, pid=None, **kwargs):
+    def find_or_new(self, pid=None, clean = False,  **kwargs):
         '''Find a partition identified by pid, and if it does not exist, create it. 
         
         Args:
@@ -796,7 +801,7 @@ class Partitions(object):
         partition = self.new_partition(pid, **kwargs)
         
         if tables:   
-            partition.create_with_tables(tables)  
+            partition.create_with_tables(tables, clean)  
 
         return partition;
     

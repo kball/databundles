@@ -391,8 +391,12 @@ class BundleFilesystem(Filesystem):
                     abs_path = self._get_unzip_file(cache, tmpdir, zf, path, name)  
                     if regex and regex.match(name) or not regex:
                         yield abs_path
-        except:
-            self.bundle.error("File '{}' can't be unzipped".format(path))
+        except Exception as e:
+            self.bundle.error("File '{}' can't be unzipped: {}".format(path, e))
+            raise
+        except KeyboardInterrupt:
+            print "\nRemoving Files! \n Wait for deletion to complete! \n"
+            self.rm_rf(tmpdir)
             raise
         finally:
             self.rm_rf(tmpdir)
@@ -480,6 +484,7 @@ class BundleFilesystem(Filesystem):
                 break
                 
             except KeyboardInterrupt:
+                print "\nRemoving Files! \n Wait for deletion to complete! \n"
                 cache.remove(file_path)
                 raise
             except DownloadFailedError as e:

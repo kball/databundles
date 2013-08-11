@@ -105,7 +105,7 @@ class Repository(object):
 
     def _do_extract(self, extract_data, force=False):
         import os # For the eval @UnusedImport
-        
+
         done_if = extract_data.get('done_if',False)
  
         if not force and done_if and self._validate_for_expr(done_if, True):

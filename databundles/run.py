@@ -102,26 +102,31 @@ class RunConfig(object):
 
 def run(argv, bundle_class):
 
-    bundle_class().run(argv)
+    raise Exception("Deprecated. Remove __main__ section from end of bundle.py")
+
+def import_(filename):
+    (path, name) = os.path.split(filename)
+    (name, ext) = os.path.splitext(name)
+
+    (file, filename, data) = imp.find_module(name, [path])
+    return imp.load_module(name, file, filename, data)
                 
 if __name__ == '__main__':
 
-    import sys, os, runpy
+    import sys, os, imp, pprint
 
     args = list(sys.argv)
 
     bundle_file = sys.argv[1]
     
     rp = os.path.realpath(os.path.join(os.getcwd(), bundle_file))
-
-    context = runpy.run_path(rp, run_name='__name__')
-    
-    #import pprint
-    #pprint.pprint(context)
-    
     dir_ = os.path.dirname(rp)
-    
-    context['Bundle'](dir_).run(args[2:])
+
+    mod = import_(rp)
+ 
+    b = mod.Bundle(dir_)
+
+    b.run(args[2:])
     
    
     

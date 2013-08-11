@@ -3,76 +3,21 @@ Created on Aug 19, 2012
 
 @author: eric
 '''
-from  databundles.sourcesupport.uscensus import UsCensusBundle
+from  databundles.bundle import BuildBundle
 
-class Us2010CensusBundle(UsCensusBundle):
+class Bundle(BuildBundle):
     '''
     Bundle code for US 2000 Census, Summary File 1
     '''
 
     def __init__(self,directory=None):
-        self.super_ = super(Us2010CensusBundle, self)
+        self.super_ = super(Bundle, self)
         self.super_.__init__(directory)
      
         self._table_id_cache = {}
         self._table_iori_cache = {}
         
 
-    def _scrape_urls(self, rootUrl, states_file,  suffix='_uf1'):
-        '''Extract all of the URLS from the Census website and store them. 
-        Unline the Us2000 version, this one lists one file per state'''
-        import urllib
-        import urlparse
-        import re
-        from bs4 import BeautifulSoup
-    
-        log = self.log
-        tick = self.ptick
-    
-        # Load in a list of states, so we know which links to follow
-        with open(states_file) as f:
-            states = map(lambda s: s.strip(),f.readlines())
-         
-        # Root URL for downloading files. 
-       
-        doc = urllib.urlretrieve(rootUrl)
-        
-        log('Getting URLS from '+rootUrl)
-        # Get all of the links
-        log('S = state, T = segment table, g = geo')
-        urls = {}
-      
-        with open(doc[0]) as bsf:
-            for link in BeautifulSoup().find_all('a'):
-                tick('S')
-                if not link.get('href') or not link.string or not link.contents:
-                    continue;# Didn't get a sensible link
-                # Only descend into links that name a state
-                state = link.get('href').strip('/')
-              
-                if link.string and link.contents[0] and state in states :
-                    stateUrl = urlparse.urljoin(rootUrl, link.get('href'))
-                    stateIndex = urllib.urlretrieve(stateUrl)
-                    # Get all of the zip files in the directory
-                    
-                    for link in  BeautifulSoup(open(stateIndex[0])).find_all('a'):
-                        
-                        if link.get('href') and  '.zip' in link.get('href'):
-                            final_url = urlparse.urljoin(stateUrl, link.get('href')).encode('ascii', 'ignore')
-                       
-                            tick('T')
-                            
-                            m = re.match('.*/(\w{2})2010.sf1.zip', final_url)
-    
-                            if  m:
-                                urls[m.group(1)] = str(final_url)
-                            else:
-                                raise Exception("Regex failed for : "+final_url)
-        
-        tick('\n')
-   
-        return {'geos': urls}
-    
     def read_packing_list(self):
         '''The packing list is a file, in every state extract directory, 
         that has a section that describes how the tables are packed into segments.

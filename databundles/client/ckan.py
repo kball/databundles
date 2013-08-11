@@ -185,10 +185,10 @@ class Ckan(object):
             raise e  
     
     def update_or_new_bundle(self, bundle, type='bundle',  name=None, 
-                             title=None, group_names=None,):
+                             title=None, group_names=None, **kwargs):
         '''Create a new package for a bundle.'''
         import datetime
-        
+
         if name is None:
             name = self.translate_name(bundle.identity.name)
         else:
@@ -205,7 +205,9 @@ class Ckan(object):
             
         except requests.exceptions.HTTPError:
             # Create minimal package, since we always update next. 
-            payload = {'name': name}
+            payload = {'name': name,
+                       'owner_org': bundle.config.about.get('organization','none')
+                       }
             
             r = requests.post(self.url+'/rest/package',
                               headers =  self.auth_headers,
@@ -232,6 +234,7 @@ class Ckan(object):
         payload['title'] = title
         payload['groups'] = [group['id'] for group in groups]
         payload['license_id'] = bundle.config.about.get('license','other')
+        
   
     
         r = requests.post(self.url+'/rest/package/{name}'.format(name=name),

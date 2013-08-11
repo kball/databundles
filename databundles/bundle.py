@@ -558,9 +558,11 @@ class BuildBundle(Bundle):
         return True
     
     
-    def repopulate(self, args):
+    def repopulate(self):
         '''Pull bundle files from the library back into the working directory'''
         import shutil
+        
+        args = self.run_args
         
         self.log('---- Repopulate ----')
         
@@ -728,7 +730,7 @@ class BuildBundle(Bundle):
 
 
     def run(self, argv):
-    
+
         b = self
         args =  b.parse_args(argv)
     
@@ -739,8 +741,8 @@ class BuildBundle(Bundle):
             return
     
         if args.command == 'repopulate':
-            b.repopulate(args)
-    
+            b.repopulate()
+            return 
     
         if hasattr(args,'clean') and args.clean:
             # If the clean arg is set, then we need to run  clean, and all of the

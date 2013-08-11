@@ -48,6 +48,8 @@ class Schema(object):
         self.table_sequence = len(self.tables)+1
         self.col_sequence = 1 
 
+        self.auto_col_numbering = False
+
         self.dataset = self.get_dataset()
 
     def get_dataset(self):
@@ -81,6 +83,9 @@ class Schema(object):
         from databundles.orm import Table
         import sqlalchemy.orm.exc
         
+        if not name_or_id:
+            raise ValueError("Got an invalid argument: {}".format(name_or_id))
+        
         try:
             return (db.session.query(Table)
                     .filter(Table.id_==name_or_id).one())
@@ -94,6 +99,7 @@ class Schema(object):
     def table(self, name_or_id):
         '''Return an orm.Table object, from either the id or name'''
         return Schema.get_table_from_database(self.bundle.database, name_or_id)
+     
 
     def add_table(self, name, **kwargs):
         '''Add a table to the schema'''
@@ -124,6 +130,7 @@ class Schema(object):
      
         self.table_sequence += 1
         self.col_sequence = 1
+        self.auto_col_numbering = False
         
         if kwargs.get('commit', True):
             self.bundle.database.session.commit()
@@ -134,12 +141,22 @@ class Schema(object):
     def add_column(self, table, name,**kwargs):
         '''Add a column to the schema'''
     
-        kwargs['sequence_id'] =self.col_sequence
-    
+        if not kwargs.get('sequence_id', False):
+            self.auto_col_numbering = True
+
+        
+        if self.auto_col_numbering:  
+            if kwargs.get('sequence_id', False):
+                raise ConfigurationError("Can't specify a seg number for a column after a columns that was autonumbered. At table {} col: '{}'"
+                                         .format(table.name, name))
+            
+            kwargs['sequence_id'] = int(self.col_sequence)
+
+        kwargs['sequence_id'] = int(kwargs['sequence_id'])
+        self.col_sequence = max(self.col_sequence,  kwargs['sequence_id']+1)
+        
         c =  table.add_column(name, **kwargs)
-        
-        self.col_sequence += 1
-        
+
         return c
         
     @property
@@ -466,6 +483,8 @@ class Schema(object):
 
                 for k,v in col.data.items():
                     row['d_'+k]=v
+
+                row['id'] = col.id_
 
                 if not w:
                     w = csv.DictWriter(f,row.keys())

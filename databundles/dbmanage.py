@@ -200,7 +200,11 @@ def library_command(args, rc, src):
         
         identities = l.find(qc)
        
-        first = identities[0]
+        try: first = identities[0]
+        except: first = None
+        
+        if not first:
+            return
         
         t = ['{id:<8s}','{vname:20s}']
         header = {'id': 'ID', 'vname' : 'Versioned Name'}
@@ -215,12 +219,13 @@ def library_command(args, rc, src):
         
         dashes = { k:'-'*len(v) for k,v in header.items() }
        
-        prt(ts, **header)
-        prt(ts, **dashes)
+        prt(ts, **header) # Print the header
+        prt(ts, **dashes) # print the dashes below the header
        
         last_rec = None
         first_rec_line = True
         for r in identities:
+            
             if not last_rec or last_rec['id'] != r['identity'].id_:
                 rec = {'id': r['identity'].id_, 'vname':r['identity'].vname}
                 last_rec = rec

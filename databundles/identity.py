@@ -585,8 +585,10 @@ class ColumnNumber(ObjectNumber):
         if not isinstance(table, TableNumber):
             raise ValueError("Constructor requires a TableNumber. got: "+str(type(table)))
 
+        column = int(column)
+
         if column > ObjectNumber.TCMAXVAL:
-            raise ValueError("Value is too large")
+            raise ValueError("Value {} is too large ( max is {} ) ".format(column, ObjectNumber.TCMAXVAL))
 
         self.table = table
         self.column = column

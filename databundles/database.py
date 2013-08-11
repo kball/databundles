@@ -112,7 +112,6 @@ class ValueInserter(ValueWriter):
         if replace:
             self.statement = self.statement.prefix_with('OR REPLACE')
 
-
     def insert(self, values):
       
         try:
@@ -130,14 +129,22 @@ class ValueInserter(ValueWriter):
             
                 
         except (KeyboardInterrupt, SystemExit):
-            self.transaction.rollback()
-            self.transaction = None
+            self.bundle.log("Processing keyboard interrupt or system exist")
+            if self.transaction:
+                self.transaction.rollback()
+                self.transaction = None
+            else:
+                self.bundle.error("No transaction")
             self.cache = []
             raise
         except Exception as e:
-            self.bundle.error("Exception during ValueInserter.insert: "+str(e))
-            self.transaction.rollback()
-            self.transaction = None
+            self.bundle.error("Exception during ValueInserter.insert: {}".format(e))
+            if self.transaction:
+                self.transaction.rollback()
+                self.transaction = None
+            else:
+                self.bundle.error("No transaction")
+                
             self.cache = []
             raise e
 
@@ -533,7 +540,7 @@ class Database(DatabaseInterface):
                                          echo=False) 
             #self._engine = create_engine('sqlite://') 
             from sqlalchemy import event
-            event.listen(self._engine, 'connect', _pragma_on_connect)
+            event.listen(self._engine, 'connect', _on_connect)
              
         return self._engine
 
@@ -687,7 +694,7 @@ class Database(DatabaseInterface):
         
         return ValueUpdater(self.bundle, table , self,**kwargs)
         
-    def load_sql(self, sql_file):
+    def create_tables(self, sql_file):
         import sqlite3
         conn = sqlite3.connect( self.path)
         f =  open(sql_file)
@@ -1139,7 +1146,7 @@ class BundleDb(Database):
 
         super(BundleDb, self).__init__(None, path)  
         
-def _pragma_on_connect(dbapi_con, con_record):
+def _on_connect(dbapi_con, con_record):
     '''ISSUE some Sqlite pragmas when the connection is created'''
 
     dbapi_con.execute('PRAGMA page_size = 8192')
