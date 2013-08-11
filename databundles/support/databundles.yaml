@@ -5,24 +5,23 @@ repository:
 
 library:
     default:
-        remote: ''
-        filesystem: library-default
-        database: library-default
-                       
+        filesystem: production
+        database: production
+        remote: 'http://library.sandiegodata.org' 
+
 database:
-    library-default:
-        dbname: '{root}/library/library.db'
-        driver: sqlite  
+    production:
+        dbname: '{root}/library.db'
+        driver: sqlite
 
 filesystem:
-    root_dir: <root-dir>
-    library-default:
-        dir: '{root}/library/'
-              
+    root_dir: /data
+    
+    production:
+        dir: '{root}/library'
+
     downloads:
         dir: '{root}/cache/downloads'
-        size: 20000
 
     extracts: 
         dir: '{root}/cache/extracts'
-        size: 20000

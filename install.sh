@@ -48,12 +48,12 @@ fi
 
 
 
-
-
 # The actual bundles don't need to be installed
-git clone https://github.com/clarinova/civicdata.git $install_dir/src/civicdata
-git clone https://github.com/clarinova/us-census-data.git $install_dir/src/us-census-data
-git clone https://github.com/sdrdl/data-projects.git $install_dir/src/data-projects
+git clone https://github.com/clarinova/civicdata.git $DATA_DIR/bundles/civicdata
+git clone https://github.com/clarinova/us-census-data.git $DATA_DIR/bundles/us-census-data
+git clone https://github.com/sdrdl/data-projects.git $DATA_DIR/bundles/data-projects
+
+mkdir /etc/databundles
 
  
 # Install the /etc/databundles.yaml file

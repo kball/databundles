@@ -394,10 +394,6 @@ class BundleFilesystem(Filesystem):
         except Exception as e:
             self.bundle.error("File '{}' can't be unzipped: {}".format(path, e))
             raise
-        except KeyboardInterrupt:
-            print "\nRemoving Files! \n Wait for deletion to complete! \n"
-            self.rm_rf(tmpdir)
-            raise
         finally:
             self.rm_rf(tmpdir)
             
