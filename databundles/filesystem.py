@@ -384,6 +384,8 @@ class BundleFilesystem(Filesystem):
 
         tmpdir = tempfile.mkdtemp(str(uuid.uuid4()))
    
+        rtrn = True
+   
         try:
             with zipfile.ZipFile(path) as zf:
                 abs_path = None 
@@ -392,12 +394,12 @@ class BundleFilesystem(Filesystem):
                     if regex and regex.match(name) or not regex:
                         yield abs_path
         except Exception as e:
-            self.bundle.error("File '{}' can't be unzipped: {}".format(path, e))
+            self.bundle.error("File '{}' can't be unzipped, removing it: {}".format(path, e))
+            os.remove(path)
             raise
         finally:
             self.rm_rf(tmpdir)
-            
-        return
+    
         
     def download(self,url, test_f=None):
         '''Context manager to download a file, return it for us, 
