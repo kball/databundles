@@ -595,7 +595,7 @@ class Database(DatabaseInterface):
         
         if isinstance(table, basestring):
             table = self.bundle.schema.table(table)
-        
+            
         hk = (table,suffix)
     
         if hk not in self._tempfiles:
