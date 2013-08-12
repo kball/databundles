@@ -674,7 +674,6 @@ class Partitions(object):
             if p.name == pid.name:
                 return self.partition(p, db_type=kwargs.get('db_type',None))
        
-      
         op = self.new_orm_partition(pid, **kwargs)
         s = self.bundle.database.session
         s.add(op)   

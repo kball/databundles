@@ -224,6 +224,8 @@ class TempFile(object):
         self.suffix = suffix
         self.ignore_first = ignore_first
 
+
+
         if header is None:
             header = [ c.name for c in table.columns ]
         else:
@@ -243,6 +245,9 @@ class TempFile(object):
         
     def __enter__(self): 
         return self
+        
+    def insert(self, row):
+        self.writer.writerow(row)
         
     @property
     def writer(self):
@@ -583,7 +588,13 @@ class Database(DatabaseInterface):
             self._dbapi_connection.close();
             self._dbapi_connection = None            
         
-    def tempfile(self, table, header=None, suffix=None, ignore_first=False):
+    def tempfile(self, table=None, header=None, suffix=None, ignore_first=False):
+        
+        if table is None: # Assumes it is a partition
+            table =  self.container.identity.table
+        
+        if isinstance(table, basestring):
+            table = self.bundle.schema.table(table)
         
         hk = (table,suffix)
     
