@@ -588,6 +588,7 @@ class Database(DatabaseInterface):
             self._dbapi_connection.close();
             self._dbapi_connection = None            
         
+
     def tempfile(self, table=None, header=None, suffix=None, ignore_first=False):
         
         if table is None: # Assumes it is a partition
