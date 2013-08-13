@@ -249,6 +249,7 @@ class TempFile(object):
     def insert(self, row):
         self.writer.writerow(row)
         
+        
     @property
     def writer(self):
         if self._writer is None:

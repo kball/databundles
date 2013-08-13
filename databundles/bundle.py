@@ -610,6 +610,11 @@ class BuildBundle(Bundle):
         parser.add_argument('-t','--test',  default=False, action="store_true", help='Enable bundle-specific test behaviour')
         parser.add_argument('--single-config', default=False,action="store_true", help="Load only the config file specified")
     
+        parser.add_argument('-m','--multi',  type = int,  nargs = '?',
+                            default = None,
+                            const = multiprocessing.cpu_count(),
+                            help='Run the build process on multiple processors, if the  method supports it')
+    
         # These are args that Aptana / PyDev adds to runs. 
         parser.add_argument('--port', default=None, help="PyDev Debugger arg") 
         parser.add_argument('--verbosity', default=None, help="PyDev Debugger arg") 
@@ -661,14 +666,10 @@ class BuildBundle(Bundle):
         
         command_p.add_argument('-o','--opt', action='append', help='Set options for the build phase')
 
-        
-        command_p.add_argument('-m','--multi',  type = int,  nargs = '?',
-                            default = None,
-                            const = multiprocessing.cpu_count(),
-                            help='Run the build process on multiple processors, if the build method supports it')
+    
 
         #
-        # Build Command
+        # Update Command
         #
         command_p = cmd.add_parser('update', help='Build the data bundle and partitions from an earlier version')
         command_p.set_defaults(command='update')   
