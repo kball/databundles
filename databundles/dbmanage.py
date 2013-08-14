@@ -115,6 +115,86 @@ def library_command(args, rc, src):
         print "Initialize Library"
         l.database.create()
 
+    elif args.subcommand == 'backup':
+        import tempfile
+    
+        if args.file:
+            backup_file = args.file
+            is_temp = False
+        else:
+            tfn = tempfile.NamedTemporaryFile(delete=False)
+            tfn.close()
+        
+            backup_file = tfn.name+".db"
+            is_temp = True
+
+        if args.date:
+            from datetime import datetime
+            date = datetime.now().strftime('%Y%m%dT%H%M')
+            parts = backup_file.split('.')
+            if len(parts) >= 2:
+                backup_file = '.'.join(parts[:-1]+[date]+parts[-1:])
+            else:
+                backup_file = backup_file + '.' + date
+
+        prt('{}: Starting backup', backup_file)
+
+        l.database.dump(backup_file)
+
+        if args.cache:
+            dest_dir = l.cache.put(backup_file,'_/{}'.format(os.path.basename(backup_file)))
+            is_temp = True
+        else:
+            dest_dir = backup_file
+
+        if is_temp:
+            os.remove(backup_file)
+
+            
+        prt("{}: Backup complete", dest_dir)
+        
+
+    elif args.subcommand == 'restore':
+
+        if args.dir:
+          
+            if args.file:
+                # Get the last file that fits the pattern, sorted alpha, with a date inserted
+                from datetime import datetime
+                import fnmatch
+                
+                date = '*' # Sub where the date will be  
+                parts = args.file.split('.')
+                if len(parts) >= 2:
+                    pattern = '.'.join(parts[:-1]+[date]+parts[-1:])
+                else:
+                    pattern = backup_file + '.' + date
+                    
+                files = sorted([ f for f in os.listdir(args.dir) if fnmatch.fnmatch(f,pattern) ])
+ 
+            else:
+                # Get the last file, by date. 
+                files = sorted([ f for f in os.listdir(args.dir) ], 
+                               key=lambda x: os.stat(os.path.join(args.dir,x))[8])
+
+
+            backup_file = os.path.join(args.dir,files.pop())
+            
+        elif args.file:
+            backup_file = args.file
+
+    
+        # Backup before restoring. 
+        
+        args = type('Args', (object,),{'file':'/tmp/before-restore.db','cache': True, 
+                                       'date': True, 'is_server': args.is_server, 'name':args.name, 
+                                       'subcommand': 'backup'})
+        library_command(args, rc, src)
+
+        prt("{}: Restoring", backup_file)
+        l.clean(add_config_root=False)
+        l.restore(backup_file)
+    
     elif args.subcommand == 'server':
 
         from databundles.server.main import production_run
@@ -276,7 +356,7 @@ def library_command(args, rc, src):
             if r.partition:
                 abs_path = os.path.join(l.cache.cache_dir, r.partition.identity.cache_key)
             else:
-                abs_path = os.path.join(l.cache.cache_dir, r.bundle.identity.cache_key)
+                abs_path = os.path.join(l.cache.cache_dir, r.identity.cache_key)
                 
             print "\nOpening: {}\n".format(abs_path)
 
@@ -569,6 +649,20 @@ def main():
     
     sp = asp.add_parser('rebuild', help='Rebuild the library database from the files in the library')
     sp.set_defaults(subcommand='rebuild')
+ 
+    sp = asp.add_parser('backup', help='Backup the library database to the remote')
+    sp.set_defaults(subcommand='backup')
+    sp.add_argument('-f','--file',  default=None,   help="Name of file to back up to") 
+    sp.add_argument('-d','--date',  default=False, action="store_true",   help='Append the date and time, in ISO format, to the name of the file ')
+    sp.add_argument('-r','--remote',  default=False, action="store_true",   help='Also load store file to  configured remote')
+    sp.add_argument('-c','--cache',  default=False, action="store_true",   help='Also load store file to  configured cache')
+
+    sp = asp.add_parser('restore', help='Restore the library database from the remote')
+    sp.set_defaults(subcommand='restore')
+    sp.add_argument('-f','--file',  default=None,   help="Base pattern of file to restore from.") 
+    sp.add_argument('-d','--dir',  default=None,   help="Directory where backup files are stored. Will retrieve the most recent. ") 
+    sp.add_argument('-r','--remote',  default=False, action="store_true",   help='Also load file from configured remote')
+    sp.add_argument('-c','--cache',  default=False, action="store_true",   help='Also load file from configured cache')
  
     sp = asp.add_parser('info', help='Display information about the library')
     sp.set_defaults(subcommand='info')   

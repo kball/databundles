@@ -69,7 +69,7 @@ class DumperThread (threading.Thread):
             if backed_up:
                 self.library.logger.debug("Backed up database")
             else:
-                self.library.logger.debug("No backup")
+                self.library.logger.debug("1461")
 
 class DependencyError(Exception):
     """Required bundle dependencies not satisfied"""
@@ -469,11 +469,11 @@ class LibraryDb(object):
         '''Hack need to clean up some installed databases'''
         from databundles.orm import Dataset
 
-        ds = self.session.query(Dataset).filter(Dataset.vid==ROOT_CONFIG_NAME).one()
+        ds = self.session.query(Dataset).filter(Dataset.id_==ROOT_CONFIG_NAME).one()
 
         ds.id_=ROOT_CONFIG_NAME
         ds.name=ROOT_CONFIG_NAME
-        ds.vname=ROOT_CONFIG_NAME
+        ds.vname=ROOT_CONFIG_NAME_V
         ds.source=ROOT_CONFIG_NAME
         ds.dataset = ROOT_CONFIG_NAME
         ds.creator=ROOT_CONFIG_NAME
@@ -971,7 +971,7 @@ class LibraryDb(object):
         for table in self.metadata.sorted_tables: # sorted by foreign key dependency
 
             rows = src.session.execute(table.select()).fetchall()
-
+            dst.session.execute(table.delete())
             for row in rows:
                 dst.session.execute(table.insert(), row)
 
@@ -1768,17 +1768,22 @@ class Library(object):
         else:
             return False
 
-    def restore(self):
+    def restore(self, backup_file=None):
         '''Restore the database from the remote'''
 
-        # This requires that the cache have and upstream that is also the remote
-        backup_file = self.cache.get('_/library.db')
+        if not backup_file:
+            # This requires that the cache have and upstream that is also the remote
+            backup_file = self.cache.get('_/library.db')
 
         self.database.restore(backup_file)
 
         # HACK, fix the dataset root
-        self.database._clean_config_root()
-
+        try:
+            self.database._clean_config_root()
+        except:
+            print "ERROR for path: {}, {}".format(self.database.dbname, self.database.dsn)
+            raise 
+        
         os.remove(backup_file)   
 
         return backup_file        

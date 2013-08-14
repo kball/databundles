@@ -656,12 +656,7 @@ def production_run(config, library_name='default', reloader=False):
     port = l.port if l.port else 80
     host = l.host if l.host else 'localhost'
 
-    if l.can_restore():
-        logger.info("Restoring library from backup")
-        l.clean(add_config_root=False)
-        l.restore()
-    else:
-        logger.info('No backup, not restoring library database')
+
 
     logger.info("starting production server for library '{}' on http://{}:{}".format(library_name, host, port))
 
