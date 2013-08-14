@@ -364,6 +364,8 @@ def post_load(library):
         if not path or not os.path.exists(path):
             raise exc.Gone("Failed to get object {} from upstream; path '{}' does not exist".format(identity.cache_key, path))
         
+        logger.debug("Installing path {} to identity {}".format(path, identity  ))
+        
         l.database.install_bundle_file(identity, path)
         
         if not l.cache.has(identity.cache_key):
