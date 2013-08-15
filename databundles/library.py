@@ -540,7 +540,7 @@ class LibraryDb(object):
         '''Copy the schema and partitions lists into the library database
         
         '''
-        from databundles.orm import Dataset, Config
+        from databundles.orm import Dataset, Config, Column, Table, Partition
         from databundles.bundle import Bundle
            
         if not isinstance(bundle, Bundle):
@@ -560,31 +560,33 @@ class LibraryDb(object):
         dataset = bdbs.query(Dataset).one()
         s.merge(dataset)
  
-        try:
-            for config in bdbs.query(Config).all():
-                s.merge(config)
-                
-            for table in dataset.tables:
-                s.merge(table)
-             
-                for column in table.columns:
-                    s.merge(column)
 
-        except IntegrityError as e:
-            self.logger.error("Failed to merge ")
-            s.rollback()
-            raise e
+        for config in bdbs.query(Config).all():
+            s.merge(config)
+            
+        s.query(Table).filter(Table.d_vid == dataset.vid).delete()
+            
+        for table in dataset.tables:
+            s.merge(table)
+         
+            # Column delete should be cascaded from the tables, but not always in sqlite. 
+            s.query(Column).filter(Column.t_vid == table.vid).delete()
+         
+            for column in table.columns:
+                s.merge(column)
 
+        s.query(Partition).filter(Partition.d_vid == dataset.vid).delete()
 
         for partition in dataset.partitions:
-            try:
-                s.merge(partition)
-                self.logger.info("Merging {} ".format(partition.identity.name))
-                s.commit()
-            except IntegrityError as e:
-                self.logger.error("Failed to merge "+str(partition.identity.id_)+":"+ str(e))
-                s.rollback()
-                raise e
+            s.merge(partition)
+            
+        try:
+
+            s.commit()
+        except IntegrityError as e:
+            self.logger.error("Failed to merge")
+            s.rollback()
+            raise e
 
         
     def remove_bundle(self, bundle):
