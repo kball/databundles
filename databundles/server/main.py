@@ -357,9 +357,7 @@ def post_load(library):
     if identity.is_bundle:
         
         l = library
-        
-        raise exc.Gone("Failed to get object {} from upstream; cache doesn't have key as after install ".format(identity.cache_key))
-        
+
         # This will pull the file into the local cache from the remote, 
         # As long as the remote is listed as an upstream for the library. 
         path = l.cache.get(identity.cache_key)
@@ -373,7 +371,7 @@ def post_load(library):
         l.database.install_bundle_file(identity, path)
         
         if not l.cache.has(identity.cache_key):
-            raise exc.Gone("Failed to get object {} from upstream; cache doesn't have key as after install ".format(identity.cache_key))
+            raise exc.Gone("Failed to get object {} from upstream; cache doesn't have the key that was installed ".format(identity.cache_key))
 
     return identity.to_dict()
 
