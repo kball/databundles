@@ -397,6 +397,7 @@ def get_load(library, name):
         
         # This will pull the file into the local cache from the remote, 
         # As long as the remote is listed as an upstream for the library. 
+        logger.debug("Get bundle for cache key {}".format(identity.cache_key))
         path = l.cache.get(identity.cache_key)
         l.run_dumper_thread()
         
@@ -406,6 +407,8 @@ def get_load(library, name):
         logger.debug("Installing path {} to identity {}".format(path, identity  ))
         
         l.database.install_bundle_file(identity, path)
+        
+        logger.debug("Intstalled path {} to identity {}".format(path, identity  ))
         
         if not l.cache.has(identity.cache_key):
             raise exc.Gone("Failed to get object {} from upstream; cache doesn't have key as after install ".format(identity.cache_key))
