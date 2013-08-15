@@ -570,13 +570,20 @@ class LibraryDb(object):
                 for column in table.columns:
                     s.merge(column)
 
-            for partition in dataset.partitions:
-                s.merge(partition)
-    
         except IntegrityError as e:
-            self.logger.error("Failed to merge partition "+str(partition.identity.id_)+":"+ str(e))
+            self.logger.error("Failed to merge ")
             s.rollback()
             raise e
+
+
+        for partition in dataset.partitions:
+            try:
+                s.merge(partition)
+                s.commit()
+            except IntegrityError as e:
+                self.logger.error("Failed to merge "+str(partition.identity.id_)+":"+ str(e))
+                s.rollback()
+                raise e
 
         
     def remove_bundle(self, bundle):
