@@ -579,6 +579,7 @@ class LibraryDb(object):
         for partition in dataset.partitions:
             try:
                 s.merge(partition)
+                self.logger.info("Merging {} ".format(partition.identity.name))
                 s.commit()
             except IntegrityError as e:
                 self.logger.error("Failed to merge "+str(partition.identity.id_)+":"+ str(e))
