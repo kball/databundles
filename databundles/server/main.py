@@ -362,7 +362,7 @@ def post_load(library):
         l.run_dumper_thread()
         
         if not path or not os.path.exists(path):
-            raise exc.Gone("Failed to get object {} from upstream; path '{}' does not exist".format(identity.cache_key, path))
+            raise exc.Gone("Failed to get object {} from upstream; path '{}' does not exist. Cache connection = {} ".format(identity.cache_key, path, l.cache.connection_info))
         
         logger.debug("Installing path {} to identity {}".format(path, identity  ))
         

@@ -68,7 +68,7 @@ class Rest(object):
                 raise ConfigurationError("Didn't find key {} in configuration accounts.s3".format(ci['access_key']))
 
             ci['secret'] = secret
-            
+         
             del ci['service']
             fs = FsCompressionCache(S3Cache(**ci))
             #fs = S3Cache(**ci)

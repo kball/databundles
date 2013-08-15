@@ -936,7 +936,7 @@ class FsLimitedCache(FsCache):
         from databundles.dbexceptions import ConfigurationError
 
         self.cache_dir = cache_dir
-        self.maxsize = int(maxsize * 1048578)  # size in MB
+        self.maxsize = int(maxsize) * 1048578  # size in MB
         self.upstream = upstream
         self.readonly = False
         self.usreadonly = False

@@ -69,7 +69,7 @@ class DumperThread (threading.Thread):
             if backed_up:
                 self.library.logger.debug("Backed up database")
             else:
-                self.library.logger.debug("1461")
+                self.library.logger.debug("Did not back up database")
 
 class DependencyError(Exception):
     """Required bundle dependencies not satisfied"""
