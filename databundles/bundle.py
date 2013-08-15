@@ -16,6 +16,26 @@ from databundles.run import get_runconfig
 import databundles.util
 import yaml
 
+
+def get_identity(path):
+    '''Get an identity from a database, either a bundle or partition'''
+    from database import BundleDb
+    db = BundleDb(path)
+    
+
+    bdc = BundleDbConfig(db)
+    
+    type_ = bdc.get_value('info','type')
+    
+    if type_ == 'bundle':
+        return  bdc.dataset.identity 
+    elif type_ == 'partition':
+        return  bdc.partition.identity 
+    else:
+        raise Exception("Invalid type: {}", type)
+    
+
+    
 class Bundle(object):
     '''Represents a bundle, including all configuration 
     and top level operations. '''
@@ -1125,6 +1145,17 @@ class BundleDbConfig(BundleConfig):
 
         return  (s.query(Dataset).one())
 
+    @property
+    def partition(self):
+        '''Initialize the identity, creating a dataset record, 
+        from the bundle.yaml file'''
+        
+        from databundles.orm import Partition
+ 
+        s = self.database.session
+
+        return  (s.query(Partition).first())
+   
    
 if __name__ == '__main__':
     import databundles.run

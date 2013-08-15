@@ -352,6 +352,45 @@ def post_load(library):
     
     identity = new_identity(request.json)
     
+    logger.debug("Loading name {}".format( identity  ))
+    
+    if identity.is_bundle:
+        
+        l = library
+        
+        raise exc.Gone("Failed to get object {} from upstream; cache doesn't have key as after install ".format(identity.cache_key))
+        
+        # This will pull the file into the local cache from the remote, 
+        # As long as the remote is listed as an upstream for the library. 
+        path = l.cache.get(identity.cache_key)
+        l.run_dumper_thread()
+        
+        if not path or not os.path.exists(path):
+            raise exc.Gone("Failed to get object {} from upstream; path '{}' does not exist. Cache connection = {} ".format(identity.cache_key, path, l.cache.connection_info))
+        
+        logger.debug("Installing path {} to identity {}".format(path, identity  ))
+        
+        l.database.install_bundle_file(identity, path)
+        
+        if not l.cache.has(identity.cache_key):
+            raise exc.Gone("Failed to get object {} from upstream; cache doesn't have key as after install ".format(identity.cache_key))
+
+    return identity.to_dict()
+
+@get('/load/<name>')
+@CaptureException
+def get_load(library, name): 
+    '''Ask the libary to check its object store for the  given dataset. We only need to do this for
+    datasets, which are referenced by the interface. 
+
+    '''
+    from databundles.identity import Identity
+
+    identity = Identity.parse_name(name)
+
+    if identity.revision == None:
+        raise exc.BadRequest("Identity name must include revision")
+    
     if identity.is_bundle:
         
         l = library
@@ -371,8 +410,11 @@ def post_load(library):
         if not l.cache.has(identity.cache_key):
             raise exc.Gone("Failed to get object {} from upstream; cache doesn't have key as after install ".format(identity.cache_key))
 
+    else:
+        # Don't need to load non bundles, because they don't have data that gets loaded into the library databases
+        pass
+    
     return identity.to_dict()
-
 
 @get('/datasets/<did>') 
 @CaptureException   

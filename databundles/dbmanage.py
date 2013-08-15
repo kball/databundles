@@ -389,6 +389,25 @@ def library_command(args, rc, src):
                     
                     w.writerow(row)
             
+    elif args.subcommand == 'load':
+        from bundle import get_identity
+        from identity import Identity
+        
+        
+        print Identity.parse_name(args.relpath).to_dict()
+        
+        return 
+        
+        prt("{}",l.cache.connection_info)
+        prt("{}: Load relpath from cache", args.relpath)
+        path = l.cache.get(args.relpath)
+            
+        prt("{}: Stored in local cache", path)
+            
+        if path:
+            print get_identity(path).name
+            
+            
     elif args.subcommand == 'listremote':
         
         if args.datasets:
@@ -406,7 +425,7 @@ def library_command(args, rc, src):
                     print ("        {0:11s} {1:50s} {2} ".format(id_,  p['name'], vs))
                 
         else:
-        
+
             datasets = l.remote.list()
 
             for id_, data in datasets.items():
@@ -672,6 +691,10 @@ def main():
     sp.add_argument('term', type=str,help='Query term')
     sp.add_argument('-o','--open',  default=False, action="store_true",  help='Open the database with sqlites')
     sp.add_argument('-s','--schema',  default=False, action="store_true",  help='Dump the schema as a CSV file.')
+
+    sp = asp.add_parser('load', help='Search for the argument as a bundle or partition name or id. Possible download the file from the remote library')
+    sp.set_defaults(subcommand='load')   
+    sp.add_argument('relpath', type=str,help='Cache rel path of dataset to load from remote')
 
 
     sp = asp.add_parser('find', help='Search for the argument as a bundle or partition name or id')

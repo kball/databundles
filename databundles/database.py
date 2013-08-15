@@ -10,6 +10,8 @@ import anydbm
 from databundles.geo.sfschema import TableShapefile
 from .hdf5 import Hdf5File
 
+    
+
 class FeatureInserter(object):
     def __init__(self, partition, table, dest_srs=4326, source_srs=None, layer_name = None):
 
@@ -1158,6 +1160,17 @@ class BundleDb(Database):
     def __init__(self, path):
 
         super(BundleDb, self).__init__(None, path)  
+        
+        self.base_path = path
+        
+    @classmethod
+    def make_path(cls, container):
+        raise NotImplementedError()
+    
+    @property 
+    def path(self):
+        return self.base_path
+    
         
 def _on_connect(dbapi_con, con_record):
     '''ISSUE some Sqlite pragmas when the connection is created'''
