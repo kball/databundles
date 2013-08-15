@@ -560,40 +560,24 @@ class LibraryDb(object):
         dataset = bdbs.query(Dataset).one()
         s.merge(dataset)
  
-        for config in bdbs.query(Config).all():
-            s.merge(config)
-            
-        s.commit()
-        
- 
-        for table in dataset.tables:
-            try:
+        try:
+            for config in bdbs.query(Config).all():
+                s.merge(config)
+                
+            for table in dataset.tables:
                 s.merge(table)
-                s.commit()
-            except IntegrityError as e:
-                self.logger.error("Failed to merge table "+str(table.id_)+":"+ str(e))
-                s.rollback()
-                raise e
-         
-            for column in table.columns:
-                try:
+             
+                for column in table.columns:
                     s.merge(column)
-                    s.commit()
-                except IntegrityError as e:
-                    self.logger.error("Failed to merge column "+str(column.id_)+":"+ str(e) )
-                    s.rollback()
-                    raise e
 
-        for partition in dataset.partitions:
-            try:
+            for partition in dataset.partitions:
                 s.merge(partition)
-                s.commit()
-            except IntegrityError as e:
-                self.logger.error("Failed to merge partition "+str(partition.identity.id_)+":"+ str(e))
-                s.rollback()
-                raise e
+    
+        except IntegrityError as e:
+            self.logger.error("Failed to merge partition "+str(partition.identity.id_)+":"+ str(e))
+            s.rollback()
+            raise e
 
-        s.commit()
         
     def remove_bundle(self, bundle):
         '''remove a bundle from the database'''
