@@ -1721,7 +1721,9 @@ class S3Cache(object):
 
     def public_url_f(self, public=False, expires_in=None):
         ''' Returns a function that will convert a rel_path into a public URL'''
-
+        from dbexceptions import NotFoundError
+        
+        
         if self.prefix is not None:
             prefix = self.prefix
         else:
@@ -1739,7 +1741,7 @@ class S3Cache(object):
 
             key =  self._get_boto_key(rel_path)
             if not key:
-                raise Exception("Failed to get key for path: {}".format(rel_path))
+                raise NotFoundError("Failed to get key for path: {}".format(rel_path))
             if public:
                 key =  prefix.strip('/')+"/"+rel_path.strip('/'); 
                 return "https://s3.amazonaws.com/{}/{}".format(bucket, key)

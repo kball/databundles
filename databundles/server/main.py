@@ -96,6 +96,8 @@ def _CaptureException(f, *args, **kwargs):
         raise # redirect() uses exceptions
     except Exception as e:
         r = capture_return_exception(e)
+        if hasattr(e, 'code'):
+            response.status = e.code
 
     return r
 
@@ -502,7 +504,12 @@ def get_dataset_partitions( did, pid, library):
         raise NotFound("Didn't find partition associated with id {}".format(pid))
     
     if library.remote:
-        url = library.remote.public_url_f()(partition.identity.cache_key)
+        try:
+            url = library.remote.public_url_f()(partition.identity.cache_key)
+        except NotFoundError as e:
+            raise NotFound("Found partition record, but not partition in remote for {}. Original Exception: {}"
+                           .format(partition.identity.name, e.message))
+            
         logger.debug("Redirect partition, {}".format(url))
         redirect(url)
     else:

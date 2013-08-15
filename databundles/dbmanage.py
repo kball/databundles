@@ -295,6 +295,11 @@ def library_command(args, rc, src):
             t.append('{column:12s}')
             header['column'] = 'Column'
 
+        if 'table' in first:
+            multi = True
+            t.append('{table:12s}')
+            header['table'] = 'table'
+
         ts = ' '.join(t)
         
         dashes = { k:'-'*len(v) for k,v in header.items() }
@@ -316,6 +321,9 @@ def library_command(args, rc, src):
             if 'column' in r:
                 rec['column'] = ''
                 
+            if 'table' in r:
+                rec['table'] = ''
+                
                
             if multi and first_rec_line:
                 prt(ts, **rec)
@@ -325,6 +333,10 @@ def library_command(args, rc, src):
             if 'column' in r:
                 rec['id'] = r['column'].id_
                 rec['column'] = r['column'].name
+
+            if 'table' in r:
+                rec['id'] = r['table'].id_
+                rec['table'] = r['table'].name
 
             prt(ts, **rec)
 
