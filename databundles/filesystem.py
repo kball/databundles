@@ -715,7 +715,7 @@ class FsCache(object):
 
         return m.hexdigest()
     
-    def get_stream(self, rel_path):
+    def get_stream(self, rel_path, cb=None):
         p = self.get(rel_path)
         
         if p:
@@ -724,7 +724,7 @@ class FsCache(object):
         if not self.upstream:
             return None
 
-        return self.upstream.get_stream(rel_path)
+        return self.upstream.get_stream(rel_path, cb=cb)
         
     def path(self, rel_path):
         abs_path = os.path.join(self.cache_dir, rel_path)
@@ -737,19 +737,20 @@ class FsCache(object):
         
         return False
         
-    def has(self, rel_path, md5=None):
+    def has(self, rel_path, md5=None, use_upstream=True):
         
         abs_path = os.path.join(self.cache_dir, rel_path)
+     
         
         if os.path.exists(abs_path):
             return abs_path
         
-        if self.upstream:
-            return self.upstream.has(rel_path, md5=md5)
+        if self.upstream and use_upstream:
+            return self.upstream.has(rel_path, md5=md5, use_upstream=use_upstream)
         
         return False
         
-    def get(self, rel_path):
+    def get(self, rel_path, cb=None):
         '''Return the file path referenced but rel_path, or None if
         it can't be found. If an upstream is declared, it will try to get the file
         from the upstream before declaring failure. 
@@ -773,7 +774,7 @@ class FsCache(object):
             # If we don't have an upstream, then we are done. 
             return None
      
-        stream = self.upstream.get_stream(rel_path)
+        stream = self.upstream.get_stream(rel_path, cb=cb)
         
         if not stream:
             logger.debug("FC {} get not found in upstream ()".format(self.repo_id,rel_path)) 
@@ -1085,7 +1086,7 @@ class FsLimitedCache(FsCache):
         return open(p)
         
     
-    def get(self, rel_path):
+    def get(self, rel_path, cb=None):
         '''Return the file path referenced but rel_path, or None if
         it can't be found. If an upstream is declared, it will try to get the file
         from the upstream before declaring failure. 
@@ -1110,7 +1111,7 @@ class FsLimitedCache(FsCache):
             # If we don't have an upstream, then we are done. 
             return None
      
-        stream = self.upstream.get_stream(rel_path)
+        stream = self.upstream.get_stream(rel_path, cb=cb)
         
         if not stream:
             logger.debug("LC {} get not found in upstream ()".format(self.repo_id,rel_path)) 
@@ -1233,7 +1234,10 @@ class FsLimitedCache(FsCache):
         
         path = path.strip('/')
         
-        raise NotImplementedError() 
+        if self.upstream:
+            return self.upstream.list(path)
+        else:
+            raise NotImplementedError() 
 
     
     def public_url_f(self, public=False, expires_in=None):
@@ -1270,7 +1274,7 @@ class FsCompressionCache(FsCache):
     def _rename( rel_path):
         return rel_path+".gz" if not rel_path.endswith('.gz') else rel_path
     
-    def get_stream(self, rel_path):
+    def get_stream(self, rel_path, cb=None):
         from databundles.util import bundle_file_type
         source = self.upstream.get_stream(self._rename(rel_path))
    
@@ -1278,15 +1282,15 @@ class FsCompressionCache(FsCache):
             return None
   
         if bundle_file_type(source) == 'gzip':
-            source = self.upstream.get_stream(self._rename(rel_path))
+            source = self.upstream.get_stream(self._rename(rel_path), cb=cb)
             logger.debug("CC returning {} with decompression".format(rel_path)) 
             return gzip.GzipFile(fileobj=source)
         else:
-            source = self.upstream.get_stream(rel_path)
+            source = self.upstream.get_stream(rel_path, cb=cb)
             logger.debug("CC returning {} with passthrough".format(rel_path)) 
             return source
 
-    def get(self, rel_path):
+    def get(self, rel_path, cb=None):
         raise NotImplementedError("Get() is not implemented. Use get_stream()") 
 
     def put(self, source, rel_path, metadata=None):
@@ -1347,8 +1351,8 @@ class FsCompressionCache(FsCache):
         return self.upstream.list(path)
 
 
-    def has(self, rel_path, md5=None):
-        return self.upstream.has(self._rename(rel_path), md5=md5)
+    def has(self, rel_path, md5=None, use_upstream=True):
+        return self.upstream.has(self._rename(rel_path), md5=md5, use_upstream=use_upstream)
 
     def metadata(self, rel_path):
         return self.upstream.metadata(self._rename(rel_path))
@@ -1435,7 +1439,7 @@ class S3Cache(object):
         else:
             return None
 
-    def get_stream(self, rel_path):
+    def get_stream(self, rel_path, cb=None):
         """Return the object as a stream"""
         from boto.s3.key import Key
         from boto.exception import S3ResponseError 
@@ -1455,7 +1459,7 @@ class S3Cache(object):
  
         b = StringIO.StringIO()
         try:
-            k.get_contents_to_file(b)
+            k.get_contents_to_file(b, cb=cb, num_cb=100)
             b.seek(0)
             return b;
         except S3ResponseError as e:
@@ -1465,7 +1469,7 @@ class S3Cache(object):
                 raise e
    
         
-    def get(self, rel_path):
+    def get(self, rel_path, cb=None):
         '''Return the file path referenced but rel_path, or None if
         it can't be found. If an upstream is declared, it will try to get the file
         from the upstream before declaring failure. 
@@ -1658,9 +1662,11 @@ class S3Cache(object):
             
     def find(self,query):
         '''Passes the query to the upstream, if it exists'''
+
         if  self.upstream:
             return self.upstream.find(query)
         else:
+            # Can't search on an S3 stream
             return False
     
     def remove(self,rel_path, propagate = False):
@@ -1689,10 +1695,10 @@ class S3Cache(object):
                 continue # partition files
             
             l.append(path)
-        
+
         return l
 
-    def has(self, rel_path, md5=None):
+    def has(self, rel_path, md5=None, use_upstream=True):
         
         rel_path = self._rename(rel_path)
         

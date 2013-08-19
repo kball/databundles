@@ -940,6 +940,17 @@ class LibraryDb(object):
         else:
             return s.query(File).filter(File.state == state).all()
 
+    def get_file_by_ref(self, ref):
+        """Return all files in the database with the given state"""
+        from databundles.orm import  File
+        from sqlalchemy.orm.exc import NoResultFound 
+        s = self.session
+
+        try:
+            return s.query(File).filter(File.ref == ref).one()
+        except NoResultFound:
+            return None
+
     def remove_file(self,path):
         pass
     
@@ -1323,6 +1334,7 @@ class Library(object):
                 else:
                     term = bp_id.name
         elif isinstance(bp_id, basestring):
+            
             try:
                 on = ObjectNumber.parse(bp_id)
                 
@@ -1404,7 +1416,7 @@ class Library(object):
    
         return  dataset, partition
 
-    def _get_remote_dataset(self, dataset):
+    def _get_remote_dataset(self, dataset, cb=None):
         from databundles.identity import Identity
         
         try:# ORM Objects
@@ -1412,17 +1424,19 @@ class Library(object):
         except:# Tuples
             identity = Identity(**(dataset._asdict()))        
 
-        r = self.remote.get(identity.id_)
+        r = self.remote.get(identity.id_, cb=cb)
         
         if not r:
             return False
         
         # Store it in the local cache. 
+        abs_path = self.cache.put(r, identity.cache_key )
         
-        if not self.cache.has(identity.cache_key):
-            abs_path = self.cache.put(r, identity.cache_key )
-        else:
-            abs_path = self.cache.get(identity.cache_key )
+        
+        #if not self.cache.has(identity.cache_key):
+        #    abs_path = self.cache.put(r, identity.cache_key )
+        #else:
+        #    abs_path = self.cache.get(identity.cache_key )
         
         if not os.path.exists(abs_path):
             raise Exception("Didn't get file '{}' for id {}".format(abs_path, identity.cache_key))
@@ -1431,12 +1445,12 @@ class Library(object):
   
         # Ensure the file is in the local library. 
 
-        self.database.add_file(abs_path, self.cache.repo_id, bundle.identity.id_, 'pulled')                 
+        self.database.add_file(abs_path, self.cache.repo_id, bundle.identity.vid, 'pulled')              
         self.database.install_bundle(bundle)
       
         return abs_path
       
-    def _get_remote_partition(self, bundle, partition):
+    def _get_remote_partition(self, bundle, partition, cb = None):
         
         from databundles.identity import PartitionIdentity, new_identity 
 
@@ -1452,7 +1466,7 @@ class Library(object):
         if os.path.exists(p.database.path):
             os.remove(p.database.path)
 
-        r = self.remote.get_partition(bundle.identity.id_, p.identity.id_)
+        r = self.remote.get(bundle.identity.id_, p.identity.id_,cb=cb)
         
         # Store it in the local cache. 
         p_abs_path = self.cache.put(r,p.identity.cache_key)
@@ -1467,11 +1481,11 @@ class Library(object):
             raise Exception(m)
 
         # Ensure the file is in the local library. 
-        self.database.add_file(p_abs_path, self.cache.repo_id, bundle.identity.id_, 'pulled')                 
+        self.database.add_file(p_abs_path, self.cache.repo_id, bundle.identity.vid, 'pulled')                 
     
         return p_abs_path, p
             
-    def get(self,bp_id):
+    def get(self,bp_id, force = False, cb=None):
         '''Get a bundle, given an id string or a name '''
 
         # Get a reference to the dataset, partition and relative path
@@ -1479,21 +1493,22 @@ class Library(object):
 
         dataset, partition = self.get_ref(bp_id)
 
-
         if partition:
-            return self._get_partition(dataset, partition)
+            return self._get_partition(dataset, partition, force, cb=cb)
         elif dataset:
-            return self._get_dataset(dataset)  
+            return self._get_dataset(dataset, force, cb=cb)
+        else:
+            return False
 
-    def _get_dataset(self, dataset):
+    def _get_dataset(self, dataset, force = False, cb=None):
 
         # Try to get the file from the cache. 
-        abs_path = self.cache.get(dataset.cache_key)
+        abs_path = self.cache.get(dataset.cache_key, cb=cb)
 
         # Not in the cache, try to get it from the remote library, 
         # if a remote was set. 
 
-        if not abs_path and self.remote:
+        if ( not abs_path or force )  and self.remote :
             abs_path = self._get_remote_dataset(dataset)
             
         if not abs_path or not os.path.exists(abs_path):
@@ -1506,34 +1521,35 @@ class Library(object):
         # For filesystems that have an upstream remote that is S3, it is possible
         # to get a dataset that isn't in the library, so well need to add it. 
 
-        dataset, partition =  self.database.get(bundle.identity)
+        #dataset, partition =  self.database.get(bundle.identity)
 
-        if dataset is None:
-            self._get_remote_dataset(bundle.identity) # Side effect of adding to the library 
+        #if dataset is None or force:
+        #    self._get_remote_dataset(bundle.identity) # Has the Side effect of adding to the library 
             
         return bundle
     
-    def _get_partition(self,  dataset, partition):
+    def _get_partition(self,  dataset, partition, force = False, cb=None):
         from databundles.dbexceptions import NotFoundError
-        
 
-        
-        r = self._get_dataset(dataset)
+        r = self._get_dataset(dataset, cb=cb)
 
         if not r:
             return False
 
-        p =  r.partitions.partition(partition)
-        
+        try:
+            p =  r.partitions.partition(partition)
+        except:
+            p = None
+            
         if not p:
             raise NotFoundError(" Partition '{}' not in bundle  '{}' "
                                 .format(partition, r.identity.name ))
         
-        rp = self.cache.get(p.identity.cache_key)
+        rp = self.cache.get(p.identity.cache_key, cb=cb)
     
-        if not os.path.exists(p.database.path) or p.database.is_empty():
+        if not os.path.exists(p.database.path) or p.database.is_empty() or force:
             if self.remote:
-                self._get_remote_partition(r,partition)
+                self._get_remote_partition(r,partition, cb=cb)
             else:
                 raise NotFoundError("""Didn't get partition in {} for id {} {}. 
                                     Partition found, but path {} ({}?) not in local library and remote not set. """
@@ -1627,7 +1643,7 @@ class Library(object):
         if self.remote and self.sync:
             self.remote.put(identity, file_path)
 
-        self.database.add_file(dst, self.cache.repo_id, identity.id_,  state)
+        self.database.add_file(dst, self.cache.repo_id, identity.vid,  state)
 
         if identity.is_bundle:
             self.database.install_bundle_file(identity, file_path)
@@ -1785,17 +1801,24 @@ class Library(object):
     def remote_rebuild(self):
         '''Rebuild the library from the contents of the remote'''
 
-        self.clean()
+        self.database.drop()
+        self.database.create()
+        
         for rel_path in self.remote.list():
+
             path = self.cache.get(rel_path) # The cache and the remote must be connected!
      
             bundle = DbBundle(path)
             identity = bundle.identity
      
-            self.database.add_file(path, self.cache.repo_id, identity.id_,  'pushed')
-
+            self.database.add_file(path, self.cache.repo_id, identity.vid,  'pulled')
+            self.logger.info('Installing: {} '.format(bundle.identity.name))
             self.database.install_bundle_file(identity, path)
             
+            for p in bundle.partitions:  
+                if self.cache.has(p.identity.cache_key, use_upstream=False): # This only installs the partitions that we already have locally
+                    self.logger.info('            {} '.format(p.identity.name))
+                    self.database.add_file(p.database.path, self.cache.repo_id, p.identity.vid,  'rebuilt')
 
 
     def rebuild(self):
@@ -1831,6 +1854,14 @@ class Library(object):
         for bundle in bundles:
             self.logger.info('Installing: {} '.format(bundle.identity.name))
             self.database.install_bundle(bundle)
+            self.database.add_file(bundle.database.path, self.cache.repo_id, bundle.identity.vid,  'rebuilt')
+
+            for p in bundle.partitions:
+                
+                if self.cache.has(p.identity.cache_key, use_upstream=False):
+                    self.logger.info('            {} '.format(p.identity.name))
+                    self.database.add_file(p.database.path, self.cache.repo_id, p.identity.vid,  'rebuilt')
+    
 
         self.database.commit()
         return bundles

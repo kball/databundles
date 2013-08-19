@@ -810,6 +810,13 @@ class File(Base, SavableMixin):
       
     def __repr__(self):
         return "<file: {}; {}>".format(self.path, self.state)
+    
+    def to_dict(self):
+
+        return  dict((col, getattr(self, col)) for col 
+                     in ['path', 'source_url', 'process', 'state', 'content_hash', 'modified', 'size', 'group', 'ref'])
+    
+    
 
 class Partition(Base):
     __tablename__ = 'partitions'

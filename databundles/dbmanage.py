@@ -100,7 +100,6 @@ def warehouse_command(args, rc, src):
     else:
         pass
     
-
 def library_command(args, rc, src):
     import library
 
@@ -111,341 +110,372 @@ def library_command(args, rc, src):
     
     l = library.get_library(config=config, name=args.name)
 
-    if args.subcommand == 'init':
-        print "Initialize Library"
-        l.database.create()
+    globals()['library_'+args.subcommand](args, l,config)
 
-    elif args.subcommand == 'backup':
-        import tempfile
+
+def library_init(args, l, config):
+
+    print "Initialize Library"
+    l.database.create()
+
+def library_backup(args, l, config):
+
+    import tempfile
+
+    if args.file:
+        backup_file = args.file
+        is_temp = False
+    else:
+        tfn = tempfile.NamedTemporaryFile(delete=False)
+        tfn.close()
     
+        backup_file = tfn.name+".db"
+        is_temp = True
+
+    if args.date:
+        from datetime import datetime
+        date = datetime.now().strftime('%Y%m%dT%H%M')
+        parts = backup_file.split('.')
+        if len(parts) >= 2:
+            backup_file = '.'.join(parts[:-1]+[date]+parts[-1:])
+        else:
+            backup_file = backup_file + '.' + date
+
+    prt('{}: Starting backup', backup_file)
+
+    l.database.dump(backup_file)
+
+    if args.cache:
+        dest_dir = l.cache.put(backup_file,'_/{}'.format(os.path.basename(backup_file)))
+        is_temp = True
+    else:
+        dest_dir = backup_file
+
+    if is_temp:
+        os.remove(backup_file)
+
+        
+    prt("{}: Backup complete", dest_dir)
+        
+def library_restore(args, l, config, *kwargs):
+
+    if args.dir:
+      
         if args.file:
-            backup_file = args.file
-            is_temp = False
-        else:
-            tfn = tempfile.NamedTemporaryFile(delete=False)
-            tfn.close()
-        
-            backup_file = tfn.name+".db"
-            is_temp = True
-
-        if args.date:
+            # Get the last file that fits the pattern, sorted alpha, with a date inserted
             from datetime import datetime
-            date = datetime.now().strftime('%Y%m%dT%H%M')
-            parts = backup_file.split('.')
+            import fnmatch
+            
+            date = '*' # Sub where the date will be  
+            parts = args.file.split('.')
             if len(parts) >= 2:
-                backup_file = '.'.join(parts[:-1]+[date]+parts[-1:])
+                pattern = '.'.join(parts[:-1]+[date]+parts[-1:])
             else:
-                backup_file = backup_file + '.' + date
-
-        prt('{}: Starting backup', backup_file)
-
-        l.database.dump(backup_file)
-
-        if args.cache:
-            dest_dir = l.cache.put(backup_file,'_/{}'.format(os.path.basename(backup_file)))
-            is_temp = True
-        else:
-            dest_dir = backup_file
-
-        if is_temp:
-            os.remove(backup_file)
-
-            
-        prt("{}: Backup complete", dest_dir)
-        
-
-    elif args.subcommand == 'restore':
-
-        if args.dir:
-          
-            if args.file:
-                # Get the last file that fits the pattern, sorted alpha, with a date inserted
-                from datetime import datetime
-                import fnmatch
+                import tempfile
+                tfn = tempfile.NamedTemporaryFile(delete=False)
+                tfn.close()
+    
+                backup_file = tfn.name+".db"
+                pattern = backup_file + '.' + date
                 
-                date = '*' # Sub where the date will be  
-                parts = args.file.split('.')
-                if len(parts) >= 2:
-                    pattern = '.'.join(parts[:-1]+[date]+parts[-1:])
-                else:
-                    pattern = backup_file + '.' + date
-                    
-                files = sorted([ f for f in os.listdir(args.dir) if fnmatch.fnmatch(f,pattern) ])
- 
-            else:
-                # Get the last file, by date. 
-                files = sorted([ f for f in os.listdir(args.dir) ], 
-                               key=lambda x: os.stat(os.path.join(args.dir,x))[8])
-
-
-            backup_file = os.path.join(args.dir,files.pop())
-            
-        elif args.file:
-            backup_file = args.file
-
+            files = sorted([ f for f in os.listdir(args.dir) if fnmatch.fnmatch(f,pattern) ])
     
-        # Backup before restoring. 
-        
-        args = type('Args', (object,),{'file':'/tmp/before-restore.db','cache': True, 
-                                       'date': True, 'is_server': args.is_server, 'name':args.name, 
-                                       'subcommand': 'backup'})
-        library_command(args, rc, src)
-
-        prt("{}: Restoring", backup_file)
-        l.clean(add_config_root=False)
-        l.restore(backup_file)
-    
-    elif args.subcommand == 'server':
-
-        from databundles.server.main import production_run
-
-        def run_server(args, src):
-            production_run(src, library_name = args.name)
-        
-        if args.daemonize:
-            daemonize(run_server, args,  src)
         else:
-            production_run(src, library_name = args.name)
+            # Get the last file, by date. 
+            files = sorted([ f for f in os.listdir(args.dir) ], 
+                           key=lambda x: os.stat(os.path.join(args.dir,x))[8])
+    
+    
+        backup_file = os.path.join(args.dir,files.pop())
         
-      
-    elif args.subcommand == 'drop':
-        print "Drop tables"
-        l.database.drop()
+    elif args.file:
+        backup_file = args.file
+    
+    
+    # Backup before restoring. 
+    
+    args = type('Args', (object,),{'file':'/tmp/before-restore.db','cache': True, 
+                                   'date': True, 'is_server': args.is_server, 'name':args.name, 
+                                   'subcommand': 'backup'})
+    library_backup(args, l, config)
+    
+    prt("{}: Restoring", backup_file)
+    l.clean(add_config_root=False)
+    l.restore(backup_file)
+   
+def library_server(args, l, config):
 
-    elif args.subcommand == 'clean':
-        print "Clean tables"
-        l.database.clean()
-      
-    elif args.subcommand == 'purge':
-        print "Purge library"
-        l.purge()
+    from databundles.server.main import production_run
+
+    def run_server(args, config):
+        production_run(config, library_name = args.name)
+    
+    if args.daemonize:
+        daemonize(run_server, args,  config)
+    else:
+        production_run(config, library_name = args.name)
         
-    elif args.subcommand == 'rebuild':
-        print "Rebuild library"
+def library_drop(args, l, config):   
+
+    print "Drop tables"
+    l.database.drop()
+
+def library_clean(args, l, config):
+
+    print "Clean tables"
+    l.database.clean()
+        
+def library_purge(args, l, config):
+
+    print "Purge library"
+    l.purge()
+      
+def library_rebuild(args, l, config):  
+
+    print "Rebuild library"
+    if args.remote:
+        l.remote_rebuild()
+    else:
         l.rebuild()
         
-    elif args.subcommand == 'list':
-        
+def library_list(args, l, config):    
+
+    if not args.term:
         for i in l.database.connection.execute('SELECT * from datasets'):
             d =  dict(i)
-            print d['d_id'], d['d_name']
-        
-    elif args.subcommand == 'info':
-        print "Library Info"
-        print "Name:     {}".format(args.name)
-        print "Database: {}".format(l.database.dsn)
-        print "Remote:   {}".format(l.remote.connection_info if l.remote else 'None')
-        print "Cache:    {}".format(l.cache.cache_dir)
-
-    elif args.subcommand == 'push':
-        
-        if args.force:
-            state = 'all'
-        else:
-            state = 'new'
-        
-        files_ = l.database.get_file_by_state(state)
-        if len(files_):
-            print "-- Pushing to {}".format(l.remote)
-            for i, f in enumerate(files_):
-                print "Pushing: {}".format(f.path)
-                try:
-                    l.push(f)
-                except Exception as e:
-                    print "Failed: {}".format(e)
-                    raise
-                
-
-    elif args.subcommand == 'files':
-
-        files_ = l.database.get_file_by_state(args.file_state)
-        if len(files_):
-            print "-- Display {} files".format(args.file_state)
-            for f in files_:
-                print "{0:11s} {1:4s} {2}".format(f.ref,f.state,f.path)
-
-    elif args.subcommand == 'find':
-     
-        from databundles.library import QueryCommand
-
-        terms = []
-        for t in args.term:
-            if ' ' in t or '%' in t:
-                terms.append("'{}'".format(t))
-            else:
-                terms.append(t)
-
-
-        qc = QueryCommand.parse(' '.join(terms))
-        
-        identities = l.find(qc)
-       
-        try: first = identities[0]
-        except: first = None
-        
-        if not first:
-            return
-        
-        t = ['{id:<8s}','{vname:20s}']
-        header = {'id': 'ID', 'vname' : 'Versioned Name'}
-        
-        multi = False
-        if 'column' in first:
-            multi = True
-            t.append('{column:12s}')
-            header['column'] = 'Column'
-
-        if 'table' in first:
-            multi = True
-            t.append('{table:12s}')
-            header['table'] = 'table'
-
-        ts = ' '.join(t)
-        
-        dashes = { k:'-'*len(v) for k,v in header.items() }
-       
-        prt(ts, **header) # Print the header
-        prt(ts, **dashes) # print the dashes below the header
-       
-        last_rec = None
-        first_rec_line = True
-        for r in identities:
-            
-            if not last_rec or last_rec['id'] != r['identity'].id_:
-                rec = {'id': r['identity'].id_, 'vname':r['identity'].vname}
-                last_rec = rec
-                first_rec_line = True
-            else:
-                rec = {'id':'', 'vname':''}
-       
-            if 'column' in r:
-                rec['column'] = ''
-                
-            if 'table' in r:
-                rec['table'] = ''
-                
-               
-            if multi and first_rec_line:
-                prt(ts, **rec)
-                rec = {'id':'', 'vname':''}
-                first_rec_line = False
-               
-            if 'column' in r:
-                rec['id'] = r['column'].id_
-                rec['column'] = r['column'].name
-
-            if 'table' in r:
-                rec['id'] = r['table'].id_
-                rec['table'] = r['table'].name
-
-            prt(ts, **rec)
-
-        return 
-
-    elif args.subcommand == 'get':
-     
-        # This will fetch the data, but the return values aren't quite right
-        r = l.get(args.term)
-      
-        if not r:
-            print "{}: Not found".format(args.term)
-        elif not args.schema:
-            print "--- Dataset ---"
-            print "Dataset   : ",r.identity.id_, r.identity.name
-            print "Is Local: ",l.cache.has(r.identity.cache_key) is not False
-            print "Rel Path  : ",r.identity.cache_key
-            print "Abs Path  : ",l.cache.has(r.identity.cache_key)
-            
-            if r.partition:
-                print "--- Partition ---"
-                print "Partition : ",r.partition.identity.id_, r.partition.name
-                print "Is Local: ",(l.cache.has(r.partition.identity.cache_key) is not False) if r.partition else ''
-                print "Rel Path  : ",r.partition.identity.cache_key
-                print "Abs Path  : ",l.cache.has(r.partition.identity.cache_key)
-
-        if r and args.open:
-            
-            if r.partition:
-                abs_path = os.path.join(l.cache.cache_dir, r.partition.identity.cache_key)
-            else:
-                abs_path = os.path.join(l.cache.cache_dir, r.identity.cache_key)
-                
-            print "\nOpening: {}\n".format(abs_path)
-
-            os.execlp('sqlite3','sqlite3',abs_path )
-            
-        elif r and args.schema:
-            from databundles.bundle import DbBundle
-            import csv, sys, itertools
-            from collections import OrderedDict
-            
-            abs_path = os.path.join(l.cache.cache_dir, r.bundle.identity.cache_key)
-            b = DbBundle(abs_path)
-            
-            w = None
-            
-            for table in b.schema.tables:
-                for col in table.columns:
-                    row = OrderedDict()
-                    row['table'] = table.name
-                    row['column'] = col.name
-                    row['is_pk'] = 1 if col.is_primary_key else ''
-                    row['is_fk'] =  col.foreign_key if col.foreign_key else ''
-                    row['type'] = col.datatype.upper()
-                    row['default'] = col.default
-                    row['description'] = col.description
-                    
-                    if not w:
-                        w = csv.DictWriter(sys.stdout,row.keys())
-                        w.writeheader()
-                    
-                    w.writerow(row)
-            
-    elif args.subcommand == 'load':
-        from bundle import get_identity
-        from identity import Identity
-        
-        
-        print Identity.parse_name(args.relpath).to_dict()
-        
-        return 
-        
-        prt("{}",l.cache.connection_info)
-        prt("{}: Load relpath from cache", args.relpath)
-        path = l.cache.get(args.relpath)
-            
-        prt("{}: Stored in local cache", path)
-            
-        if path:
-            print get_identity(path).name
-            
-            
-    elif args.subcommand == 'listremote':
-        
-        if args.datasets:
-            for ds in args.datasets:
-                dsi = l.remote.dataset(ds)
-
-                print "dataset {0:11s} {1}".format(dsi['dataset']['id'],dsi['dataset']['name'])
-
-                for id_, p in dsi['partitions'].items():
-                    vs = ''
-                    for v in ['time','space','table','grain','format']:
-                        val = p.get(v,False)
-                        if val:
-                            vs += "{}={} ".format(v, val)
-                    print ("        {0:11s} {1:50s} {2} ".format(id_,  p['name'], vs))
-                
-        else:
-
-            datasets = l.remote.list()
-
-            for id_, data in datasets.items():
-                print "{0:4s} {1:50s} {2}".format('remote',id_,data['identity']['name'])
-        
+            prt("{:10s} {}", d['d_id'], d['d_name'])
     else:
-        print "Unknown subcommand"
-        print args 
+        d = l.get(args.term)
+        
+        if not d:
+            prt("Error: no bundle found for identifier {} ", args.term)
+            return 
+        
+        for p in d.partitions:
+            prt("{:15s} {}", p.identity.vid, p.identity.vname)
+            
+        
+        
+
+def library_info(args, l, config):    
+
+    print "Library Info"
+    print "Name:     {}".format(args.name)
+    print "Database: {}".format(l.database.dsn)
+    print "Remote:   {}".format(l.remote.connection_info if l.remote else 'None')
+    print "Cache:    {}, {}".format(type(l.cache), l.cache.cache_dir)
+    
+def library_push(args, l, config):
+
+    if args.force:
+        state = 'all'
+    else:
+        state = 'new'
+    
+    files_ = l.database.get_file_by_state(state)
+    if len(files_):
+        print "-- Pushing to {}".format(l.remote)
+        for i, f in enumerate(files_):
+            print "Pushing: {}".format(f.path)
+            try:
+                l.push(f)
+            except Exception as e:
+                print "Failed: {}".format(e)
+                raise
+                
+def library_files(args, l, config):
+
+    files_ = l.database.get_file_by_state(args.file_state)
+    if len(files_):
+        print "-- Display {} files".format(args.file_state)
+        for f in files_:
+            print "{0:11s} {1:4s} {2}".format(f.ref,f.state,f.path)
+            
+def library_find(args, l, config):
+
+    from databundles.library import QueryCommand
+
+    terms = []
+    for t in args.term:
+        if ' ' in t or '%' in t:
+            terms.append("'{}'".format(t))
+        else:
+            terms.append(t)
+
+
+    qc = QueryCommand.parse(' '.join(terms))
+    
+    identities = l.find(qc)
+   
+    try: first = identities[0]
+    except: first = None
+    
+    if not first:
+        return
+    
+    t = ['{id:<8s}','{vname:20s}']
+    header = {'id': 'ID', 'vname' : 'Versioned Name'}
+    
+    multi = False
+    if 'column' in first:
+        multi = True
+        t.append('{column:12s}')
+        header['column'] = 'Column'
+
+    if 'table' in first:
+        multi = True
+        t.append('{table:12s}')
+        header['table'] = 'table'
+
+    ts = ' '.join(t)
+    
+    dashes = { k:'-'*len(v) for k,v in header.items() }
+   
+    prt(ts, **header) # Print the header
+    prt(ts, **dashes) # print the dashes below the header
+   
+    last_rec = None
+    first_rec_line = True
+    for r in identities:
+        
+        if not last_rec or last_rec['id'] != r['identity'].id_:
+            rec = {'id': r['identity'].id_, 'vname':r['identity'].vname}
+            last_rec = rec
+            first_rec_line = True
+        else:
+            rec = {'id':'', 'vname':''}
+   
+        if 'column' in r:
+            rec['column'] = ''
+            
+        if 'table' in r:
+            rec['table'] = ''
+            
+           
+        if multi and first_rec_line:
+            prt(ts, **rec)
+            rec = {'id':'', 'vname':''}
+            first_rec_line = False
+           
+        if 'column' in r:
+            rec['id'] = r['column'].id_
+            rec['column'] = r['column'].name
+
+        if 'table' in r:
+            rec['id'] = r['table'].id_
+            rec['table'] = r['table'].name
+
+        prt(ts, **rec)
+
+    return 
+
+def library_get(args, l, config):
+
+    def progress(i, n):
+        print i,n
+
+    # This will fetch the data, but the return values aren't quite right
+    r = l.get(args.term, force=args.force, cb=progress)
+  
+    if not r:
+        print "{}: Not found".format(args.term)
+    elif not args.schema:
+        print "--- Dataset ---"
+        print "Dataset   : ",r.identity.id_, r.identity.name
+        print "Is Local: ",l.cache.has(r.identity.cache_key) is not False
+        print "Rel Path  : ",r.identity.cache_key
+        print "Abs Path  : ",l.cache.has(r.identity.cache_key)
+        
+        if r.partition:
+            print "--- Partition ---"
+            print "Partition : ",r.partition.identity.id_, r.partition.name
+            print "Is Local: ",(l.cache.has(r.partition.identity.cache_key) is not False) if r.partition else ''
+            print "Rel Path  : ",r.partition.identity.cache_key
+            print "Abs Path  : ",l.cache.has(r.partition.identity.cache_key)
+
+    if r and args.open:
+        
+        if r.partition:
+            abs_path = os.path.join(l.cache.cache_dir, r.partition.identity.cache_key)
+        else:
+            abs_path = os.path.join(l.cache.cache_dir, r.identity.cache_key)
+            
+        print "\nOpening: {}\n".format(abs_path)
+
+        os.execlp('sqlite3','sqlite3',abs_path )
+        
+    elif r and args.schema:
+        from databundles.bundle import DbBundle
+        import csv, sys, itertools
+        from collections import OrderedDict
+        
+        abs_path = os.path.join(l.cache.cache_dir, r.bundle.identity.cache_key)
+        b = DbBundle(abs_path)
+        
+        w = None
+        
+        for table in b.schema.tables:
+            for col in table.columns:
+                row = OrderedDict()
+                row['table'] = table.name
+                row['column'] = col.name
+                row['is_pk'] = 1 if col.is_primary_key else ''
+                row['is_fk'] =  col.foreign_key if col.foreign_key else ''
+                row['type'] = col.datatype.upper()
+                row['default'] = col.default
+                row['description'] = col.description
+                
+                if not w:
+                    w = csv.DictWriter(sys.stdout,row.keys())
+                    w.writeheader()
+                
+                w.writerow(row)
+     
+def library_load(args, l, config):       
+
+    from bundle import get_identity
+    from identity import Identity
+    
+    
+    print Identity.parse_name(args.relpath).to_dict()
+    
+    return 
+    
+    prt("{}",l.cache.connection_info)
+    prt("{}: Load relpath from cache", args.relpath)
+    path = l.cache.get(args.relpath)
+        
+    prt("{}: Stored in local cache", path)
+        
+    if path:
+        print get_identity(path).name
+        
+def library_listremote(args, l, config):          
+
+    if args.datasets:
+        for ds in args.datasets:
+            dsi = l.remote.dataset(ds)
+
+            print "dataset {0:11s} {1}".format(dsi['dataset']['id'],dsi['dataset']['name'])
+
+            for id_, p in dsi['partitions'].items():
+                vs = ''
+                for v in ['time','space','table','grain','format']:
+                    val = p.get(v,False)
+                    if val:
+                        vs += "{}={} ".format(v, val)
+                print ("        {0:11s} {1:50s} {2} ".format(id_,  p['name'], vs))
+            
+    else:
+
+        datasets = l.remote.list()
+
+        for id_, data in datasets.items():
+            print "{0:4s} {1:50s} {2}".format('remote',id_,data['identity']['name'])
+    
+def library_unknown(args, l, config):
+    print "Unknown subcommand"
+    print args 
 
 def remote_command(args, rc, src):
     import library
@@ -464,23 +494,37 @@ def remote_command(args, rc, src):
             print l.remote.connection_info
 
     elif args.subcommand == 'list':
-        o = []
         
+        from identity import new_identity
+        import json
+
+        o = []
+
         if l.remote.connection_info['service'] == 'remote':
             for name, d in l.remote.list().items():
                 identity = d['identity']
-                print identity['id'], identity['name']
+                o.append((identity['id'], identity['name'], None))
+           
         else:
             for i in l.remote.list():
-                try: o.append(i.name)
-                except: o.append(i)
-                
-            for i in sorted(o):
-                print i            
-        
-
-             
+                try: name = i.name
+                except: name = i
             
+                if args.meta:
+                    meta = l.remote.metadata(name)
+
+                    o.append((meta['id'],
+                              new_identity(json.loads(meta['identity'])) , 
+                              meta['size']
+                              ))
+
+                else:
+
+                    o.append((name,None,'' ))
+
+        for id, name, size in sorted(o, key = lambda i: i[0]):
+            print "{:5s} {:8s} {}".format( id,  str(size),  name)          
+
 def ckan_command(args,rc, src):
     from databundles.dbexceptions import ConfigurationError
     import databundles.client.ckan
@@ -675,12 +719,14 @@ def main():
     sp = asp.add_parser('purge', help='Remove all entries from the library database and delete all files')
     sp.set_defaults(subcommand='purge')
     
-    sp = asp.add_parser('list', help='List datasets in the library')
+    sp = asp.add_parser('list', help='List datasets in the library, or partitions in dataset')
     sp.set_defaults(subcommand='list')
+    sp.add_argument('term', type=str, nargs='?', help='Name of bundle, to list partitions')
     
     sp = asp.add_parser('rebuild', help='Rebuild the library database from the files in the library')
     sp.set_defaults(subcommand='rebuild')
- 
+    sp.add_argument('-r','--remote',  default=False, action="store_true",   help='Rebuild from teh remote')
+    
     sp = asp.add_parser('backup', help='Backup the library database to the remote')
     sp.set_defaults(subcommand='backup')
     sp.add_argument('-f','--file',  default=None,   help="Name of file to back up to") 
@@ -701,8 +747,9 @@ def main():
     sp = asp.add_parser('get', help='Search for the argument as a bundle or partition name or id. Possible download the file from the remote library')
     sp.set_defaults(subcommand='get')   
     sp.add_argument('term', type=str,help='Query term')
-    sp.add_argument('-o','--open',  default=False, action="store_true",  help='Open the database with sqlites')
+    sp.add_argument('-o','--open',  default=False, action="store_true",  help='Open the database with sqlite')
     sp.add_argument('-s','--schema',  default=False, action="store_true",  help='Dump the schema as a CSV file.')
+    sp.add_argument('-f','--force',  default=False, action="store_true",  help='Force retrieving from the remote')
 
     sp = asp.add_parser('load', help='Search for the argument as a bundle or partition name or id. Possible download the file from the remote library')
     sp.set_defaults(subcommand='load')   
@@ -799,7 +846,7 @@ def main():
     lib_p.set_defaults(command='remote')
     asp = lib_p.add_subparsers(title='remote commands', help='Access the remote library')
     lib_p.add_argument('-n','--name',  default='default',  help='Select a different name for the library, from which the remote is located')
-     
+ 
     group = lib_p.add_mutually_exclusive_group()
     group.add_argument('-s', '--server',  default=False, dest='is_server',  action='store_true', help = 'Select the server configuration')
     group.add_argument('-c', '--client',  default=False, dest='is_server',  action='store_false', help = 'Select the client configuration')
@@ -809,7 +856,8 @@ def main():
   
     sp = asp.add_parser('list', help='List remote files')
     sp.set_defaults(subcommand='list')
-
+    sp.add_argument('-m','--meta', default=False,  action='store_true',  help="Force fetching metadata for remotes that don't provide it while listing, like S3")
+        
                        
     #
     # Test Command

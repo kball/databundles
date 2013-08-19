@@ -463,11 +463,21 @@ def get_dataset_info(did, library):
     if not gr:
         raise exc.NotFound("Failed to find dataset for {}".format(did))
     
-    d = {'dataset' : gr.bundle.identity.to_dict(), 'partitions' : {}}
+    d = {'dataset' : gr.identity.to_dict(), 'partitions' : {}}
          
-    for partition in  gr.bundle.partitions:
+    file = library.database.get_file_by_ref(gr.identity.vid)
+    
+    if file:
+        d['dataset']['file'] = file.to_dict()
+
+    for partition in  gr.partitions:
         d['partitions'][partition.identity.id_] = partition.identity.to_dict()
     
+        file = library.database.get_file_by_ref(partition.identity.vid)
+        
+        if file:
+            d['partitions'][partition.identity.id_]['file'] = file.to_dict()
+        
     return d
 
 @get('/datasets/<did>/partitions')
