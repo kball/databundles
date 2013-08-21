@@ -1472,7 +1472,7 @@ class Library(object):
         if os.path.exists(p.database.path):
             os.remove(p.database.path)
 
-        r = self.remote.get(bundle.identity.vid, p.identity.vid,cb=cb)
+        r = self.remote.get(p.identity.vid,cb=cb)
         
         # Store it in the local cache. 
         p_abs_path = self.cache.put(r,p.identity.cache_key)
