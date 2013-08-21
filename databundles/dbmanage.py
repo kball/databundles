@@ -409,27 +409,14 @@ def library_get(args, l, config):
         import csv, sys, itertools
         from collections import OrderedDict
         
-        abs_path = os.path.join(l.cache.cache_dir, r.bundle.identity.cache_key)
+        abs_path = os.path.join(l.cache.cache_dir, r.identity.cache_key)
         b = DbBundle(abs_path)
         
         w = None
         
-        for table in b.schema.tables:
-            for col in table.columns:
-                row = OrderedDict()
-                row['table'] = table.name
-                row['column'] = col.name
-                row['is_pk'] = 1 if col.is_primary_key else ''
-                row['is_fk'] =  col.foreign_key if col.foreign_key else ''
-                row['type'] = col.datatype.upper()
-                row['default'] = col.default
-                row['description'] = col.description
-                
-                if not w:
-                    w = csv.DictWriter(sys.stdout,row.keys())
-                    w.writeheader()
-                
-                w.writerow(row)
+        print b.schema.as_csv()
+        
+       
      
 def library_load(args, l, config):       
 

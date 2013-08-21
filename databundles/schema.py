@@ -479,8 +479,10 @@ class Schema(object):
                 row['seq'] = col.sequence_id
                 row['column'] = col.name
                 row['is_pk'] = 1 if col.is_primary_key else ''
-                row['is_fk'] = col.foreign_key if col.foreign_key else None
                 
+            
+                row['is_fk'] = col.foreign_key if col.foreign_key else None
+             
                 for idx,s in indexes.items():
                     if idx:
                         row[idx] = 1 if col in s else None

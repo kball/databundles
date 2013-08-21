@@ -468,8 +468,13 @@ class Partitions(object):
         Throws:
             a Sqlalchemy exception if the partition either does not exist or
             is not unique
+            
+        Because this method works on the bundle, it the id_ ( without version information )
+        is equivalent to the vid ( with version information )
+            
         ''' 
         from databundles.orm import Partition as OrmPartition
+        from sqlalchemy import or_
         
         # This is needed to flush newly created partitions, I think ... 
         self.bundle.database.session.close()
@@ -480,7 +485,10 @@ class Partitions(object):
         
         q = (self.bundle.database.session
              .query(OrmPartition)
-             .filter(OrmPartition.id_==str(id_).encode('ascii')))
+             .filter(or_(
+                         OrmPartition.id_==str(id_).encode('ascii'),
+                          OrmPartition.vid==str(id_).encode('ascii')
+                         )))
       
         try:
             orm_partition = q.one()

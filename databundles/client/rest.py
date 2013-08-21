@@ -98,9 +98,8 @@ class Rest(object):
         
         return response.object
   
-    def _process_get_response(self, id_or_name, response, file_path=None, uncompress=False):
+    def _process_get_response(self, id_or_name, response, file_path=None, uncompress=False, cb=None):
         
-
         if response.status == 404:
             raise NotFound("Didn't find a file for {}".format(id_or_name))
         
@@ -146,10 +145,15 @@ class Rest(object):
                 raise NotImplementedError()
                
             chunksize = 8192  
+            i = 0
+            import pdb; pdb.set_trace()
             with open(file_path,'w') as file_:
                 
                 chunk =  response.read(chunksize) #@UndefinedVariable
                 while chunk:
+                    i += 1
+                    if cb:
+                        cb(0,i*chunksize)
                     file_.write(chunk)
                     chunk =  response.read(chunksize) #@UndefinedVariable
 
@@ -157,7 +161,7 @@ class Rest(object):
         else:
             return response
            
-    def get(self, id_or_name, file_path=None, uncompress=False):
+    def get(self, id_or_name, file_path=None, uncompress=False, cb=False):
         '''Get a bundle by name or id and either return a file object, or
         store it in the given file object
         
@@ -172,15 +176,18 @@ class Rest(object):
         
         '''
         from databundles.util import bundle_file_type
+        from urllib import quote_plus
 
         try: id_or_name = id_or_name.id_ # check if it is actualy an Identity object
         except: pass
 
+        id_or_name = id_or_name.replace('/','|')
+
         response  = self.remote.datasets(id_or_name).get()
 
-        return self._process_get_response(id_or_name, response, file_path, uncompress)
+        return self._process_get_response(id_or_name, response, file_path, uncompress, cb=cb)
                 
-    def get_partition(self, d_id_or_name, p_id_or_name, file_path=None, uncompress=False):
+    def get_partition(self, d_id_or_name, p_id_or_name, file_path=None, uncompress=False, cb=False):
         '''Get a partition by name or id and either return a file object, or
         store it in the given file object
         
@@ -196,7 +203,7 @@ class Rest(object):
         '''
         response  = self.remote.datasets(d_id_or_name).partitions(p_id_or_name).get()
         
-        return self._process_get_response(p_id_or_name, response, file_path, uncompress)
+        return self._process_get_response(p_id_or_name, response, file_path, uncompress, cb=cb)
 
                     
     def _put(self, source, identity):

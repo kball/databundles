@@ -1128,13 +1128,19 @@ class QueryCommand(object):
 
         for tt in tokenize.generate_tokens(StringIO(unicode(s)).readline):
             t_type =  tt[0]
-            t_string = tt[1]
+            t_string = tt[1].strip()
             pos = tt[2][0]
-            
+
             line = tt[4]
+            
+            #print "{:5d} {:5d} {:15s} || {}".format(t_type, pos, "'"+t_string+"'", line)
+            
 
             def err(expected):
                 raise cls.ParseError("Expected {} in {} at char {}, got {}, '{}' ".format(expected, line, pos, token.tok_name[t_type], t_string))
+
+            if not t_string:
+                continue
 
             if state == 'name_start':
                 # First part of name
@@ -1168,7 +1174,7 @@ class QueryCommand(object):
                     raise err("'='")                            
             elif state == 'value':
                 # The Value
-                if t_type == token.NAME or t_type == token.STRING:
+                if t_type == token.NAME or t_type == token.STRING or t_type == token.NUMBER:
                     value = t_string
                     state = 'name_start'
                    
@@ -1466,7 +1472,7 @@ class Library(object):
         if os.path.exists(p.database.path):
             os.remove(p.database.path)
 
-        r = self.remote.get(bundle.identity.id_, p.identity.id_,cb=cb)
+        r = self.remote.get(bundle.identity.vid, p.identity.vid,cb=cb)
         
         # Store it in the local cache. 
         p_abs_path = self.cache.put(r,p.identity.cache_key)

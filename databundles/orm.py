@@ -370,7 +370,10 @@ class Column(Base):
         try:
             return self._foreign_key
         except OperationalError:
-            return self._is_foreign_key if bool(self._is_foreign_key) else None
+            try:
+                return self._is_foreign_key if bool(self._is_foreign_key) else None
+            except TypeError: # Something about requiring an integer
+                return False
     
     @foreign_key.setter
     def foreign_key(self, value):

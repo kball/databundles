@@ -655,9 +655,100 @@ class BundleFilesystem(Filesystem):
             return None
         
         return o
-   
 
-class FsCache(object):
+class Cache(object):
+    
+    upstream = None
+    readonly = False
+    usreadonly = False   
+    
+    def __init__(self,  upstream=None):   
+        self.upstream = upstream
+   
+        self.readonly = False
+        self.usreadonly = False   
+    
+    @property
+    def remote(self):
+        '''Return a reference to an inner cache that is a remote'''
+        if self.upstream:
+            return self.upstream.remote
+        else:
+            return None
+   
+    @property
+    def repo_id(self):
+        raise NotImplementedError()
+    
+    def path(self, rel_path):
+        raise NotImplementedError()
+    
+    def get(self, rel_path, cb=None):
+        if self.upstream:
+            return self.upstream.get(rel_path, cb)
+        
+        return None
+
+    def get_stream(self, rel_path, cb=None):
+        if self.upstream:
+            return self.upstream.get_stream(rel_path, cb)
+        
+        return None
+
+    def has(self, rel_path, md5=None, use_upstream=True):
+        if self.upstream:
+            return self.upstream.has(rel_path, md5=md5, use_upstream=use_upstream)
+        
+        return None
+
+    def put(self, source, rel_path, metadata=None):
+        if self.upstream:
+            return self.upstream.put(self, source, rel_path, metadata=metadata)
+        
+        return None
+
+    def put_stream(self,rel_path, metadata=None):
+        if self.upstream:
+            return self.upstream.put_stream(self,rel_path, metadata=metadata)
+        
+        return None
+
+    
+    def remove(self,rel_path, propagate = False):
+        if self.upstream:
+            return self.upstream.remove(self,rel_path, propagate = propagate)
+        
+        return None
+
+    def find(self,query):
+
+        if self.upstream:
+            return self.upstream.find(query)    
+        return None
+
+    def clean(self):
+
+        if self.upstream:
+            return self.upstream.clean()
+        
+        return None
+        
+        
+    def list(self, path=None):
+        if self.upstream:
+            return self.upstream.list(path)
+        
+        return None
+
+
+    def public_url_f(self, public=False, expires_in=None):
+        if self.upstream:
+            return self.upstream.public_url_f(self, public=public, expires_in=expires_in)
+        
+        return None  
+
+
+class FsCache(Cache):
     '''A cache that transfers files to and from a remote filesystem
     
     The `FsCache` stores files in a filesystem, possily retrieving and storing
@@ -678,12 +769,14 @@ class FsCache(object):
             maxsize. Maximum size of the cache, in GB
         
         '''
-        self.readonly = False
-        self.usreadonly = False
+
         from databundles.dbexceptions import ConfigurationError
-        self.cache_dir = cache_dir
-        self.upstream = upstream
-     
+        
+        
+        super(FsCache, self).__init__(upstream)
+        
+        self._cache_dir = cache_dir
+
         if not os.path.isdir(self.cache_dir):
             os.makedirs(self.cache_dir)
         
@@ -698,13 +791,11 @@ class FsCache(object):
         else:
             return {'service':'file','dir':self.cache_dir }
         
+        
     @property
-    def remote(self):
-        '''Return a reference to an inner cache that is a remote'''
-        if self.upstream:
-            return self.upstream.remote
-        else:
-            return None
+    def cache_dir(self):
+        return self._cache_dir
+
         
     @property
     def repo_id(self):
@@ -715,17 +806,6 @@ class FsCache(object):
 
         return m.hexdigest()
     
-    def get_stream(self, rel_path, cb=None):
-        p = self.get(rel_path)
-        
-        if p:
-            return open(p) 
-     
-        if not self.upstream:
-            return None
-
-        return self.upstream.get_stream(rel_path, cb=cb)
-        
     def path(self, rel_path):
         abs_path = os.path.join(self.cache_dir, rel_path)
         
@@ -736,20 +816,7 @@ class FsCache(object):
             return self.upstream.path(rel_path)        
         
         return False
-        
-    def has(self, rel_path, md5=None, use_upstream=True):
-        
-        abs_path = os.path.join(self.cache_dir, rel_path)
-     
-        
-        if os.path.exists(abs_path):
-            return abs_path
-        
-        if self.upstream and use_upstream:
-            return self.upstream.has(rel_path, md5=md5, use_upstream=use_upstream)
-        
-        return False
-        
+    
     def get(self, rel_path, cb=None):
         '''Return the file path referenced but rel_path, or None if
         it can't be found. If an upstream is declared, it will try to get the file
@@ -796,6 +863,34 @@ class FsCache(object):
         logger.debug("FC {} got return from upstream {}".format(self.repo_id,rel_path)) 
         return path
     
+    
+    def get_stream(self, rel_path, cb=None):
+        p = self.get(rel_path)
+        
+        if p:
+            return open(p) 
+     
+        if not self.upstream:
+            return None
+
+        return self.upstream.get_stream(rel_path, cb=cb)
+        
+
+        
+    def has(self, rel_path, md5=None, use_upstream=True):
+        
+        abs_path = os.path.join(self.cache_dir, rel_path)
+     
+        
+        if os.path.exists(abs_path):
+            return abs_path
+        
+        if self.upstream and use_upstream:
+            return self.upstream.has(rel_path, md5=md5, use_upstream=use_upstream)
+        
+        return False
+        
+
 
     def put(self, source, rel_path, metadata=None):
         '''Copy a file to the repository
@@ -866,14 +961,9 @@ class FsCache(object):
                         self._upstream.put(self._repo_path, self._rel_path) 
 
       
-        return sink #flo(sink, upstream, repo_path, rel_path)
+        return flo(sink, upstream, repo_path, rel_path)
     
-    def find(self,query):
-        '''Passes the query to the upstream, if it exists'''
-        if self.upstream:
-            return self.upstream.find(query)
-        else:
-            return False
+
     
     def remove(self,rel_path, propagate = False):
         '''Delete the file from the cache, and from the upstream'''
@@ -936,9 +1026,10 @@ class FsLimitedCache(FsCache):
         
         from databundles.dbexceptions import ConfigurationError
 
-        self.cache_dir = cache_dir
+        super(FsLimitedCache, self).__init__(cache_dir, upstream=upstream)
+        
         self.maxsize = int(maxsize) * 1048578  # size in MB
-        self.upstream = upstream
+
         self.readonly = False
         self.usreadonly = False
         self._database = None
@@ -1077,8 +1168,8 @@ class FsLimitedCache(FsCache):
 
         return m.hexdigest()
     
-    def get_stream(self, rel_path):
-        p = self.get(rel_path)
+    def get_stream(self, rel_path, cb=None):
+        p = self.get(rel_path, cb=cb)
         
         if not p:
             return None
@@ -1111,6 +1202,7 @@ class FsLimitedCache(FsCache):
             # If we don't have an upstream, then we are done. 
             return None
      
+        
         stream = self.upstream.get_stream(rel_path, cb=cb)
         
         if not stream:
@@ -1251,16 +1343,16 @@ class FsLimitedCache(FsCache):
             return lambda rel_path: 'file://{}'.format(os.path.join(cache_dir, rel_path))     
     
 
-class FsCompressionCache(FsCache):
+class FsCompressionCache(Cache):
     
     '''A Cache Adapter that compresses files before sending  them to
     another cache.
      '''
 
     def __init__(self, upstream):
-        self.upstream = upstream
-        self.readonly = False
-        self.usreadonly = False
+        
+        super(FsCompressionCache, self).__init__(upstream)
+
 
     @property
     def repo_id(self):
@@ -1269,6 +1361,16 @@ class FsCompressionCache(FsCache):
     @property
     def cache_dir(self):
         return self.upstream.cache_dir
+  
+    @property
+    def connection_info(self):
+        '''Return reference to the connection, excluding the secret'''
+        return self.upstream.connection_info
+      
+    @property
+    def remote(self):
+        '''Return a reference to an inner cache that is a remote'''
+        return self.upstream.remote
     
     @staticmethod
     def _rename( rel_path):
@@ -1346,9 +1448,9 @@ class FsCompressionCache(FsCache):
         # Must always propagate, since this is really just a filter. 
         self.upstream.remove(self._rename(rel_path), propagate)    
 
-    def list(self, path=None):
+    def list(self, rel_path=None):
         '''get a list of all of the files in the repository'''
-        return self.upstream.list(path)
+        return self.upstream.list(self._rename(rel_path))
 
 
     def has(self, rel_path, md5=None, use_upstream=True):
@@ -1357,15 +1459,7 @@ class FsCompressionCache(FsCache):
     def metadata(self, rel_path):
         return self.upstream.metadata(self._rename(rel_path))
 
-    @property
-    def connection_info(self):
-        '''Return reference to the connection, excluding the secret'''
-        return self.upstream.connection_info
-      
-    @property
-    def remote(self):
-        '''Return a reference to an inner cache that is a remote'''
-        return self.upstream.remote
+
       
     def public_url_f(self, public=False, expires_in=None):
         ''' Returns a function that will convert a rel_path into a public URL'''
@@ -1378,7 +1472,7 @@ class FsCompressionCache(FsCache):
         return lambda rel_path: upstream_f(rename_f(rel_path))
     
 
-class S3Cache(object):
+class S3Cache(Cache):
     '''A cache that transfers files to and from an S3 bucket
     
      '''
@@ -1389,13 +1483,13 @@ class S3Cache(object):
         '''
         from boto.s3.connection import S3Connection
 
-        self.readonly = False
-        self.usreadonly = False
+        super(S3Cache, self).__init__(None)
+
         self.is_remote = False
         self.access_key = access_key
         self.bucket_name = bucket
         self.prefix = prefix
-        self.upstream = None
+
         self.conn = S3Connection(self.access_key, secret, is_secure = False )
         self.bucket = self.conn.get_bucket(self.bucket_name)
   
@@ -1403,6 +1497,10 @@ class S3Cache(object):
     def _rename(self, rel_path):
         import re
         return re.sub('\.gz$','',rel_path)
+  
+    @property
+    def cache_dir(self):
+        return None
   
     @property
     def size(self):

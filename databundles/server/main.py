@@ -431,6 +431,8 @@ def get_dataset_bundle(did, library):
 
     l = library
     
+    did = did.replace('|','/')
+    
     # We can get the dataset file to the local storage because we need to reference it in the interface. 
     # which is not necessary for partitions. 
     bp = l.get(did)

@@ -46,7 +46,7 @@ class TestBase(unittest.TestCase):
             bundle.clean()
             
             bundle = Bundle()   
-            if True or not os.path.exists(save_dir):
+            if not os.path.exists(save_dir):
                 logger.info( "Save dir is missing; re-build bundle. ")
                 bundle.prepare()
                 

@@ -361,13 +361,16 @@ class Test(TestBase):
 
         self.assertEqual(10, len(self.bundle.partitions.all))
         
-        p = self.bundle.partitions.new_partition(pid1)   
+        p = self.bundle.partitions.new_partition(pid1)
+        p.database.create() # Find will go to the library if the database doesn't exist. 
         self.assertEquals('pid1',p.data['pid'] )
       
-        p = self.bundle.partitions.new_partition(pid2)   
+        p = self.bundle.partitions.new_partition(pid2) 
+        p.database.create()  
         self.assertEquals('pid2',p.data['pid'] ) 
 
-        p = self.bundle.partitions.new_partition(pid3)   
+        p = self.bundle.partitions.new_partition(pid3)
+        p.database.create()   
         self.assertEquals('pid3',p.data['pid'] ) 
 
         p = self.bundle.partitions.find(pid1)   
