@@ -71,33 +71,34 @@ class Filesystem(object):
     def __init__(self, config):
         self.config = config
      
-    def get_cache(self, cache_name, config=None):
+    @classmethod
+    def get_cache(cls, config):
 
         """Return a new :class:`FsCache` built on the configured cache directory
-  
-        :type cache_name: string
-        :param cache_name: A key in the 'filesystem' section of the configuration,
-            from which configuration will be retrieved
-     
-        :type config: :class:`RunConfig`
-        :param config: If supplied, wil replace the default RunConfig()
-              
-        :rtype: a `FsCache` object
-        :return: a nre first level cache. 
-        
-        If config is None, the function will constuct a new RunConfig() with a default
-        constructor. 
-        
-        The `FsCache` will be constructed with the cache_dir values from the
-        library.cache config key, and if the library.repository value exists, it will 
-        be use for the upstream parameter.
-    
         """   
 
-        if config is None:
-            config = self.config
+        if 'size' in config:
+            fsclass = FsLimitedCache
+        elif 'url' in config:
+            fsclass = RestRemote
+        elif 'account' in config:
+            fsclass = S3Cache
+        elif 'dir' in config:
+            fsclass = FsCache
+        else:
+            from databundles.dbexceptions import ConfigurationError
+            raise ConfigurationError("Can't determine cache type: {} ".format(config))
 
-        return Filesystem._get_cache(config.filesystem, cache_name)
+        
+        if 'options' in config and 'compress' in config['options'] :
+            config['options'] = [ i for i in config['options'] if i !=  'compress']
+
+            return FsCompressionCache(upstream=config)
+        else:
+            return  fsclass(**dict(config))
+            
+            
+        
 
     @classmethod
     def _get_cache(cls, filesystem_config, cache_name, subconfig=None):
@@ -656,32 +657,111 @@ class BundleFilesystem(Filesystem):
         
         return o
 
+class CacheInterface(object):
+
+    config = None
+
+    def get(self, rel_path, cb=None): raise NotImplementedError()
+    
+    def get_stream(self, rel_path, cb=None):  raise NotImplementedError()
+    
+    def has(self, rel_path, md5=None, use_upstream=True):  raise NotImplementedError()
+    
+    def put(self, source, rel_path, metadata=None): raise NotImplementedError()
+    
+    def put_stream(self,rel_path, metadata=None): raise NotImplementedError()
+    
+    def remove(self,rel_path, propagate = False): raise NotImplementedError()
+    
+    def find(self,query): raise NotImplementedError()
+    
+    def list(self, path=None): raise NotImplementedError()
+   
+    def get_upsream(self, type_):
+        '''Return self, or an upstream, that has the given class type.
+        This is typically used to find upstream s that impoement the RemoteInterface
+        ''' 
+        raise NotImplementedError()
+   
+def RemoteInterface(CacheInterface):
+    
+    bucket_name = None #@UnusedVariable
+    prefix = None #@UnusedVariable
+    access_key = None #@UnusedVariable
+    secret_key = None #@UnusedVariable
+    
+    @property
+    def connection_info(self):  raise NotImplementedError()
+    
+    def find(self, query): raise NotImplementedError()
+    
+    def get_ref(self, id_): raise NotImplementedError()
+    
+    
+def RestRemote(RemoteInterface):
+       
+    def __init__(self,  url, upstream):           
+        super(RestRemote, self).__init__(upstream)
+        
+
+    def get(self, rel_path, cb=None): raise NotImplementedError()
+    
+    def get_stream(self, rel_path, cb=None):  raise NotImplementedError()
+    
+    def has(self, rel_path, md5=None, use_upstream=True):  raise NotImplementedError()
+    
+    def put(self, source, rel_path, metadata=None): raise NotImplementedError()
+    
+    def put_stream(self,rel_path, metadata=None): raise NotImplementedError()
+    
+    def remove(self,rel_path, propagate = False): raise NotImplementedError()
+    
+    def find(self,query): raise NotImplementedError()
+    
+    def list(self, path=None): raise NotImplementedError()
+   
+    def get_upsream(self, type_):
+        '''Return self, or an upstream, that has the given class type.
+        This is typically used to find upstream s that impoement the RemoteInterface
+        ''' 
+        raise NotImplementedError()    
+       
+   
+  
 class Cache(object):
     
     upstream = None
     readonly = False
     usreadonly = False   
     
-    def __init__(self,  upstream=None):   
+    def __init__(self,  upstream=None,**kwargs):   
         self.upstream = upstream
+   
+        self.args = kwargs
    
         self.readonly = False
         self.usreadonly = False   
     
-    @property
-    def remote(self):
-        '''Return a reference to an inner cache that is a remote'''
-        if self.upstream:
-            return self.upstream.remote
+        if upstream:
+            self.upstream = Filesystem.get_cache(upstream)
+    
+    def get_upsream(self, type_): 
+        if isinstance(type,_, self):
+            return self
+        elif self.upstream:
+            return self.upstream.get_upstream(type_)
         else:
             return None
-   
+
     @property
     def repo_id(self):
         raise NotImplementedError()
     
     def path(self, rel_path):
-        raise NotImplementedError()
+        if self.upstream:
+            return self.path(rel_path)
+        
+        return None
     
     def get(self, rel_path, cb=None):
         if self.upstream:
@@ -748,6 +828,9 @@ class Cache(object):
         return None  
 
 
+    def __repr__(self):
+        return "{}".format(type(self))
+
 class FsCache(Cache):
     '''A cache that transfers files to and from a remote filesystem
     
@@ -761,7 +844,7 @@ class FsCache(Cache):
     files are deleted to free up space. 
     '''
 
-    def __init__(self, cache_dir,  upstream=None):
+    def __init__(self, dir=None,  options=None, upstream=None,**kwargs):
         '''Init a new FileSystem Cache
         
         Args:
@@ -775,21 +858,15 @@ class FsCache(Cache):
         
         super(FsCache, self).__init__(upstream)
         
-        self._cache_dir = cache_dir
+        self._cache_dir = dir
 
-        if not os.path.isdir(self.cache_dir):
-            os.makedirs(self.cache_dir)
+        if not os.path.isdir(self._cache_dir):
+            os.makedirs(self._cache_dir)
         
-        if not os.path.isdir(self.cache_dir):
-            raise ConfigurationError("Cache dir '{}' is not valid".format(self.cache_dir)) 
+        if not os.path.isdir(self._cache_dir):
+            raise ConfigurationError("Cache dir '{}' is not valid".format(self._cache_dir)) 
         
-    @property
-    def connection_info(self):
-        '''Return reference to the connection, excluding the secret'''
-        if self.upstream:
-            return self.upstream.connection_info
-        else:
-            return {'service':'file','dir':self.cache_dir }
+
         
         
     @property
@@ -998,7 +1075,10 @@ class FsCache(Cache):
             return lambda rel_path: upstream_f(rel_path)
         else:
             cache_dir = self.cache_dir
-            return lambda rel_path: 'file://{}'.format(os.path.join(cache_dir, rel_path))            
+            return lambda rel_path: 'file://{}'.format(os.path.join(cache_dir, rel_path))      
+              
+    def __repr__(self):
+        return "FsCache: dir={} upstream=({})".format(self.cache_dir, self.upstream)
 
 
 class FsLimitedCache(FsCache):
@@ -1015,7 +1095,7 @@ class FsLimitedCache(FsCache):
     
      '''
 
-    def __init__(self, cache_dir, maxsize=10000, upstream=None):
+    def __init__(self, dir=dir, size=10000, upstream=None,**kwargs):
         '''Init a new FileSystem Cache
         
         Args:
@@ -1026,9 +1106,9 @@ class FsLimitedCache(FsCache):
         
         from databundles.dbexceptions import ConfigurationError
 
-        super(FsLimitedCache, self).__init__(cache_dir, upstream=upstream)
+        super(FsLimitedCache, self).__init__(dir, upstream=upstream,**kwargs)
         
-        self.maxsize = int(maxsize) * 1048578  # size in MB
+        self.maxsize = int(size) * 1048578  # size in MB
 
         self.readonly = False
         self.usreadonly = False
@@ -1290,11 +1370,7 @@ class FsLimitedCache(FsCache):
                 size = os.path.getsize(repo_path)
                 this.add_record(rel_path, size)
 
-                if upstream and not upstream.readonly and not upstream.usreadonly:
-                    
-                    upstream.put(repo_path, rel_path, metadata=metadata) 
-                    # Only delete if there is an upstream 
-                    this._free_up_space(size, this_rel_path=rel_path)
+                this._free_up_space(size, this_rel_path=rel_path)
                     
         return flo()
     
@@ -1342,6 +1418,9 @@ class FsLimitedCache(FsCache):
             cache_dir = self.cache_dir
             return lambda rel_path: 'file://{}'.format(os.path.join(cache_dir, rel_path))     
     
+    def __repr__(self):
+        return "FsLimitedCache: dir={} size={} upstream=({})".format(self.cache_dir, self.maxsize, self.upstream)
+    
 
 class FsCompressionCache(Cache):
     
@@ -1349,7 +1428,7 @@ class FsCompressionCache(Cache):
     another cache.
      '''
 
-    def __init__(self, upstream):
+    def __init__(self, upstream=None):
         
         super(FsCompressionCache, self).__init__(upstream)
 
@@ -1362,10 +1441,6 @@ class FsCompressionCache(Cache):
     def cache_dir(self):
         return self.upstream.cache_dir
   
-    @property
-    def connection_info(self):
-        '''Return reference to the connection, excluding the secret'''
-        return self.upstream.connection_info
       
     @property
     def remote(self):
@@ -1378,6 +1453,7 @@ class FsCompressionCache(Cache):
     
     def get_stream(self, rel_path, cb=None):
         from databundles.util import bundle_file_type
+        
         source = self.upstream.get_stream(self._rename(rel_path))
    
         if not source:
@@ -1393,7 +1469,19 @@ class FsCompressionCache(Cache):
             return source
 
     def get(self, rel_path, cb=None):
-        raise NotImplementedError("Get() is not implemented. Use get_stream()") 
+        
+        source = self.get_stream(rel_path)
+        
+        if not source:
+            raise Exception()
+        
+        uc_rel_path = os.path.join('uncompressed',rel_path)
+        
+        sink = self.upstream.put_stream(uc_rel_path)
+
+        copy_file_or_flo(source,  sink) 
+        
+        return self.upstream.get(uc_rel_path)
 
     def put(self, source, rel_path, metadata=None):
         from databundles.util import bundle_file_type
@@ -1417,6 +1505,8 @@ class FsCompressionCache(Cache):
             copy_file_or_flo(source,  gzip.GzipFile(fileobj=sink,  mode='wb'))
       
         sink.close()
+        
+        return self.upstream.get(self._rename(rel_path))
     
     def put_stream(self, rel_path,  metadata=None):
         
@@ -1448,6 +1538,11 @@ class FsCompressionCache(Cache):
         # Must always propagate, since this is really just a filter. 
         self.upstream.remove(self._rename(rel_path), propagate)    
 
+        # In case someone called get()
+        uc_rel_path = os.path.join('uncompressed',rel_path)
+    
+        self.upstream.remove(uc_rel_path)
+
     def list(self, rel_path=None):
         '''get a list of all of the files in the repository'''
         return self.upstream.list(self._rename(rel_path))
@@ -1471,26 +1566,32 @@ class FsCompressionCache(Cache):
         rename_f = self._rename
         return lambda rel_path: upstream_f(rename_f(rel_path))
     
+    def __repr__(self):
+        return "FsCompressionCache: upstream=({})".format(self.upstream)
+    
 
 class S3Cache(Cache):
     '''A cache that transfers files to and from an S3 bucket
     
      '''
 
-    def __init__(self, bucket=None, access_key=None, secret=None, prefix=None):
+    def __init__(self, bucket=None, prefix=None, account=None, upstream=None):
         '''Init a new S3Cache Cache
 
         '''
         from boto.s3.connection import S3Connection
 
-        super(S3Cache, self).__init__(None)
+        super(S3Cache, self).__init__(upstream=upstream)
+
+        print bucket, account
 
         self.is_remote = False
-        self.access_key = access_key
+        self.access_key = account['access']
+        self.secret = account['secret']
         self.bucket_name = bucket
         self.prefix = prefix
 
-        self.conn = S3Connection(self.access_key, secret, is_secure = False )
+        self.conn = S3Connection(self.access_key, self.secret, is_secure = False )
         self.bucket = self.conn.get_bucket(self.bucket_name)
   
   
@@ -1521,22 +1622,7 @@ class S3Cache(Cache):
         m.update(self.bucket_name)
 
         return m.hexdigest()
-    
-    @property
-    def connection_info(self):
-        '''Return reference to the connection, excluding the secret'''
-        
-        return {'service':'s3','bucket':self.bucket_name, 'prefix':self.prefix, 'access_key': self.access_key}
-
-    @property
-    def remote(self):
-        '''Return a reference to an inner cache that is a remote'''
-
-        if self.is_remote:
-            return self
-        else:
-            return None
-
+ 
     def get_stream(self, rel_path, cb=None):
         """Return the object as a stream"""
         from boto.s3.key import Key
@@ -1568,16 +1654,25 @@ class S3Cache(Cache):
    
         
     def get(self, rel_path, cb=None):
-        '''Return the file path referenced but rel_path, or None if
-        it can't be found. If an upstream is declared, it will try to get the file
-        from the upstream before declaring failure. 
+        '''For S3, get requires and upstream, where the downloaded file can be stored
         '''
+        from dbexceptions import ConfigurationError
+        source = self.get_stream(rel_path)
         
-        rel_path = self._rename(rel_path)
+        if not source:
+            raise Exception()
         
-        raise NotImplementedError('Should only use the stream interface. ')
+        if not self.upstream:
+            raise ConfigurationError("Can't use get() on S3 without an upstream ")
+        
+        sink = self.upstream.put_stream(rel_path)
+
+        copy_file_or_flo(source, sink) 
+        
+        sink.close()
+        
+        return self.upstream.get(rel_path)
     
-  
     def _get_boto_key(self, rel_path):
         from boto.s3.key import Key
 
@@ -1775,8 +1870,11 @@ class S3Cache(Cache):
         
         key = self._get_boto_key(rel_path)
         if key:
+            key.delete()   
             
-            key.delete()    
+        if self.upstream: # In case someone called get(0
+            self.upstream.remove(rel_path)
+             
         
     def list(self, path=None):
         '''Get a list of all of bundle files in the cache. Does not return partition files'''
@@ -1856,7 +1954,12 @@ class S3Cache(Cache):
                 return key.generate_url(expires_in)
             
         return public_url_f_inner
-        
+     
+     
+    
+    def __repr__(self):
+        return "S3Cache: bucket={} prefix={} access={} upstream=({})".format(self.bucket, self.prefix, self.access_key, self.upstream)
+       
 
 # Stolen from : https://bitbucket.org/fabian/filechunkio/src/79ba1388ee96/LICENCE?at=default
 

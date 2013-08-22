@@ -86,6 +86,11 @@ class RunConfig(object):
         
         g = self.group(group)
         
+        if not name in g:
+            import pprint
+            pprint.pprint(name)
+            raise KeyError("Could not find name '{}' in group '{}'".format(name, group))
+        
         return g[name]
         
 
@@ -96,6 +101,10 @@ class RunConfig(object):
 
         for path, subdicts, values in walk_dict(e):
             for k,v in values:
+                
+                if v is None:
+                    raise Exception('{} {} {} {} '.format(path, subdicts, k, v))
+                
                 path_parts = path.split('/')
                 path_parts.pop()
                 path_parts.pop(0)
@@ -118,17 +127,23 @@ class RunConfig(object):
         
     
     def _sub_strings(self, e, subs):
-        '''Substitute keys in the dict e with funtions defined in subs'''
-        sub_count = 1
+        '''Substitute keys in the dict e with functions defined in subs'''
+
         iters = 0
-        while (sub_count > 0 and iters < 100):
+        while (iters < 100):
             sub_count = 0
+           
             for k,v,setter in self._yield_string(e):
                 if k in subs:
                     setter(subs[k](k,v))
                     sub_count += 1
 
+            if sub_count == 0:
+                break
+
             iters += 1   
+            
+            
             
         return e         
 
@@ -153,19 +168,19 @@ class RunConfig(object):
         e =  self.group_item('filesystem', name) 
 
         return self._sub_strings(e, {
-                                     'upstream': lambda k,v: self.filesystem(v)
+                                     'upstream': lambda k,v: self.filesystem(v),
+                                     'account': lambda k,v: self.account(v)
                                      }  )
     
-    def account(self,service, name):
-        e =  self.group_item('repository', service) 
-        return e['name']
- 
+    def account(self,name):
+        return  self.group_item('accounts', name) 
+
 
     def repository(self,name):
         e =  self.group_item('repository', name) 
 
         return self._sub_strings(e, {
-                                     'filesystem': lambda k,v: self.filesystem(v),
+                                     'filesystem': lambda k,v: self.filesystem(v)
                                      }  )
    
     def library(self,name):

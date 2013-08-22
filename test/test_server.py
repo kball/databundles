@@ -263,8 +263,10 @@ class Test(TestBase):
 
 
     def test_caches(self):
+        '''Basic test of put(), get() and has() for all cache types'''
         from functools import partial
-        
+        from databundles.run import  get_runconfig, RunConfig
+        from databundles.filesystem import Filesystem
         
         fn = '/tmp/1mbfile'
         
@@ -272,25 +274,30 @@ class Test(TestBase):
         
         with open(fn, 'wb') as f:
             f.write('.'*(1024))
+      
+        rc = get_runconfig((os.path.join(self.bundle_dir,'test-run-config.yaml'),RunConfig.USER_CONFIG))
+        
+        
+        for fsname in ['fscache', 'limitedcache','compressioncache', 's3cache']:
+
+            config = rc.filesystem(fsname)
+            cache = Filesystem.get_cache(config)
+
+            r = cache.put(fn, 'f')
+            r = cache.get('f')
+            self.assertTrue(os.path.exists(r), str(cache))
+            self.assertTrue(cache.has('f'))
             
-        #get_cache('cache1').put(fn,'cache1')
-        #get_cache('cache2').put(fn,'cache2') 
-          
-        get_cache('cache3').put(fn,'cache3')
-
-        rm_rf(get_cache('cache3').cache_dir)
-
-        path = get_cache('cache3').get('cache3')
-
-        self.assertEquals('AKIAIOKK4KSYYGYXWQJQ', get_cache('cache3').connection_info.get('access_key'))
-
+            cache.remove('f', propagate=True)
+            
+            self.assertFalse(os.path.exists(r), str(cache))
+            self.assertFalse(cache.has('f'))
+            
     
     def test_put_redirect(self):
         from databundles.bundle import DbBundle
         from databundles.library import QueryCommand
         from databundles.util import md5_for_file, rm_rf, bundle_file_type
-
-
 
         #
         # Simple out and retrieve
