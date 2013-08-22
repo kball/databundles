@@ -82,6 +82,56 @@ class RunConfig(object):
         
         return self.config.get(name,{})
 
+    def group_item(self, group, name):
+        
+        g = self.group(group)
+        
+        return g[name]
+        
+
+    def _yield_string(self, e):
+        '''Recursively descend a data structure to find string values.
+         This will locate values that should be expanded by reference. '''
+        from util import walk_dict
+
+        for path, subdicts, values in walk_dict(e):
+            for k,v in values:
+                path_parts = path.split('/')
+                path_parts.pop()
+                path_parts.pop(0)
+                path_parts.append(k)
+                def setter(nv):
+                    sd = e
+                    for pp in path_parts:
+                        if not isinstance(sd[pp], dict ):
+                            break
+                        sd = sd[pp]
+                        
+                    # Save the oroginal value as a name
+                        
+                    sd[pp] = nv
+                    
+                    if isinstance(sd[pp], dict):
+                        sd[pp]['_name'] = v
+            
+                yield k,v,setter
+        
+    
+    def _sub_strings(self, e, subs):
+        '''Substitute keys in the dict e with funtions defined in subs'''
+        sub_count = 1
+        iters = 0
+        while (sub_count > 0 and iters < 100):
+            sub_count = 0
+            for k,v,setter in self._yield_string(e):
+                if k in subs:
+                    setter(subs[k](k,v))
+                    sub_count += 1
+
+            iters += 1   
+            
+        return e         
+
     def dump(self, stream=None):
         
         to_string = False
@@ -98,6 +148,45 @@ class RunConfig(object):
         else:
             return stream
         
+
+    def filesystem(self,name):
+        e =  self.group_item('filesystem', name) 
+
+        return self._sub_strings(e, {
+                                     'upstream': lambda k,v: self.filesystem(v)
+                                     }  )
+    
+    def account(self,service, name):
+        e =  self.group_item('repository', service) 
+        return e['name']
+ 
+
+    def repository(self,name):
+        e =  self.group_item('repository', name) 
+
+        return self._sub_strings(e, {
+                                     'filesystem': lambda k,v: self.filesystem(v),
+                                     }  )
+   
+    def library(self,name):
+        e =  self.group_item('library', name) 
+
+        return self._sub_strings(e, {
+                                     'filesystem': lambda k,v: self.filesystem(v),
+                                     'remote': lambda k,v: self.filesystem(v),
+                                     'database': lambda k,v: self.database(v) 
+                                     }  )
+     
+    
+    def warehouse(self,name):
+        e =  self.group_item('warehouse', name) 
+
+        return self._sub_strings(e, {
+                                     'database': lambda k,v: self.database(v) 
+                                     }  )
+    def database(self,name):
+        return self.group_item('database', name) 
+
 
 
 def run(argv, bundle_class):
