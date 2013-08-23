@@ -61,20 +61,18 @@ class TestBase(unittest.TestCase):
         logger.info(  "Copying bundle from {}".format(save_dir))
         os.system("rm -rf {0}; rsync -arv {1} {0}  > /dev/null ".format(build_dir, save_dir))
         
-    def start_server(self, rc=None, name='default'):
+    def start_server(self, config=None):
         '''Run the Bottle server as a thread'''
         from databundles.client.siesta import  API
         import databundles.server.main
         from threading import Thread
         import time
         from functools import  partial
-    
-        if not rc:
-            rc = self.server_rc
-    
-        sub_rc = rc.library.get(name)
-    
-        self.server_url = "http://localhost:{}".format(sub_rc.port)
+
+        config = self.server_rc.library('default')['upstream']
+
+        self.server_url = "http://localhost:{}".format(config['port'])
+        
         logger.info("Checking server at: {}".format(self.server_url))
         a = API(self.server_url)
 

@@ -422,6 +422,20 @@ class Test(TestBase):
             self.assertIn(pid.name, [p.name for p in parts])
 
         
+    def test_runconfig(self):
+        '''Check the the RunConfig expands  the library configuration'''
+        from databundles.run import  get_runconfig, RunConfig
+        
+        rc = get_runconfig((os.path.join(self.bundle_dir,'test-run-config.yaml'),RunConfig.USER_CONFIG))
+
+        l = rc.library('library1')
+         
+        self.assertEquals('database1', l['database']['_name'])
+        self.assertEquals('filesystem1', l['filesystem']['_name'])
+        self.assertEquals('filesystem2', l['filesystem']['upstream']['_name'])
+        self.assertEquals('filesystem3', l['filesystem']['upstream']['upstream']['_name'])
+        self.assertEquals('devtest.clarinova.net', l['filesystem']['upstream']['upstream']['account']['_name'])
+        
     def x_test_tempfile(self):
   
         self.test_generate_schema()

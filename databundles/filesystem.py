@@ -18,6 +18,10 @@ from databundles.identity import Identity
 
 logger = databundles.util.get_logger(__name__)
 #logger.setLevel(logging.DEBUG) 
+ 
+ 
+def new_filesystem(config):
+    return Filesystem.get_cache(config)
         
 ##makedirs
 ## Monkey Patch!
@@ -700,7 +704,7 @@ def RemoteInterface(CacheInterface):
     
 def RestRemote(RemoteInterface):
        
-    def __init__(self,  url, upstream):           
+    def __init__(self,  url, upstream=None):           
         super(RestRemote, self).__init__(upstream)
         
 
@@ -710,7 +714,14 @@ def RestRemote(RemoteInterface):
     
     def has(self, rel_path, md5=None, use_upstream=True):  raise NotImplementedError()
     
-    def put(self, source, rel_path, metadata=None): raise NotImplementedError()
+    def put(self, source, rel_path, metadata=None):
+        
+        from databundles.bundle import DbBundle
+        
+        b = DbBundle(source)
+        
+        self.upstream.put(source)
+        
     
     def put_stream(self,rel_path, metadata=None): raise NotImplementedError()
     
@@ -743,7 +754,10 @@ class Cache(object):
         self.usreadonly = False   
     
         if upstream:
-            self.upstream = Filesystem.get_cache(upstream)
+            if isinstance(upstream, Cache):
+                self.upstream = upstream
+            else:
+                self.upstream = Filesystem.get_cache(upstream)
     
     def get_upsream(self, type_): 
         if isinstance(type,_, self):
@@ -1331,7 +1345,11 @@ class FsLimitedCache(FsCache):
         
         sink.close()
 
-        return sink.repo_path
+
+        if self.upstream:
+            self.upstream.put(source, rel_path, metadata=metadata)
+
+        return self.get(rel_path)
 
     def put_stream(self,rel_path, metadata=None):
         """return a file object to write into the cache. The caller
@@ -1582,8 +1600,6 @@ class S3Cache(Cache):
         from boto.s3.connection import S3Connection
 
         super(S3Cache, self).__init__(upstream=upstream)
-
-        print bucket, account
 
         self.is_remote = False
         self.access_key = account['access']

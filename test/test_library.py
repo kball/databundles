@@ -8,7 +8,7 @@ import os.path
 from  testbundle.bundle import Bundle
 from sqlalchemy import * #@UnusedWildImport
 from databundles.run import  get_runconfig
-from databundles.library import QueryCommand, get_library
+from databundles.library import QueryCommand, new_library
 import logging
 import databundles.util
 
@@ -32,12 +32,9 @@ class Test(TestBase):
 
         self.bundle = Bundle()    
 
-        
-        print "Deleting: {}".format(self.rc.filesystem.root_dir)
-        Test.rm_rf(self.rc.filesystem.root_dir)
+        print "Deleting: {}".format(self.rc.group('filesystem').root_dir)
+        Test.rm_rf(self.rc.group('filesystem').root_dir)
        
-
-          
     @staticmethod
     def rm_rf(d):
         
@@ -51,10 +48,12 @@ class Test(TestBase):
                 os.unlink(path)
         os.rmdir(d)
         
-    def get_library(self):
+    def get_library(self, name = 'default'):
         """Clear out the database before the test run"""
 
-        return get_library(self.rc, reset = True)
+        config = self.rc.library(name)
+
+        return new_library(config, reset = True)
         
     def tearDown(self):
         pass
@@ -275,7 +274,7 @@ class Test(TestBase):
     def test_cache(self):
         from databundles.filesystem import  FsCache, FsLimitedCache
      
-        root = self.rc.filesystem.root_dir
+        root = self.rc.group('filesystem').root_dir
       
         l1_repo_dir = os.path.join(root,'repo-l1')
         os.makedirs(l1_repo_dir)
@@ -312,7 +311,10 @@ class Test(TestBase):
         # Now create the cache with an upstream, the first
         # cache we created
        
-        l1 =  FsLimitedCache(l1_repo_dir, upstream=l2, maxsize=5)
+        l1 =  FsLimitedCache(l1_repo_dir, upstream=l2, size=5)
+      
+        print l1
+        print l2
       
         g = l1.get('tf2')
         self.assertTrue(g is not None)
@@ -377,7 +379,7 @@ class Test(TestBase):
         '''Test a two-level cache where the upstream compresses files '''
         from databundles.filesystem import  FsCache,FsCompressionCache
          
-        root = self.rc.filesystem.root_dir
+        root = self.rc.group('filesystem').root_dir
       
         l1_repo_dir = os.path.join(root,'comp-repo-l1')
         os.makedirs(l1_repo_dir)

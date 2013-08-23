@@ -9,7 +9,7 @@ from bottle import ServerAdapter, server_names, Bottle  #@UnresolvedImport
 from bottle import run, debug #@UnresolvedImport
 
 from decorator import  decorator #@UnresolvedImport
-import databundles.library 
+from  databundles.library import new_library
 import databundles.util
 from databundles.bundle import DbBundle
 import logging
@@ -22,22 +22,15 @@ logger = databundles.util.get_logger(__name__)
 logger.setLevel(logging.DEBUG)
     
 
-def _get_library(run_config, library_name=None):
-    '''Return the library. In a function to defer execution, so the
-    run_config variable can be altered before it is called. '''
-    
-    if library_name is None:
-        library_name = 'default'
-    
-    return databundles.library._get_library(run_config, library_name)
- 
+
 #
 # The LibraryPlugin allows the library to be inserted into a reuest handler with a
 # 'library' argument. 
 class LibraryPlugin(object):
-    def __init__(self, rconfig, library_name, keyword='library'):
-        self.rconfig = rconfig
-        self.library_name = library_name
+    
+    def __init__(self, library, keyword='library'):
+
+        self.library = library
         self.keyword = keyword
     
     def setup(self, app):
@@ -49,11 +42,11 @@ class LibraryPlugin(object):
         # Override global configuration with route-specific values.
         conf = context['config'].get('library') or {}
         
-        rconfig = conf.get('rconfig', self.rconfig)
-        library_name = conf.get('library_name', self.library_name)
+        library = conf.get('library', self.library)
+
         keyword = conf.get('keyword', self.keyword)
         
-        # Test if the original callback accepts a 'db' keyword.
+        # Test if the original callback accepts a 'library' keyword.
         # Ignore it if it does not need a database handle.
         args = inspect.getargspec(context['callback'])[0]
         if keyword not in args:
@@ -61,7 +54,7 @@ class LibraryPlugin(object):
 
         def wrapper(*args, **kwargs):
 
-            kwargs[keyword] = _get_library(rconfig, library_name)
+            kwargs[keyword] = library
 
             rv = callback(*args, **kwargs)
 
@@ -190,7 +183,7 @@ def post_datasets_find(library):
     out = []
     for r in results:
 
-        out.append(r.to_dict())
+        out.append(r)
         
     return out
 
@@ -223,48 +216,13 @@ def _get_dataset_partition_record(library, did, pid):
     return bundle,partition
 
 
-def _read_body(request):
-    # Really important to only call request.body once! The property method isn't
-    # idempotent!
-    import zlib
-    import uuid # For a random filename. 
-    import tempfile
-            
-    tmp_dir = tempfile.gettempdir()
-    #tmp_dir = '/tmp'
-            
-    file_ = os.path.join(tmp_dir,'rest-downloads',str(uuid.uuid4())+".db")
-    if not os.path.exists(os.path.dirname(file_)):
-        os.makedirs(os.path.dirname(file_))  
-        
-    body = request.body # Property acessor
-    
-    # This method can recieve data as compressed or not, and determines which
-    # from the magic number in the head of the data. 
-    data_type = databundles.util.bundle_file_type(body)
-    decomp = zlib.decompressobj(16+zlib.MAX_WBITS) # http://stackoverflow.com/a/2424549/1144479
- 
-    if not data_type:
-        raise Exception("Bad data type: not compressed nor sqlite")
- 
-    # Read the file directly from the network, writing it to the temp file,
-    # and uncompressing it if it is compressesed. 
-    with open(file_,'w') as f:
-
-        chunksize = 8192
-        chunk =  body.read(chunksize) #@UndefinedVariable
-        while chunk:
-            if data_type == 'gzip':
-                f.write(decomp.decompress(chunk))
-            else:
-                f.write(chunk)
-            chunk =  body.read(chunksize) #@UndefinedVariable   
-
-    return file_
-
 @put('/datasets/<did>')
 @CaptureException
 def put_dataset(did, library): 
+    
+    '''Store a reference to a dataset. The library will fetch the dataset fro mthe object store and
+    install it. '''
+    
     '''Store a bundle, calling put() on the bundle file in the Library.
     
         :param did: A dataset id string. must be parsable as a `DatasetNumber`
@@ -282,114 +240,15 @@ def put_dataset(did, library):
     from databundles.identity import ObjectNumber, DatasetNumber
     import stat
 
-    try:
-        
-        l = library
-        
-        if l.require_upload:
-            raise exc.NotAuthorized("This libraray uses an objct store for uploads.")
-        
-        cf = _read_body(request)
-     
-        size = os.stat(cf).st_size
-        
-        if size == 0:
-            raise exc.BadRequest("Got a zero size dataset file")
-        
-        if not os.path.exists(cf):
-            raise exc.BadRequest("Non existent file")
- 
-        # Now we have the bundle in cf. Stick it in the library. 
-        
-        # We're doing these exceptions here b/c if we don't read the body, the
-        # client will get an error with the socket closes. 
-        try:
-            on = ObjectNumber.parse(did)
-        except ValueError:
-            raise exc.BadRequest("Unparseablr dataset id: {}".format(did))
-        
-        if not isinstance(on, DatasetNumber):
-            raise exc.BadRequest("Bad dataset id, not for a dataset: {}".format(did))
-       
-        # Is this a partition or a bundle?
-        
-        try:
-            tb = DbBundle(cf)
-            type = tb.db_config.info.type
-        except Exception as e:
-            logger.error("Failed to access database: {}; {}".format(cf, e))
-            raise
-            
-        if( type == 'partition'):
-            raise exc.BadRequest("Bad data type: Got a partition")
-       
-        if(tb.identity.id_ != did ):
-            raise exc.BadRequest("""Bad request. Dataset id of URL doesn't
-            match payload. {} != {}""".format(did,tb.identity.id_))
-    
-        library_path, rel_path, url = l.put(tb) #@UnusedVariable
-
-        identity = tb.identity
-        
-        # if that worked, OK to remove the temporary file. 
-    finally :
-        pass
-        #os.remove(cf)
-      
-    r = identity.to_dict()
-    r['url'] = url
-    
-    l.run_dumper_thread()
-    
-    return r
-  
-@post('/load')
-@CaptureException
-def post_load(library): 
-    '''Ask the libary to check its object store for the  given dataset. We only need to do this for
-    datasets, which are referenced by the interface. 
-
-    '''
-    from databundles.identity import new_identity
-    
-    identity = new_identity(request.json)
-    
-    logger.debug("Loading name {}".format( identity  ))
-    
-    if identity.is_bundle:
-        
-        l = library
-
-        # This will pull the file into the local cache from the remote, 
-        # As long as the remote is listed as an upstream for the library. 
-        path = l.cache.get(identity.cache_key)
-        l.run_dumper_thread()
-        
-        if not path or not os.path.exists(path):
-            raise exc.Gone("Failed to get object {} from upstream; path '{}' does not exist. Cache connection = {} ".format(identity.cache_key, path, l.cache.connection_info))
-        
-        logger.debug("Installing path {} to identity {}".format(path, identity  ))
-        
-        l.database.install_bundle_file(identity, path)
-        
-        if not l.cache.has(identity.cache_key):
-            raise exc.Gone("Failed to get object {} from upstream; cache doesn't have the key that was installed ".format(identity.cache_key))
-
-    return identity.to_dict()
-
-@get('/load/<name>')
-@CaptureException
-def get_load(library, name): 
-    '''Ask the libary to check its object store for the  given dataset. We only need to do this for
-    datasets, which are referenced by the interface. 
-
-    '''
     from databundles.identity import Identity
 
-    identity = Identity.parse_name(name)
+    identity = Identity.parse_name(did)
 
     if identity.revision == None:
         raise exc.BadRequest("Identity name must include revision")
+    
+    ### Only get HEAD to verify that caller was able to store the dataset properly
+    ### Defer downloading the data until it is requested. 
     
     if identity.is_bundle:
         
@@ -418,45 +277,16 @@ def get_load(library, name):
         pass
     
     return identity.to_dict()
+      
+    #r = identity.to_dict()
+    #r['url'] = url
+    #l.run_dumper_thread()
+    #return r
+  
 
 @get('/datasets/<did>') 
 @CaptureException   
-def get_dataset_bundle(did, library):
-    '''Get a bundle database file, given an id or name
-    
-    Args:
-        id    The Name or id of the dataset bundle. 
-              May be for a bundle or partition
-    '''
-
-    l = library
-    
-    did = did.replace('|','/')
-    
-    # We can get the dataset file to the local storage because we need to reference it in the interface. 
-    # which is not necessary for partitions. 
-    bp = l.get(did)
-
-    if not bp:
-        raise Exception("Didn't find dataset for id: {}, library = {}  ".format(did, library.database.dsn))
-
-    if l.remote:
-        url = l.remote.public_url_f()(bp.identity.cache_key)
-        logger.debug("Redirect bundle, {}".format(url))
-        redirect(url)
-    else:
-        
-        f = bp.database.path
-    
-        if not os.path.exists(f):
-            raise exc.NotFound("No file {} for id {}".format(f, did))
-        
-        logger.debug("Returning bundle directly")
-        
-        return static_file(f, root='/', mimetype="application/octet-stream")
-
-@get('/datasets/:did/info')
-def get_dataset_info(did, library):
+def get_dataset(did, library):
     '''Return the complete record for a dataset, including
     the schema and all partitions. '''
 
@@ -482,21 +312,6 @@ def get_dataset_info(did, library):
         
     return d
 
-@get('/datasets/<did>/partitions')
-@CaptureException
-def get_dataset_partitions_info(did, library):
-    ''' GET    /dataset/:did/partitions''' 
-    gr =  library.get(did)
-    
-    if not gr:
-        raise exc.NotFound("Failed to find dataset for {}".format(did))
-   
-    out = {}
-
-    for partition in  gr.bundle.partitions:
-        out[partition.id_] = partition.to_dict()
-        
-    return out;
 
 @get('/datasets/<did>/partitions/<pid>')
 @CaptureException
@@ -536,63 +351,51 @@ def get_dataset_partitions( did, pid, library):
         logger.debug("Send file directly, {}".format(url))
         return static_file(r.partition.database.path, root='/', mimetype="application/octet-stream")    
 
-@get('/info/objectstore')
-@CaptureException
-def get_info_objectstore(library):
-    """Return information about where to upload files"""
-
-    l = library
-
-    if l.remote:
-        # Send it directly to the upstream API
-        r = l.remote.connection_info
-    else:
-        # Send it here
-        r = {'service':'here'}
-       
-    # import uuid
-    # r['ticket'] = str(uuid.uuid4())  
-    
-    return r
-  
 
 @put('/datasets/<did>/partitions/<pid>')
 @CaptureException
 def put_datasets_partitions(did, pid, library):
-    '''Upload a partition database file'''
-    
-    payload_file = _read_body(request)
-    
-    l =  library
-    
-    if l.require_upload:
-        raise exc.NotAuthorized("This libraray uses an objct store for uploads.")
-    
-    try:
+    '''Record that a partition has been stored at in the object store'''
+
+def _read_body(request):
+    '''Read the body of a request and decompress it if required '''
+    # Really important to only call request.body once! The property method isn't
+    # idempotent!
+    import zlib
+    import uuid # For a random filename. 
+    import tempfile
+            
+    tmp_dir = tempfile.gettempdir()
+    #tmp_dir = '/tmp'
+            
+    file_ = os.path.join(tmp_dir,'rest-downloads',str(uuid.uuid4())+".db")
+    if not os.path.exists(os.path.dirname(file_)):
+        os.makedirs(os.path.dirname(file_))  
         
-        dataset, partition = _get_dataset_partition_record(library, did, pid) #@UnusedVariable
-        
-        library_path, rel_path, url =l.put_file(partition.identity, payload_file) #@UnusedVariable
-        
-        logger.info("Put partition {} {} to {}".format(partition.identity.id_,  partition.identity.name, library_path))   
-
-    finally:
-        if os.path.exists(payload_file):
-            os.remove(payload_file)
-
-
-    if not os.path.exists(library_path):
-        raise Exception("Can't find {} after put".format(library_path))
-
-    r = partition.identity.to_dict()
-    r['url'] = url
+    body = request.body # Property acessor
     
-    l.run_dumper_thread()
-    
-    return r 
+    # This method can recieve data as compressed or not, and determines which
+    # from the magic number in the head of the data. 
+    data_type = databundles.util.bundle_file_type(body)
+    decomp = zlib.decompressobj(16+zlib.MAX_WBITS) # http://stackoverflow.com/a/2424549/1144479
+ 
+    if not data_type:
+        raise Exception("Bad data type: not compressed nor sqlite")
+ 
+    # Read the file directly from the network, writing it to the temp file,
+    # and uncompressing it if it is compressesed. 
+    with open(file_,'w') as f:
 
+        chunksize = 8192
+        chunk =  body.read(chunksize) #@UndefinedVariable
+        while chunk:
+            if data_type == 'gzip':
+                f.write(decomp.decompress(chunk))
+            else:
+                f.write(chunk)
+            chunk =  body.read(chunksize) #@UndefinedVariable   
 
-
+    return file_
 
 #### Test Code
 
@@ -673,19 +476,18 @@ class StoppableWSGIRefServer(ServerAdapter):
 
 server_names['stoppable'] = StoppableWSGIRefServer
 
-def test_run(config, library_name='default'):
+def test_run(config):
     '''Run method to be called from unit tests'''
     from bottle import run, debug #@UnresolvedImport
   
     debug()
 
-    l = _get_library(config, library_name)  # fixate library
-
-    port = l.port if l.port else 7979
-    host = l.host if l.host else 'localhost'
+    port = config['port'] if config['port'] else 7979
+    host = config['host'] if config['host'] else 'localhost'
     
     logger.info("starting test server on http://{}:{}".format(host, port))
-    install(LibraryPlugin(config, library_name))
+    
+    install(LibraryPlugin(config))
     
     return run(host=host, port=port, reloader=False, server='stoppable')
 
@@ -696,37 +498,30 @@ def local_run(config, library_name='default', reloader=True):
 
     debug()
 
-    l = _get_library(config, library_name)  #@UnusedVariable 
-    port = l.port if l.port else 8080
-    host = l.host if l.host else 'localhost'
-    
-    logger.info("starting local server for library '{}' on http://{}:{}".format(library_name, host, port))
+    l = new_library(config.library(library_name))  
 
-    install(LibraryPlugin(config, library_name))
-    return run(host=host, port=port, reloader=reloader)
+    logger.info("starting local server for library '{}' on http://{}:{}".format(library_name, l.host, l.port))
+
+    install(LibraryPlugin(l))
+    return run(host=l.host, port=l.port, reloader=reloader)
     
 def local_debug_run(config, library_name='default'):
 
     debug()
-    l = _get_library(library_name)  #@UnusedVariable
-    port = l.port if l.port else 8080
-    host = l.host if l.host else 'localhost'
+    l = new_library(config.library(library_name))  
+
     install(LibraryPlugin(config, library_name))
-    return run(host=host, port=port, reloader=True)
+    return run(host=l.host, port=l.port, reloader=True)
 
 def production_run(config, library_name='default', reloader=False):
 
-    l = _get_library(config, library_name)  #@UnusedVariable
-    port = l.port if l.port else 80
-    host = l.host if l.host else 'localhost'
+    l = new_library(config.library(library_name))  
 
+    logger.info("starting production server for library '{}' on http://{}:{}".format(library_name, l.host, l.port))
 
+    install(LibraryPlugin(l))
 
-    logger.info("starting production server for library '{}' on http://{}:{}".format(library_name, host, port))
-
-    install(LibraryPlugin(config, library_name))
-
-    return run(host=host, port=port, reloader=reloader, server='paste')
+    return run(host=l.host, port=l.port, reloader=reloader, server='paste')
     
 if __name__ == '__main__':
     local_debug_run()

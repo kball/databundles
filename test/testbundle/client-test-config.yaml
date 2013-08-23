@@ -69,13 +69,10 @@ filesystem:
         upstream:
           bucket: devtest.clarinova.net
           prefix: cache-test/cache3
-          access_key: AKIAIOKK4KSYYGYXWQJQ
-          secret: 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               
+
+              
       
-accounts:
-    s3:
-        AKIAIOKK4KSYYGYXWQJQ: 9btJZdRoBsOV8p4Gtaduy6zCLtcoSr3Z5sgRpbd9 # devtest.clarinova.net
-        
+    
 downloads:
     dir: '{root}/downloads'
 

@@ -1,62 +1,59 @@
 library:
+  
+    writer:
+        filesystem: writer
+        database: writer  
+        upstream:
+          host: localhost
+          port: 7979   
+          upstream: remote    
+  
+    reader:
+        filesystem: reader
+        database: reader  
+        upstream:
+          host: localhost   
+          port: 7979
+          
     default:
-        port: 7979
         filesystem: server
-        database: server     
-
-    default-remote:
-        port: 7979
-        filesystem: server-remote
         database: server  
+        host: localhost   
+        port: 7979
+
 
 database:
+  
+    writer:
+        dbname: '/tmp/server/writer.db'
+        driver: sqlite  
+        
+    reader:
+        dbname: '/tmp/server/reader.db'
+        driver: sqlite  
+        
     server:
-        dbname: '/tmp/server/library.db'
+        dbname: '/tmp/server/server.db'
         driver: sqlite  
 
 filesystem:  
+    writer:
+        dbname: '/tmp/server/writer'
+        
+    reader:
+        dbname: '/tmp/server/reader'
+        
     server:
-        dir: '/tmp/server/cache-l1'
-        size: 5000
-        upstream:
-          dir: '/tmp/server//cache-l2'
-          options: [compress]
-
-    server-remote:
-        dir: '/tmp/server/cache-l1'
-        size: 5000
-        upstream: 
-          options: [compress,remote]
-          bucket: devtest.clarinova.net
-          prefix: test
-          access_key: AKIAIOKK4KSYYGYXWQJQ
-          secret: 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
-
-          
-    direct-remote:
-      dir: '/tmp/server/cache-l1'
+        dbname: '/tmp/server/server'
+   
+   
+    remote:
+      prefix: server-test
+      bucket: devtest.clarinova.net
+      account: devtest.clarinova.net
       upstream:
-        dir: '/tmp/server/cache-l2'
-        options: [compress]
-        upstream:
-          options: [compress]
-          bucket: devtest.clarinova.net
-          prefix: test
-          access_key: AKIAIOKK4KSYYGYXWQJQ
-          secret: 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  
-         
-    direct-remote-2:
-      dir: '/tmp/server/cache-l1-2'
-      size: 5000
-      upstream:
-        dir: '/tmp/server/cache-l2-2'
-        options: [compress]
-        upstream:
-          bucket: devtest.clarinova.net
-          prefix: test
-          access_key: AKIAIOKK4KSYYGYXWQJQ
-          secret: 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  
-          
+        size: 2000
+        dir: /tmp/server/s3cache
             
 downloads:
     dir: '{root}/downloads'

@@ -17,7 +17,7 @@ class RestError(Exception):
 def raise_for_status(response):
     import pprint
 
-    e = databundles.client.exceptions.get_exception(response.status)
+    e = databundles.client.exceptions.get_http_exception(response.status)
         
     if e:
         raise e(response.message)
@@ -35,7 +35,7 @@ class Rest(object):
         
     @property
     def remote(self):
-        # It would make sense to cache self.remote = API)(, but siesta saves the id
+        # It would make sense to cache self.remote = API(), but siesta saves the id
         # ( calls like remote.datasets(id).post() ), so we have to either alter siesta, 
         # or re-create it every call. 
         return API(self.url)
@@ -146,7 +146,7 @@ class Rest(object):
                
             chunksize = 8192  
             i = 0
-            import pdb; pdb.set_trace()
+            
             with open(file_path,'w') as file_:
                 
                 chunk =  response.read(chunksize) #@UndefinedVariable

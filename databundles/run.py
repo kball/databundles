@@ -166,10 +166,15 @@ class RunConfig(object):
 
     def filesystem(self,name):
         e =  self.group_item('filesystem', name) 
+        root_dir = e['root_dir'] if 'root_dir' in e  else  '/tmp/norootdir'
+        from collections import  defaultdict
+
+        d = defaultdict(str,{'root':root_dir} )
 
         return self._sub_strings(e, {
                                      'upstream': lambda k,v: self.filesystem(v),
-                                     'account': lambda k,v: self.account(v)
+                                     'account': lambda k,v: self.account(v),
+                                     'dir' : lambda k,v: v.format(d)
                                      }  )
     
     def account(self,name):
@@ -186,11 +191,15 @@ class RunConfig(object):
     def library(self,name):
         e =  self.group_item('library', name) 
 
-        return self._sub_strings(e, {
+        e =  self._sub_strings(e, {
                                      'filesystem': lambda k,v: self.filesystem(v),
                                      'remote': lambda k,v: self.filesystem(v),
                                      'database': lambda k,v: self.database(v) 
                                      }  )
+     
+        e['_name'] = name
+     
+        return e
      
     
     def warehouse(self,name):
@@ -200,8 +209,13 @@ class RunConfig(object):
                                      'database': lambda k,v: self.database(v) 
                                      }  )
     def database(self,name):
-        return self.group_item('database', name) 
+        
+        fs =  self.group_item('filesystem', name) 
+        root_dir = fs['root_dir'] if 'root_dir' in fs  else  '/tmp/norootdir'
+        
+        e = self.group_item('database', name) 
 
+        return self._sub_strings(e, {'dbname' : lambda k,v: v.format(root_dir=root_dir)}  )
 
 
 def run(argv, bundle_class):

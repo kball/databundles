@@ -10,8 +10,6 @@ import anydbm
 from databundles.geo.sfschema import TableShapefile
 from .hdf5 import Hdf5File
 
-    
-
 class FeatureInserter(object):
     def __init__(self, partition, table, dest_srs=4326, source_srs=None, layer_name = None):
 

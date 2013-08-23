@@ -1,4 +1,4 @@
-"""http exceptions
+"""http http_exceptions
 
 Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
@@ -63,7 +63,7 @@ class InternalError(HttpException):
     def __init__(self, message): 
         super(HttpException, self).__init__(self.http_message+":"+str(message)) 
         
-exceptions = {
+http_exceptions = {
     303: SeeOther, 
     400: BadRequest,
     401: NotAuthorized,
@@ -75,10 +75,10 @@ exceptions = {
 }
 
     
-def get_exception(code):
+def get_http_exception(code):
     """Return an exception class based on its code"""
     try:
-        return exceptions[int(code)]
+        return http_exceptions[int(code)]
     except:
         return None
     

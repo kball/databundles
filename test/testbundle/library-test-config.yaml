@@ -7,7 +7,9 @@ library:
 
     # Used to seperate tests that do or dont have a remote. 
     default-remote:
-      remote: http://localhost:7979
+      remote: 
+        host: localhost
+        port: 7979
       filesystem: default
       database: default
 
@@ -44,9 +46,7 @@ filesystem:
         upstream:
           bucket: devtest.clarinova.net
           prefix: /test/s3-l3/
-          access_key: AKIAIOKK4KSYYGYXWQJQ
-          secret: 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
-             
+
       
 downloads:
     dir: '{root}/downloads'

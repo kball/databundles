@@ -12,7 +12,7 @@ import databundles.util
 from databundles.run import  get_runconfig #@UnresolvedImport
 from databundles.util import temp_file_name
 from databundles.dbexceptions import ConfigurationError, NotFoundError
-from databundles.filesystem import  Filesystem
+from databundles.filesystem import  Filesystem, CacheInterface
 from databundles.identity import new_identity
 from databundles.bundle import DbBundle
 from databundles.util import lru_cache
@@ -20,6 +20,8 @@ from databundles.util import lru_cache
 
 from collections import namedtuple
 from sqlalchemy.exc import IntegrityError, ProgrammingError, OperationalError
+
+
 
 import Queue
 
@@ -75,90 +77,24 @@ class DependencyError(Exception):
     """Required bundle dependencies not satisfied"""
 
 
-def get_database(config=None,name='library'):
-    """Return a new `LibraryDb`, constructed from a configuration
-    
-    :param config: a `RunConfig` object
-    :rtype: a `LibraryDb` object
-    
-    If config is None, the function will constuct a new RunConfig() with a default
-    constructor. 
-    
-    """
-    import tempfile 
-    
-    if config is None:
-        config = get_runconfig()    
 
-    if not config.library:
-        raise ConfigurationError("Didn't get library configuration value")
+def _new_library(config):
+    from filesystem import new_filesystem
+   
+    filesystem = new_filesystem(config['filesystem'])
     
-    root_dir = config.filesystem.get('root_dir',tempfile.gettempdir())
-    db_config = config.database.get(name)
+    database = LibraryDb(**dict(config['database']))    
     
-    db_config.dbname = db_config.dbname.format(root=root_dir)
-    
-    if not db_config:
-        raise ConfigurationError("Didn't get database.{} configuration value".format(name))
-    
-    database = LibraryDb(**db_config)    
-    
-    database.create() # creates if does not exist. 
-    
-    return database
+    remote = new_filesystem(config['remote']) if 'remote' in config else None
 
-
-def _get_library(config=None, name='default'):
-    from databundles.filesystem import Filesystem
-    
-    if name is None:
-        name = 'default'
-    
-    if config is None:
-        config = get_runconfig()
-    
-    sc = config.library.get(name,False)
-    
-
-    if not sc:
-        raise Exception("Failed to get library.{} config key ".format(name))
-    
-    filesystem = Filesystem(config)
-    cache = filesystem.get_cache(sc.filesystem, config)
-    
-    database = get_database(config, name=sc.database)
-    
-    remote_name = sc.get('remote',None)
-
-    if remote_name:
-        from  databundles.client.rest import Rest
-        if not isinstance(remote_name, basestring):
-            raise Exception("Deprecated")
-        elif remote_name.startswith('http'):
-            # It is a URL, and it points to an api that wil be used directly. 
-            
-            url = remote_name
-            remote =  Rest(url, config.group('accounts'))
-        else:
-            # It is a name of a filesystem configuration
-            
-            remote = Filesystem._get_cache(config.filesystem, remote_name )
-    else:
-        remote = None
-
-    require_upload = sc.get('require-upload', False)
-
-    l =  Library(cache = cache, 
+    l =  Library(cache = filesystem, 
                  database = database, 
-                 remote = remote, 
-                 require_upload = require_upload,
-                 host = sc.get('host','localhost'),
-                 port = sc.get('port',80)
-                 )
+                 remote = remote,
+                 name=config['_name'])
+
+
     
-    return l
-    
-def get_library(config=None, name='default', reset=False):
+def new_library(config, reset=False):
     """Return a new :class:`~databundles.library.Library`, constructed from a configuration
     
     :param config: a :class:`~databundles.run.RunConfig` object
@@ -174,12 +110,14 @@ def get_library(config=None, name='default', reset=False):
     if reset:
         libraries = {}
     
+    name = config['_name']
+    
     if name is None:
         name = 'default'
 
     if name not in libraries:
   
-        libraries[name] = _get_library(config, name)
+        libraries[name] = _new_library(config, name)
     
     return libraries[name]
 
@@ -1269,7 +1207,7 @@ class Library(object):
     # Return value for earches
     ReturnDs = collections.namedtuple('ReturnDs',['dataset','partition'])
     
-    def __init__(self, cache,database, remote=None, sync=False, require_upload = False, host=None,port = None):
+    def __init__(self, cache,database, name =None, remote=None, sync=False, require_upload = False, host=None,port = None):
         '''
         Libraries are constructed on the root cache name for the library. 
         If the cache does not exist, it will be created. 
@@ -1283,6 +1221,7 @@ class Library(object):
    
         '''
  
+        self.name = name
         self.cache = cache
         self._database = database
         self._remote = remote
@@ -1309,6 +1248,7 @@ class Library(object):
     def clone(self):
         
         return self.__class__(self.cache, self.database.clone(), self._remote, self.sync, self.require_upload, self.host, self.port)
+    
     
     @property
     def remote(self):
@@ -1472,6 +1412,7 @@ class Library(object):
         if os.path.exists(p.database.path):
             os.remove(p.database.path)
 
+        # Now actually get it from the remote. 
         r = self.remote.get(p.identity.vid,cb=cb)
         
         # Store it in the local cache. 
@@ -2007,7 +1948,8 @@ class Warehouse(object):
         config = dict(self.config)
         del config['password']
         return config
-        
+     
+ 
 def _pragma_on_connect(dbapi_con, con_record):
     '''ISSUE some Sqlite pragmas when the connection is created'''
 
