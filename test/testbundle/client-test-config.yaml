@@ -39,6 +39,22 @@ database:
     
 filesystem:  
     root_dir: /tmp/client-test
+    
+    devtest:
+      size: 100
+      dir: '{root}/devtest'
+      upstream:
+        options: [compress]
+        bucket: devtest.clarinova.net
+        prefix: test
+        account: devtest.clarinova.net
+    
+    devtest-nocache:
+      options: [compress]
+      bucket: devtest.clarinova.net
+      prefix: test-remote
+      account: devtest.clarinova.net
+    
     client:
         dir: '{root}/cache-l1'
     clean:
@@ -60,7 +76,6 @@ filesystem:
       upstream:
         dir: '/tmp/cache-test/cache2' 
         options: [compress]    
-        
     cache3:
       dir: '/tmp/cache-test/cache1' 
       upstream:

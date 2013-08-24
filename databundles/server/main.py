@@ -28,21 +28,21 @@ logger.setLevel(logging.DEBUG)
 # 'library' argument. 
 class LibraryPlugin(object):
     
-    def __init__(self, library, keyword='library'):
+    def __init__(self, library_creator, keyword='library'):
 
-        self.library = library
+        self.library_creator = library_creator
         self.keyword = keyword
-    
+
     def setup(self, app):
         pass
 
     def apply(self, callback, context):
         import inspect
-        
+
         # Override global configuration with route-specific values.
         conf = context['config'].get('library') or {}
         
-        library = conf.get('library', self.library)
+        #library = conf.get('library', self.library_creator())
 
         keyword = conf.get('keyword', self.keyword)
         
@@ -54,7 +54,11 @@ class LibraryPlugin(object):
 
         def wrapper(*args, **kwargs):
 
-            kwargs[keyword] = library
+            #
+            # NOTE! Creating the library every call. This is bacuase the Sqlite driver
+            # isn't multi-threaded. 
+            #
+            kwargs[keyword] = self.library_creator()
 
             rv = callback(*args, **kwargs)
 
@@ -147,8 +151,7 @@ def error500(error):
 
 @hook('after_request')
 def close_library_db():
-    '''Close the library database after the request if is sqlite, since sqlite
-    isn't multi-threaded'''
+    pass
 
 @get('/datasets')
 def get_datasets(library):
@@ -187,101 +190,63 @@ def post_datasets_find(library):
         
     return out
 
-def _get_dataset_partition_record(library, did, pid):
-    """Get the reference information for a partition from the bundle database"""
-    
-    from databundles.identity import ObjectNumber, DatasetNumber, PartitionNumber
-    
-    don = ObjectNumber.parse(did)
-    if not don or not isinstance(don, DatasetNumber):
-        raise exc.BadRequest('Dataset number {} is not valid'.format(did))
-  
-    pon = ObjectNumber.parse(pid)
-    if not pon or not isinstance(pon, PartitionNumber):
-        raise exc.BadRequest('Partition number {} is not valid'.format(pid))
-    
-    if str(pon.dataset) != str(don):
-        raise exc.BadRequest('Partition number {} does not belong to datset {}'.format(pid, did))
-    
-    bundle =  library.get(did)
-    
-    # Need to read the file early, otherwise exceptions here
-    # will result in the cilent's ocket disconnecting. 
-
-    if not bundle:
-        raise exc.NotFound('No dataset for id: {}'.format(did))
-
-    partition = bundle.partitions.get(pid)
-
-    return bundle,partition
-
-
-@put('/datasets/<did>')
+@post('/datasets/did')
 @CaptureException
-def put_dataset(did, library): 
+def post_dataset(did,library): 
+    '''Accept a payload that describes a bundle in the remote. Download the
+    bundle and install it. '''
+    from databundles.identity import new_identity, Identity
+    from databundles.util import md5_for_file
     
-    '''Store a reference to a dataset. The library will fetch the dataset fro mthe object store and
-    install it. '''
-    
-    '''Store a bundle, calling put() on the bundle file in the Library.
-    
-        :param did: A dataset id string. must be parsable as a `DatasetNumber`
-        value
-        :rtype: string
-        
-        :param pid: A partition id string. must be parsable as a `partitionNumber`
-        value
-        :rtype: string
-        
-        :param payload: The bundle database file, which may be compressed. 
-        :rtype: binary
-    
-    '''
-    from databundles.identity import ObjectNumber, DatasetNumber
-    import stat
+    payload = request.json
+    identity = new_identity(payload['identity'])
 
-    from databundles.identity import Identity
+    if not did in set([identity.id, identity.vid]):
+        raise exc.Conflict("Dataset address '{}' doesn't match payload id '{}'".format(did, identity.vid))
 
-    identity = Identity.parse_name(did)
+    # need to go directly to remote, not library.get() because the
+    # dataset hasn't been loaded yet. 
+    db_path = library.load(identity.cache_key)
 
-    if identity.revision == None:
-        raise exc.BadRequest("Identity name must include revision")
-    
-    ### Only get HEAD to verify that caller was able to store the dataset properly
-    ### Defer downloading the data until it is requested. 
-    
-    if identity.is_bundle:
-        
-        l = library
-        
-        # This will pull the file into the local cache from the remote, 
-        # As long as the remote is listed as an upstream for the library. 
-        logger.debug("Get bundle for cache key {}".format(identity.cache_key))
-        path = l.cache.get(identity.cache_key)
-        l.run_dumper_thread()
-        
-        if not path or not os.path.exists(path):
-            raise exc.Gone("Failed to get object {} from upstream; path '{}' does not exist. Cache connection = {} ".format(identity.cache_key, path, l.cache.connection_info))
-        
-        logger.debug("Installing path {} to identity {}".format(path, identity  ))
-        
-        l.database.install_bundle_file(identity, path)
-        
-        logger.debug("Intstalled path {} to identity {}".format(path, identity  ))
-        
-        if not l.cache.has(identity.cache_key):
-            raise exc.Gone("Failed to get object {} from upstream; cache doesn't have key as after install ".format(identity.cache_key))
+    if not db_path:
+        logger.error("Failed to get {}".format(identity.cache_key))
+        logger.error("  cache =  {}".format(library.cache))
+        logger.error("  remote = {}".format(library.remote))
+        raise exc.NotFound("Didn't  get bundle file for cache key {} ".format(identity.cache_key))
 
-    else:
-        # Don't need to load non bundles, because they don't have data that gets loaded into the library databases
-        pass
+    logger.debug("Loading {} for identity {} ".format(db_path, identity))
+
+    b = DbBundle(db_path)
+
     
-    return identity.to_dict()
-      
-    #r = identity.to_dict()
-    #r['url'] = url
-    #l.run_dumper_thread()
-    #return r
+    md5 = md5_for_file(db_path)
+    
+    if md5 != payload['md5']:
+        logger.debug('MD5 Mismatch: {} != {} '.format( md5 , payload['md5']))
+        # First, try deleting the cached copy and re-fetching
+        # but don't delete it unless there is an intervening cache
+        if library.remote.path(identity.cache_key).startswith('http'):
+            raise exc.Conflict("MD5 Mismatch (a)")
+        
+        library.remote.remove(identity.cache_key)
+        db_path = library.remote.get(identity.cache_key)
+        
+        md5 = md5_for_file(db_path)
+        if md5 != payload['md5']:
+            logger.debug('MD5 Mismatch, persiting ater refetch: {} != {} '.format( md5 , payload['md5']))
+            raise exc.Conflict("MD5 Mismatch (b)")
+
+        b = DbBundle(db_path)
+
+    if b.identity.cache_key != identity.cache_key:
+        logger.debug("Identity mismatch while posting dataset: {} != {}".format(b.identity.cache_key, identity.cache_key))
+        raise exc.Conflict("Identity of downloaded bundle doesn't match request payload")
+
+    library.put(b)
+
+    library.run_dumper_thread()
+
+    return b.identity.to_dict()
   
 
 @get('/datasets/<did>') 
@@ -289,15 +254,23 @@ def put_dataset(did, library):
 def get_dataset(did, library):
     '''Return the complete record for a dataset, including
     the schema and all partitions. '''
+    from databundles.filesystem import RemoteMarker
 
     gr =  library.get(did)
      
     if not gr:
         raise exc.NotFound("Failed to find dataset for {}".format(did))
     
+    # COnstruct the response
     d = {'dataset' : gr.identity.to_dict(), 'partitions' : {}}
          
     file = library.database.get_file_by_ref(gr.identity.vid)
+    
+    # Get direct access to the cache that implements the remote, so
+    # we can get a URL with path()
+    remote = library.remote.get_upstream(RemoteMarker)
+    if remote:
+        d['dataset']['url'] = remote.path(gr.identity.cache_key)
     
     if file:
         d['dataset']['file'] = file.to_dict()
@@ -309,53 +282,45 @@ def get_dataset(did, library):
         
         if file:
             d['partitions'][partition.identity.id_]['file'] = file.to_dict()
+        if remote:
+            d['partitions'][partition.identity.id_]['url'] = remote.path(partition.identity.cache_key)
         
     return d
 
+@post('/datasets/<did>/partitions/<pid>') 
+@CaptureException   
+def post_partition(did, pid, library):
+    from databundles.identity import new_identity, Identity
+    from databundles.util import md5_for_file
 
-@get('/datasets/<did>/partitions/<pid>')
-@CaptureException
-def get_dataset_partitions( did, pid, library):
-    '''Return a partition for a dataset'''
-    from databundles.client.exceptions import NotFound
-    from databundles.dbexceptions import NotFoundError
+
+    b =  library.get(did)
+
+    if not b:
+        raise exc.NotFound("No bundle found for id {}".format(did))
+
+    payload = request.json
+    identity = new_identity(payload['identity'])
+
+    p = b.partitions.get(pid)
     
-    dataset, partition = _get_dataset_partition_record(library, did, pid)
+    if not p:
+        raise exc.NotFound("No partition for {} in dataset {}".format(pid, did))
 
-    if not dataset:
-        logger.info("Didn't find dataset")
-        raise NotFound("Didn't find dataset associated with id {}".format(did))
-        
-    if not partition:
-        logger.info("Didn't find partition")
-        raise NotFound("Didn't find partition associated with id {}".format(pid))
-    
-    if library.remote:
-        try:
-            url = library.remote.public_url_f()(partition.identity.cache_key)
-        except NotFoundError as e:
-            raise NotFound("Found partition record, but not partition in remote for {}. Original Exception: {}"
-                           .format(partition.identity.name, e.message))
-            
-        logger.debug("Redirect partition, {}".format(url))
-        redirect(url)
-    else:
-        
-        try:
-            # Realize the partition file in the top level cache. 
-            r = library.get(partition.identity.id_)
-        except NotFoundError as e:
-            raise NotFound("Found partition record, but not partition in library for {}. Original Exception: {}"
-                           .format(partition.identity.name, e.message))
-        
-        logger.debug("Send file directly, {}".format(url))
-        return static_file(r.partition.database.path, root='/', mimetype="application/octet-stream")    
+    if not pid in set([identity.id, identity.vid]):
+        raise exc.Conflict("Partition address '{}' doesn't match payload id '{}'".format(pid, identity.vid))
 
 
-@put('/datasets/<did>/partitions/<pid>')
-@CaptureException
-def put_datasets_partitions(did, pid, library):
-    '''Record that a partition has been stored at in the object store'''
+    logger.debug("Putting partition {}".format(identity))
+
+    file = library.database.get_file_by_ref(identity.vid)
+
+    if not file:
+        raise exc.NotFound("Partition identity {} not found".format(identity.vid))
+
+    return identity.to_dict()
+
+
 
 def _read_body(request):
     '''Read the body of a request and decompress it if required '''
@@ -487,39 +452,54 @@ def test_run(config):
     
     logger.info("starting test server on http://{}:{}".format(host, port))
     
-    install(LibraryPlugin(config))
+    lf = lambda: new_library(config, True)  
+    
+    l = lf()
+    l.database.create()
+    
+    install(LibraryPlugin(lf))
     
     return run(host=host, port=port, reloader=False, server='stoppable')
 
-def local_run(config, library_name='default', reloader=True):
+def local_run(config, reloader=True):
  
     global stoppable_wsgi_server_run
     stoppable_wsgi_server_run = None
 
     debug()
 
-    l = new_library(config.library(library_name))  
+    lf = lambda:  new_library(config, True)  
 
-    logger.info("starting local server for library '{}' on http://{}:{}".format(library_name, l.host, l.port))
+    l = lf()
+    l.database.create()
+    
+    logger.info("starting local server for library '{}' on http://{}:{}".format(l.name, l.host, l.port))
 
-    install(LibraryPlugin(l))
+    install(LibraryPlugin(lf))
     return run(host=l.host, port=l.port, reloader=reloader)
     
-def local_debug_run(config, library_name='default'):
+def local_debug_run(config):
 
     debug()
-    l = new_library(config.library(library_name))  
+    lf = lambda: new_library(config, True)  
 
-    install(LibraryPlugin(config, library_name))
+    install(LibraryPlugin(lf))
+    
+    l = lf()
+    l.database.create()
+    
     return run(host=l.host, port=l.port, reloader=True)
 
-def production_run(config, library_name='default', reloader=False):
+def production_run(config, reloader=False):
 
-    l = new_library(config.library(library_name))  
+    lf = lambda:  new_library(config, True)  
 
-    logger.info("starting production server for library '{}' on http://{}:{}".format(library_name, l.host, l.port))
+    l = lf()
+    l.database.create()
 
-    install(LibraryPlugin(l))
+    logger.info("starting production server for library '{}' on http://{}:{}".format(l.name, l.host, l.port))
+
+    install(LibraryPlugin(lf))
 
     return run(host=l.host, port=l.port, reloader=reloader, server='paste')
     

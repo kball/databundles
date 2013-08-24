@@ -11,7 +11,7 @@ import databundles.util
 from  testbundle.bundle import Bundle
 from databundles.run import  RunConfig
 from test_base import  TestBase
-from  databundles.client.rest import Rest #@UnresolvedImport
+from  databundles.client.rest import RestApi #@UnresolvedImport
 from databundles.library import QueryCommand, new_library
 from databundles.util import rm_rf
 
@@ -28,9 +28,10 @@ class Test(TestBase):
         self.copy_or_build_bundle()
         self.bundle_dir =  os.path.join(os.path.dirname(os.path.abspath(__file__)),'testbundle')    
         self.rc = RunConfig([os.path.join(self.bundle_dir,'client-test-config.yaml'),
-                             os.path.join(self.bundle_dir,'bundle.yaml')])
+                             os.path.join(self.bundle_dir,'bundle.yaml'),
+                             RunConfig.USER_CONFIG])
          
-        self.server_rc = RunConfig([os.path.join(self.bundle_dir,'server-test-config.yaml')])
+        self.server_rc = RunConfig([os.path.join(self.bundle_dir,'server-test-config.yaml'),RunConfig.USER_CONFIG])
        
         self.bundle = Bundle()  
         self.bundle_dir = self.bundle.bundle_dir
@@ -38,33 +39,51 @@ class Test(TestBase):
     def tearDown(self):
         self.stop_server()
 
-
+    def web_exists(self,s3, rel_path):
     
-    def test_simple_install(self):
-        from databundles.library import QueryCommand
+        import requests
+        import urlparse
         
-        self.start_server()
+        url  = s3.path(rel_path, method='HEAD')
+        
+        parts = list(urlparse.urlparse(url))
+        qs = urlparse.parse_qs(parts[4])
+        parts[4] = None
+        
+        url = urlparse.urlunparse(parts)
+        r = requests.head(urlparse.urlunparse(parts), params=qs)
 
-        api = Rest(self.server_url, self.rc.accounts)
+        self.assertEquals(200, r.status_code)
+    
 
-        r =  api.put(self.bundle.database.path, self.bundle.identity)
-      
-        self.assertEquals(self.bundle.identity.name,r.object.get('name',''))
-  
-        r = api.get(self.bundle.identity.name, file_path = True )
+    def test_simple_install(self):
+        from databundles.library import QueryCommand, new_library
+        from databundles.filesystem import RestRemote, new_filesystem
+        
+        config = self.start_server()
+        
+        # Create the library so we can get the same remote config
+        l = new_library(config)
+        s3 = l.remote.last_upstream()
 
-        self.assertTrue(os.path.exists(r))
-        os.remove(r)
+        print "Starting server with config: {}".format(config.to_dict())
+
+        api = RestRemote(upstream=s3, **config)
+
+        r =  api.put_bundle(self.bundle)
+        print r
+        self.web_exists(s3,self.bundle.identity.cache_key)
+
 
         for partition in self.bundle.partitions:
-            r =  api.put(partition.database.path, partition.identity)
-            self.assertEquals(partition.identity.name,r.object.get('name',''))
-            
-            
-            r = api.get(partition.identity, file_path = True )
+            r =  api.put_partition(partition)
 
-            self.assertTrue(os.path.exists(r))
-            os.remove(r)
+            r = api.get(partition.identity.cache_key)
+
+            self.assertTrue(self.web_exists(s3,partition.identity.cache_key ), "{} is missing".format(r))
+            #os.remove(r)
+  
+        return 
   
         # Try variants of find. 
         r = api.find(self.bundle.identity.name)
@@ -164,7 +183,7 @@ class Test(TestBase):
         # Copy all of the newly added files to the server. 
         l.push()
             
-        l2 = get_library('clean')
+        l2 = new_library('clean')
         l2.purge()
         
         r = l2.get('b1DxuZ001')
@@ -218,7 +237,7 @@ class Test(TestBase):
         
         self.start_server(remote_config)
         
-        r = Rest(self.server_url, remote_config)
+        r = None #Rest(self.server_url, remote_config)
         
         bf = self.bundle.database.path
 
@@ -259,36 +278,75 @@ class Test(TestBase):
         return self._test_put_bundle('default-remote', self.rc.accounts)
 
 
-    def test_caches(self):
+    def test_find_upstream(self):
+
+        from databundles.run import  get_runconfig
+        from databundles.filesystem import Filesystem, RemoteMarker
+
+   
+        def get_cache(fsname):
+            rc = get_runconfig((os.path.join(self.bundle_dir,'test-run-config.yaml'),RunConfig.USER_CONFIG))
+            config = rc.filesystem(fsname)
+            cache = Filesystem.get_cache(config)
+            return cache
+        
+        cache = get_cache("cached-compressed-s3")
+        
+        print cache
+        
+        print cache.get_upstream(RemoteMarker)
+        
+            
+    def x_test_caches(self):
         '''Basic test of put(), get() and has() for all cache types'''
         from functools import partial
         from databundles.run import  get_runconfig, RunConfig
         from databundles.filesystem import Filesystem
+        from databundles.util import md5_for_file
+   
         
-        fn = '/tmp/1mbfile'
+        self.start_server() # For the rest-cache
         
-        get_cache = partial(self.bundle.filesystem._get_cache, self.rc.filesystem)
-        
-        with open(fn, 'wb') as f:
-            f.write('.'*(1024))
+        #fn = '/tmp/1mbfile'
+        #with open(fn, 'wb') as f:
+        #    f.write('.'*(1024))
+      
+        fn = self.bundle.database.path
+      
+        md5 = md5_for_file(fn)
       
         rc = get_runconfig((os.path.join(self.bundle_dir,'test-run-config.yaml'),RunConfig.USER_CONFIG))
         
-        
-        for fsname in ['fscache', 'limitedcache','compressioncache', 's3cache']:
+        for i, fsname in enumerate(['fscache', 'limitedcache', 'compressioncache', 's3cache','cached-s3', 'cached-compressed-s3', 'rest-cache']): #'compressioncache',
+
+        #for i, fsname in enumerate([ 'rest-cache']): #'compressioncache',
+
 
             config = rc.filesystem(fsname)
             cache = Filesystem.get_cache(config)
 
-            r = cache.put(fn, 'f')
-            r = cache.get('f')
-            self.assertTrue(os.path.exists(r), str(cache))
-            self.assertTrue(cache.has('f'))
+            print '--', cache
+            relpath = "{}/f".format(i,'f')
+
+            r = cache.put(fn, relpath,{'md5':md5,'path':relpath})
+            r = cache.get(relpath)
+            print cache.path(relpath), cache.metadata(relpath)
+
+            if not r.startswith('http'):
+                self.assertTrue(os.path.exists(r), str(cache))
+                
+            self.assertTrue(cache.has(relpath, md5=md5))
             
-            cache.remove('f', propagate=True)
+            cache.remove(relpath, propagate=True)
             
             self.assertFalse(os.path.exists(r), str(cache))
-            self.assertFalse(cache.has('f'))
+            self.assertFalse(cache.has(relpath))
+            
+
+        cache = Filesystem.get_cache(rc.filesystem('s3cache-noupstream'))         
+        r = cache.put(fn, 'a')
+ 
+            
             
     def x_test_remote_cache(self):
         self.start_server(name='default-remote')
@@ -321,7 +379,7 @@ class Test(TestBase):
         rm_rf('/tmp/server')
         self.start_server(name='default-remote')
         
-        api = Rest(self.server_url, self.rc.accounts)  
+        api = None # Rest(self.server_url, self.rc.accounts)  
 
         # Upload directly, then download via the cache. 
         

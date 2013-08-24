@@ -61,7 +61,7 @@ class TestBase(unittest.TestCase):
         logger.info(  "Copying bundle from {}".format(save_dir))
         os.system("rm -rf {0}; rsync -arv {1} {0}  > /dev/null ".format(build_dir, save_dir))
         
-    def start_server(self, config=None):
+    def start_server(self, config=None, name='default'):
         '''Run the Bottle server as a thread'''
         from databundles.client.siesta import  API
         import databundles.server.main
@@ -69,7 +69,7 @@ class TestBase(unittest.TestCase):
         import time
         from functools import  partial
 
-        config = self.server_rc.library('default')['upstream']
+        config = self.server_rc.library(name)
 
         self.server_url = "http://localhost:{}".format(config['port'])
         
@@ -90,13 +90,13 @@ class TestBase(unittest.TestCase):
                 logger.info( 'Already running a non-debug server')
     
             # We already have a server, so carry on
-            return 
+            return config
         except:
             # We'll get an exception refused eception if there is not server
             logger.info( 'No server, starting a local debug server')
 
 
-        server = Thread(target = partial(databundles.server.main.test_run, rc, name) ) 
+        server = Thread(target = partial(databundles.server.main.test_run, config) ) 
         server.setDaemon(True)
         server.start()
         
@@ -113,6 +113,8 @@ class TestBase(unittest.TestCase):
                 time.sleep(1)
                                
         r = a.test.echo('foobar').get(bar='baz') 
+        
+        return config
     
     def stop_server(self):
         '''Shutdown the server process by calling the close() API, then waiting for it

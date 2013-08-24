@@ -1143,7 +1143,11 @@ class BundleDbConfig(BundleConfig):
  
         s = self.database.session
 
-        return  (s.query(Dataset).one())
+        try:
+            return  (s.query(Dataset).one())
+        except:
+            #print "!!!", self.database.path
+            raise 
 
     @property
     def partition(self):

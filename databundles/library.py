@@ -79,19 +79,41 @@ class DependencyError(Exception):
 
 
 def _new_library(config):
-    from filesystem import new_filesystem
+
+    from filesystem import new_filesystem, RemoteMarker
+
    
-    filesystem = new_filesystem(config['filesystem'])
+    cache = new_filesystem(config['filesystem'])
     
     database = LibraryDb(**dict(config['database']))    
     
+    database.create()
+    
     remote = new_filesystem(config['remote']) if 'remote' in config else None
 
-    l =  Library(cache = filesystem, 
+    config = dict(config)
+    config['name'] = config['_name'] if '_name' in config else 'NONE'
+
+    for key in ['_name', 'filesystem', 'database', 'remote' ]:
+        if key in config:
+            del config[key]
+
+
+    if remote and (not isinstance(remote, RemoteMarker) 
+                   and not isinstance(remote.last_upstream(), RemoteMarker)):
+        raise ConfigurationError("Library remote must hace a RemoteMarker interface: {}".format(config))
+
+    # Idea for integrating the remote into the cache. 
+    #lus = cache.last_upstream()
+    #lus.upstream = remote
+    #remote = remote.last_upstream
+
+    l =  Library(cache = cache, 
                  database = database, 
                  remote = remote,
-                 name=config['_name'])
+                 **config)
 
+    return l
 
     
 def new_library(config, reset=False):
@@ -117,8 +139,8 @@ def new_library(config, reset=False):
 
     if name not in libraries:
   
-        libraries[name] = _new_library(config, name)
-    
+        libraries[name] = _new_library(config)
+
     return libraries[name]
 
 @lru_cache(maxsize=128)
@@ -135,8 +157,8 @@ def get_warehouse(config=None, name='default'):
     if not sc:
         raise ConfigurationError("Failed to get name '{}' in configuration group 'warehouse' ".format(name))
     
-    database = get_database(config, name=sc.database)
- 
+    #database = get_database(config, name=sc.database)
+    database = None
     
     return Warehouse(database, sc)
     
@@ -166,7 +188,7 @@ class LibraryDb(object):
             'mysql':Dbci(dsn_template='mysql://{user}:{password}@{server}/{name}',sql='support/configuration-sqlite.sql')
             }
     
-    def __init__(self,  driver=None, server=None, dbname = None, username=None, password=None):
+    def __init__(self,  driver=None, server=None, dbname = None, username=None, password=None, **kwargs):
         self.driver = driver
         self.server = server
         self.dbname = dbname
@@ -1255,12 +1277,31 @@ class Library(object):
         if self._remote:
             return self._remote # When it is a URL to a REST interface. 
         else:
-            return self.cache.remote
+            return None
     
     @property
     def database(self):
         '''Return databundles.database.Database object'''
         return self._database
+  
+    def load(self, rel_path):
+        '''Load a record into the cache from the remote'''
+        from filesystem import copy_file_or_flo
+        
+        if not self.remote.has(rel_path):
+            return None
+        
+        source = self.remote.get_stream(rel_path)
+        sink = self.cache.put_stream(rel_path)
+        
+        copy_file_or_flo(source,sink)
+        
+        source.close()
+        sink.close()
+        
+        return self.cache.path(rel_path)
+        
+        
   
             
     def get_ref(self,bp_id):
@@ -1582,7 +1623,10 @@ class Library(object):
         if isinstance(identity , dict):
             identity = new_identity(identity)
 
-        dst = self.cache.put(file_path,identity.cache_key)
+        if not self.cache.has(identity.cache_key):
+            dst = self.cache.put(file_path,identity.cache_key)
+        else: 
+            dst = self.cache.path(identity.cache_key)
 
         if not os.path.exists(dst):
             raise Exception("cache {}.put() didn't return an existent path. got: {}".format(type(self.cache), dst))

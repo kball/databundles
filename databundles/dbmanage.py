@@ -108,7 +108,7 @@ def library_command(args, rc, src):
     else:
         config = rc
     
-    l = library.get_library(config=config, name=args.name)
+    l = library.new_library(config.library(args.name))
 
     globals()['library_'+args.subcommand](args, l,config)
 
@@ -208,12 +208,12 @@ def library_server(args, l, config):
     from databundles.server.main import production_run
 
     def run_server(args, config):
-        production_run(config, library_name = args.name)
+        production_run(config.library(args.name))
     
     if args.daemonize:
         daemonize(run_server, args,  config)
     else:
-        production_run(config, library_name = args.name)
+        production_run(config.library(args.name))
         
 def library_drop(args, l, config):   
 
@@ -472,7 +472,7 @@ def remote_command(args, rc, src):
     else:
         config = rc
     
-    l = library.get_library(config=config, name=args.name)
+    l = library.new_library(config.library(args.name))
 
     if args.subcommand == 'info':
         if not l.remote:
@@ -557,7 +557,7 @@ def source_command(args,rc, src):
         from databundles.bundle import BuildBundle
         from databundles.util import toposort
         
-        l = library.get_library(config=rc)
+        l = library.new_library(rc.library(args.name))
         
         if not os.path.exists(args.term) and os.path.isdir(args.term):
             print "ERROR: '{}' is not a valid directory ".format(args.term)
