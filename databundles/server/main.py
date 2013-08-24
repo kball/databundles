@@ -191,19 +191,19 @@ def post_datasets_find(library):
     return out
 
 @post('/datasets/<did>')
+
 @CaptureException
 def post_dataset(did,library): 
     '''Accept a payload that describes a bundle in the remote. Download the
     bundle and install it. '''
-    
+
     did = did.replace('|','/')
-    
+
     from databundles.identity import new_identity, Identity
     from databundles.util import md5_for_file
     
     payload = request.json
     identity = new_identity(payload['identity'])
-
 
     if not did in set([identity.id_, identity.vid]):
         raise exc.Conflict("Dataset address '{}' doesn't match payload id '{}'".format(did, identity.vid))
@@ -261,7 +261,6 @@ def get_dataset(did, library):
     from databundles.filesystem import RemoteMarker
 
     did = did.replace('|','/')
-    
 
     gr =  library.get(did)
      
@@ -288,8 +287,10 @@ def get_dataset(did, library):
         file = library.database.get_file_by_ref(partition.identity.vid)
         
         if file:
+
             fd = file.to_dict()
             d['partitions'][partition.identity.id_]['file']  = { k:v for k,v in fd.items() if k in ['state'] }
+
         if remote:
             d['partitions'][partition.identity.id_]['url'] = remote.path(partition.identity.cache_key)
         
@@ -321,6 +322,7 @@ def post_partition(did, pid, library):
         raise exc.Conflict("Partition address '{}' doesn't match payload id '{}'".format(pid, identity.vid))
 
     library.database.add_file(identity.cache_key, 'remote', identity.vid, state='remote')
+
 
     return identity.to_dict()
 

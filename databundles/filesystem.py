@@ -560,8 +560,6 @@ class BundleFilesystem(Filesystem):
         if opened:
             f.close
 
-
-
         return out
 
     def download_shapefile(self, url):
@@ -792,9 +790,9 @@ class RestRemote(RemoteInterface):
             r = self.upstream.path(rel_path)
             
         self.api.put(metadata)
-        
+
         return r
-        
+
     def put_stream(self,rel_path, metadata=None): 
         from io import IOBase
         import requests
