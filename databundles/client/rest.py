@@ -22,69 +22,24 @@ def raise_for_status(response):
     if e:
         raise e(response.message)
     
-class Rest(object):
+class RestApi(object):
     '''Interface class for the Databundles Library REST API
     '''
 
-    def __init__(self, url,  accounts_config=None):
+    def __init__(self, url):
         '''
         '''
         
         self.url = url
-        self.accounts_config = accounts_config
-        
+
     @property
     def remote(self):
         # It would make sense to cache self.remote = API(), but siesta saves the id
         # ( calls like remote.datasets(id).post() ), so we have to either alter siesta, 
         # or re-create it every call. 
         return API(self.url)
-        
-    @property
-    def connection_info(self):
-        '''Return  reference to this remote, excluding the connection secret'''
-        return {'service':'remote', 'url':self.url}
-       
- 
-    def upload_file(self, identity, path, ci=None, force=False):
-        '''Upload  file to the object_store_config's object store'''
-        from databundles.util import md5_for_file
-        from databundles.dbexceptions import ConfigurationError
-        import json
 
-        if ci is None:
-            ci = self.remote.info().objectstore().get().object
 
-        if ci['service'] == 's3':
-            from databundles.filesystem import S3Cache, FsCompressionCache
-            
-            if not self.accounts_config:
-                raise ConfigurationError("Remote requires S3 upload, but no account_config is set for this api")
-            
-            secret = self.accounts_config.get('s3',{}).get(ci['access_key'], False)
-            
-            if not secret:
-                print self.accounts_config
-                raise ConfigurationError("Didn't find key {} in configuration accounts.s3".format(ci['access_key']))
-
-            ci['secret'] = secret
-         
-            del ci['service']
-            fs = FsCompressionCache(S3Cache(**ci))
-            #fs = S3Cache(**ci)
-        else:
-            raise NotImplementedError("No handler for service: {} ".format(ci))
-
-        md5 = md5_for_file(path)
-        
-        if  fs.has(identity.cache_key, md5) and not force:
-            return identity.cache_key
-        else:
-            
-            metadata = {'id':identity.id_, 'identity': json.dumps(identity.to_dict()), 'name':identity.name, 'md5':md5}
-
-            return fs.put(path, identity.cache_key,  metadata=metadata)
-        
     def get_ref(self, id_or_name):
         '''Return a tuple of (rel_path, dataset_identity, partition_identity)
         for an id or name'''
@@ -205,115 +160,26 @@ class Rest(object):
         
         return self._process_get_response(p_id_or_name, response, file_path, uncompress, cb=cb)
 
-                    
-    def _put(self, source, identity):
-        '''Put the source to the remote, creating a compressed version if
-        it is not originally compressed'''
-        
-        from databundles.util import bundle_file_type
-        import gzip
-        import os, tempfile, uuid
-        from databundles.identity import ObjectNumber, DatasetNumber, PartitionNumber
-        
-        id_ = identity.id_
-        
-        on = ObjectNumber.parse(id_)
- 
-        if not on:
-            raise ValueError("Failed to parse id: '{}'".format(id_))
- 
-        if not  isinstance(on, (DatasetNumber, PartitionNumber)):
-            raise ValueError("Object number '{}' is neither for a dataset nor partition".format(id_))
- 
-        type_ = bundle_file_type(source)
+                     
+    def put(self, metadata):
+        ''''''
+        import json
+        from databundles.identity import new_identity
 
-        if  type_ == 'sqlite' or type_ == 'hdf':
-            import shutil
-            # If it is a plain sqlite file, compress it before sending it. 
-            try:
-                cf = os.path.join(tempfile.gettempdir(),str(uuid.uuid4()))
-                
-                with gzip.open(cf, 'wb') as out_f:
-                    try:
-                        shutil.copyfileobj(source, out_f)
-                    except AttributeError:
-                        with open(source) as in_f:
-                            shutil.copyfileobj(in_f, out_f)
-                        
-             
-                with open(cf) as sf_:
-                    if isinstance(on,DatasetNumber ):
-                        response =  self.remote.datasets(id_).put(sf_)
-                    else:
-                        response =  self.remote.datasets(str(on.dataset)).partitions(str(on)).put(sf_)
+        metadata['identity'] = json.loads(metadata['identity'])
+        
+        identity = new_identity(metadata['identity'])
 
-            finally:
-                if os.path.exists(cf):
-                    os.remove(cf)
-       
-        elif type_ == 'gzip':
-            # the file is already gziped, so nothing to do. 
-
-            if isinstance(on,DatasetNumber ):
-                response =  self.remote.datasets(id_).put(source)
-            else:
-                response =  self.remote.datasets(str(on.dataset)).partitions(str(on)).put(source)
-            
+        if identity.is_bundle:
+            r =  self.remote.datasets(identity.vid_enc).post(metadata)
+            raise_for_status(r)
         else:
-            raise Exception("Bad file for id {}  got type: {} ".format(id_, type_))
+            r =  self.remote.datasets(identity.as_dataset.vid_enc).partitions(identity.vid_enc).post(metadata)
+            raise_for_status(r)
 
-        raise_for_status(response)
-        
-        return response
-
-
-    def put_to_api(self,source, identity):
-        '''Put the bundle in source to the remote library 
-        Args:
-            identity. An identity object that identifies the bundle or partition
-            source. Either the name of the bundle file, or a file-like opbject
-            
-        This writes to the remote. The preferred method is to save to the object store first
-            
-        '''
-        from sqlalchemy.exc import IntegrityError
-
-         
-        try:
-            # a Filename
-            with open(source) as flo:
-                r =  self._put(flo, identity)
-        except IntegrityError as e:
-            raise e
-        except Exception as e:
-            # an already open file
-            r =  self._put(source, identity)
-
-        if isinstance(r.object, list):
-            r.object = r.object[0]
 
         return r
-       
-    def put(self,source, identity):
-            
-        ci = self.remote.info().objectstore().get().object
-          
-        if ci['service'] == 'here':
-                
-            # Upload directly to the remote. 
-            return self.put_to_api(source,identity)
-            
-        else:
-              
-            # Upload to the remote first, then kick the API to get it from the remote
-                
-            # Upload the file to the object store, outside of the API
-            self.upload_file( identity, source, ci=ci)
-            
-            # Tell the API to check the file. 
-            return self.remote.load().post(identity.to_dict())
 
-   
     def find(self, query):
         '''Find datasets, given a QueryCommand object'''
         from databundles.library import QueryCommand

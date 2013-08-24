@@ -75,6 +75,24 @@ class Identity(object):
 
         return { k:v for k,v in d.items() if v}
  
+    def to_meta(self, md5=None, file=None):
+        '''Return a dictionary of metadata, for use in the Remote api'''
+        import json
+        
+        if not md5:
+            if not file:
+                raise ValueError("Must specify either file or md5")
+        
+            from util import md5_for_file
+            
+            md5 = md5_for_file(file)
+        
+        return {
+                'id':self.id_, 
+                'identity': json.dumps(self.to_dict()),
+                'name':self.name, 
+                'md5':md5}
+ 
     def clone(self):
         return self.__class__(**self.to_dict())
  
@@ -90,14 +108,20 @@ class Identity(object):
         
         return c
         
-        
- 
+
     @property
     def vid(self):
         try:
             return str(ObjectNumber.parse(self.id_).rev(self.revision))
         except AttributeError:
             return None
+ 
+ 
+    @property
+    def vid_enc(self):
+        '''vid, urlencoded'''
+        import urllib
+        return self.vid.replace('/','|')
  
     @property
     def creatorcode(self):
@@ -337,6 +361,8 @@ class PartitionIdentity(Identity):
         
         return  Identity(**d)
     
+    
+
     
     @staticmethod
     def convert(arg, bundle=None):

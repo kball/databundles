@@ -103,7 +103,9 @@ class RunConfig(object):
             for k,v in values:
                 
                 if v is None:
-                    raise Exception('{} {} {} {} '.format(path, subdicts, k, v))
+                    import pprint
+                    pprint.pprint(e.to_dict())
+                    raise Exception('Got None value: {} {} {} {} '.format(path, subdicts, k, v))
                 
                 path_parts = path.split('/')
                 path_parts.pop()
@@ -166,15 +168,14 @@ class RunConfig(object):
 
     def filesystem(self,name):
         e =  self.group_item('filesystem', name) 
-        root_dir = e['root_dir'] if 'root_dir' in e  else  '/tmp/norootdir'
-        from collections import  defaultdict
-
-        d = defaultdict(str,{'root':root_dir} )
+        
+        fs = self.group('filesystem') 
+        root_dir = fs['root_dir'] if 'root_dir' in fs  else  '/tmp/norootdir'
 
         return self._sub_strings(e, {
                                      'upstream': lambda k,v: self.filesystem(v),
                                      'account': lambda k,v: self.account(v),
-                                     'dir' : lambda k,v: v.format(d)
+                                     'dir' : lambda k,v: v.format(root=root_dir)
                                      }  )
     
     def account(self,name):
@@ -194,7 +195,8 @@ class RunConfig(object):
         e =  self._sub_strings(e, {
                                      'filesystem': lambda k,v: self.filesystem(v),
                                      'remote': lambda k,v: self.filesystem(v),
-                                     'database': lambda k,v: self.database(v) 
+                                     'database': lambda k,v: self.database(v),
+                                     'account': lambda k,v: self.account(v),
                                      }  )
      
         e['_name'] = name
@@ -210,12 +212,12 @@ class RunConfig(object):
                                      }  )
     def database(self,name):
         
-        fs =  self.group_item('filesystem', name) 
+        fs = self.group('filesystem') 
         root_dir = fs['root_dir'] if 'root_dir' in fs  else  '/tmp/norootdir'
         
         e = self.group_item('database', name) 
 
-        return self._sub_strings(e, {'dbname' : lambda k,v: v.format(root_dir=root_dir)}  )
+        return self._sub_strings(e, {'dbname' : lambda k,v: v.format(root=root_dir)}  )
 
 
 def run(argv, bundle_class):

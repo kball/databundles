@@ -46,6 +46,7 @@ filesystem:
         upstream:
           bucket: devtest.clarinova.net
           prefix: /test/s3-l3/
+          account: devtest.clarinova.net
 
       
 downloads:

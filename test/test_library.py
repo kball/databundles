@@ -7,7 +7,7 @@ import unittest
 import os.path
 from  testbundle.bundle import Bundle
 from sqlalchemy import * #@UnusedWildImport
-from databundles.run import  get_runconfig
+from databundles.run import  get_runconfig, RunConfig
 from databundles.library import QueryCommand, new_library
 import logging
 import databundles.util
@@ -25,7 +25,8 @@ class Test(TestBase):
         import testbundle.bundle
         self.bundle_dir = os.path.dirname(testbundle.bundle.__file__)
         self.rc = get_runconfig((os.path.join(self.bundle_dir,'library-test-config.yaml'),
-                                 os.path.join(self.bundle_dir,'bundle.yaml'))
+                                 os.path.join(self.bundle_dir,'bundle.yaml'),
+                                 RunConfig.USER_CONFIG)
                                  )
 
         self.copy_or_build_bundle()
@@ -53,7 +54,11 @@ class Test(TestBase):
 
         config = self.rc.library(name)
 
-        return new_library(config, reset = True)
+        l =  new_library(config, reset = True)
+
+        return l
+        
+        
         
     def tearDown(self):
         pass
@@ -375,6 +380,20 @@ class Test(TestBase):
       
         l1.verify()
 
+    def x_test_remote(self):
+        from databundles.run import RunConfig
+        from databundles.library import new_library
+        
+        rc = get_runconfig((os.path.join(self.bundle_dir,'server-test-config.yaml'),RunConfig.USER_CONFIG))
+
+        config = rc.library('default')
+        library =  new_library(config)
+
+        print library.remote
+        print library.remote.last_upstream()
+        print library.cache
+        print library.cache.last_upstream()  
+                                           
     def test_compression_cache(self):
         '''Test a two-level cache where the upstream compresses files '''
         from databundles.filesystem import  FsCache,FsCompressionCache
@@ -472,8 +491,8 @@ class Test(TestBase):
 
         #databundles.util.get_logger('databundles.filesystem').setLevel(logging.DEBUG) 
         # Set up the test directory and make some test files. 
-
-        root = self.rc.filesystem.root_dir
+        from databundles.filesystem import new_filesystem
+        root = self.rc.group('filesystem').root_dir
         os.makedirs(root)
                 
         testfile = os.path.join(root,'testfile')
@@ -486,7 +505,7 @@ class Test(TestBase):
         #fs = self.bundle.filesystem
         #local = fs.get_cache('downloads')
         
-        cache = self.bundle.filesystem.get_cache('s3', self.rc)
+        cache = new_filesystem(self.rc.filesystem('s3'))
         repo_dir  = cache.cache_dir
       
         print "Repo Dir: {}".format(repo_dir)

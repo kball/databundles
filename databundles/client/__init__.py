@@ -1,2 +1,2 @@
 
-from rest import Rest
+from rest import RestApi

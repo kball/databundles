@@ -39,17 +39,17 @@ filesystem:
         account: 'devtest.clarinova.net'
         
     fscache:
-      dir: /tmp/fscache
+      dir: /tmp/cache-test/fscache
       
     limitedcache:
       size: 2000
-      dir: /tmp/limitedcache
+      dir: /tmp/cache-test/limitedcache
       upstream: fscache
       
     compressioncache:
       options: [compress]
       size: 2000
-      dir: /tmp/compressed
+      dir: /tmp/cache-test/compressed
       upstream: fscache
       
     s3cache: 
@@ -58,6 +58,33 @@ filesystem:
       account: devtest.clarinova.net
       upstream:
         size: 2000
-        dir: /tmp/s3cache
+        dir: /tmp/cache-test/s3cache
+      
+    s3cache-noupstream: 
+      prefix: prefix
+      bucket: devtest.clarinova.net
+      account: devtest.clarinova.net
+
+      
+    cached-s3:
+      dir: /tmp/cache-test/cached-s3
+      upstream: s3cache-noupstream
+      
+    cached-compressed-s3:
+      dir: /tmp/cache-test/cached-compressed-s3
+      upstream: 
+        options: [compress]
+        prefix: prefix
+        bucket: devtest.clarinova.net
+        account: devtest.clarinova.net
+        
+      
+    rest-cache:
+      host: localhost
+      port: 7979
+      upstream:
+        prefix: restremote
+        bucket: devtest.clarinova.net
+        account: devtest.clarinova.net
       
       

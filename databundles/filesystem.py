@@ -83,7 +83,7 @@ class Filesystem(object):
 
         if 'size' in config:
             fsclass = FsLimitedCache
-        elif 'url' in config:
+        elif 'host' in config:
             fsclass = RestRemote
         elif 'account' in config:
             fsclass = S3Cache
@@ -463,7 +463,6 @@ class BundleFilesystem(Filesystem):
      
                 else:
 
-
                     self.bundle.log("Downloading "+url)
                     self.bundle.log("  --> "+file_path)
                     
@@ -665,9 +664,13 @@ class CacheInterface(object):
 
     config = None
 
+    def path(self, rel_path, **kwargs): raise NotImplementedError()
+
     def get(self, rel_path, cb=None): raise NotImplementedError()
     
     def get_stream(self, rel_path, cb=None):  raise NotImplementedError()
+    
+    def last_upstream(self):  raise NotImplementedError()
     
     def has(self, rel_path, md5=None, use_upstream=True):  raise NotImplementedError()
     
@@ -679,15 +682,18 @@ class CacheInterface(object):
     
     def find(self,query): raise NotImplementedError()
     
-    def list(self, path=None): raise NotImplementedError()
+    def list(self, path=None, with_metadata=False): raise NotImplementedError()
    
     def get_upsream(self, type_):
         '''Return self, or an upstream, that has the given class type.
         This is typically used to find upstream s that impoement the RemoteInterface
         ''' 
         raise NotImplementedError()
+
+class RemoteMarker(object):
+    pass
    
-def RemoteInterface(CacheInterface):
+class RemoteInterface(CacheInterface, RemoteMarker):
     
     bucket_name = None #@UnusedVariable
     prefix = None #@UnusedVariable
@@ -702,44 +708,145 @@ def RemoteInterface(CacheInterface):
     def get_ref(self, id_): raise NotImplementedError()
     
     
-def RestRemote(RemoteInterface):
-       
-    def __init__(self,  url, upstream=None):           
-        super(RestRemote, self).__init__(upstream)
+class RestRemote(RemoteInterface):
+
+    def __init__(self,  host,  port = None, upstream=None, **kwargs):           
+        from client.rest import RestApi
+        self.host = host
+        self.port = port if port else 80
+ 
+        self.url = 'http://{}:{}'.format(self.host, self.port)
+ 
+        self.api = RestApi(self.url)
+ 
+        if upstream:
+            
+         
+            if isinstance(upstream, (CacheInterface, RemoteMarker)):
+                self.upstream = upstream
+            else:
+                self.upstream = Filesystem.get_cache(upstream)
+        else:
+            self.upstream = None
         
 
-    def get(self, rel_path, cb=None): raise NotImplementedError()
+    def path(self, rel_path, **kwargs): 
+        return self.upstream.path(rel_path, **kwargs)
+
+        
+    def get(self, rel_path, cb=None): 
+        
+        if not self.upstream.has(rel_path):
+            return None
+        
+        url = self.upstream.path(rel_path)
+        
+        return url
+        
     
     def get_stream(self, rel_path, cb=None):  raise NotImplementedError()
     
-    def has(self, rel_path, md5=None, use_upstream=True):  raise NotImplementedError()
-    
+    def has(self, rel_path, md5=None, use_upstream=True):
+        if self.upstream:
+            return self.upstream.has(rel_path)
+        else:
+            raise NotImplementedError()
+   
+    def put_bundle(self, bundle):
+        
+        metadata = bundle.identity.to_meta(file=bundle.database.path )
+        
+        return self.put(bundle.database.path, 
+                         bundle.identity.cache_key,
+                         metadata = metadata)
+                         
+    def put_partition(self, partition):
+        
+        metadata = partition.identity.to_meta(file=partition.database.path )
+        
+        return self.put(partition.database.path, 
+                         partition.identity.cache_key,
+                         metadata = metadata)
+   
     def put(self, source, rel_path, metadata=None):
         
         from databundles.bundle import DbBundle
+        from databundles.util import md5_for_file
+        import json
+        from dbexceptions import ConfigurationError
+     
+        if not self.upstream:
+            raise ConfigurationError("Can't put to a RestRemote without an s3 upstream")
+     
+        if not metadata:
+            raise ConfigurationError("Must have metadata")
+     
+        if set(['id','identity','name','md5']) != set(metadata.keys()):
+            raise ConfigurationError("Metadata is missing keys: {}".format(metadata.keys()))
+
+        # Store the bundle into the S3 cache. 
         
-        b = DbBundle(source)
+        if not self.upstream.has(rel_path, md5=metadata['md5']):
+            r =  self.upstream.put(source, rel_path, metadata=metadata)
+        else:
+            r = self.upstream.path(rel_path)
+            
+        self.api.put(metadata)
         
-        self.upstream.put(source)
+        return r
+        
+    def put_stream(self,rel_path, metadata=None): 
+        from io import IOBase
+        import requests
+        
+        if set(['id','identity','name','md5']) not in set(metadata.keys()):
+            raise ValueError("Must have complete metadata to use put_stream(): 'id','identity','name','md5' ") 
+    
+        class flo(IOBase):
+
+            def __init__(self, api, url, upstream,  rel_path):
+                
+                self._api = api
+                self._url = url
+                self._upstream = upstream
+                self._rel_path = rel_path
+                self._sink = self.upstream.put_stream(rel_path, metadata=metadata) 
+
+            def write(self, str_):
+                self._sink.write(str_)
+            
+            def close(self):
+                if not self._sink.closed:
+                    self._sink.close()
+                    self.api.put(self._url, metadata)
+  
+
+        return flo(self.api, self.url, self.upstream,  rel_path)
         
     
-    def put_stream(self,rel_path, metadata=None): raise NotImplementedError()
+    def remove(self,rel_path, propagate = False): 
+        
+        self.upstream.remove(rel_path, propagate)
+        
     
-    def remove(self,rel_path, propagate = False): raise NotImplementedError()
+    def metadata(self,rel_path):
+        if self.upstream:
+            return self.upstream.metadata(rel_path)
+        else:
+            raise NotImplementedError()
     
     def find(self,query): raise NotImplementedError()
     
-    def list(self, path=None): raise NotImplementedError()
+    def list(self, path=None,with_metadata=False): raise NotImplementedError()
    
     def get_upsream(self, type_):
-        '''Return self, or an upstream, that has the given class type.
-        This is typically used to find upstream s that impoement the RemoteInterface
-        ''' 
-        raise NotImplementedError()    
+        ''''''
+         
+        return self._upstream  
        
    
   
-class Cache(object):
+class Cache(CacheInterface):
     
     upstream = None
     readonly = False
@@ -759,21 +866,32 @@ class Cache(object):
             else:
                 self.upstream = Filesystem.get_cache(upstream)
     
-    def get_upsream(self, type_): 
-        if isinstance(type,_, self):
+    def get_upstream(self, type_): 
+        if isinstance(self, type_):
             return self
+        elif self.upstream and isinstance(self.upstream, type_):
+            return self.upstream
         elif self.upstream:
             return self.upstream.get_upstream(type_)
         else:
             return None
 
+    def last_upstream(self):
+        us = self
+        
+        while us.upstream:   
+            us = us.upstream
+            
+        return us
+
     @property
     def repo_id(self):
         raise NotImplementedError()
     
-    def path(self, rel_path):
+    
+    def path(self, rel_path, **kwargs):
         if self.upstream:
-            return self.path(rel_path)
+            return self.upstream.path(rel_path, **kwargs)
         
         return None
     
@@ -807,7 +925,26 @@ class Cache(object):
         
         return None
 
+    def put_metadata(self,rel_path, metadata):
+        import json
+        if metadata:
+            strm = self.put_stream(os.path.join('meta',rel_path))
+            json.dump(metadata, strm)
+            strm.close()
     
+    def metadata(self,rel_path):
+        import json
+
+        strm = self.get_stream(os.path.join('meta',rel_path))
+        
+        if strm:
+            try:
+                return json.load(strm)
+            except ValueError as e:
+                raise ValueError("Failed to decode json for key '{}',  {}".format(rel_path, self.path(os.path.join('meta',rel_path))))
+        else:
+            return {}
+        
     def remove(self,rel_path, propagate = False):
         if self.upstream:
             return self.upstream.remove(self,rel_path, propagate = propagate)
@@ -828,9 +965,9 @@ class Cache(object):
         return None
         
         
-    def list(self, path=None):
+    def list(self, path=None,with_metadata=False):
         if self.upstream:
-            return self.upstream.list(path)
+            return self.upstream.list(path, with_metadata=with_metadata)
         
         return None
 
@@ -879,10 +1016,7 @@ class FsCache(Cache):
         
         if not os.path.isdir(self._cache_dir):
             raise ConfigurationError("Cache dir '{}' is not valid".format(self._cache_dir)) 
-        
 
-        
-        
     @property
     def cache_dir(self):
         return self._cache_dir
@@ -897,14 +1031,14 @@ class FsCache(Cache):
 
         return m.hexdigest()
     
-    def path(self, rel_path):
+    def path(self, rel_path, **kwargs):
         abs_path = os.path.join(self.cache_dir, rel_path)
         
         if os.path.exists(abs_path):
             return abs_path
         
         if self.upstream:
-            return self.upstream.path(rel_path)        
+            return self.upstream.path(rel_path, **kwargs)        
         
         return False
     
@@ -969,11 +1103,12 @@ class FsCache(Cache):
 
         
     def has(self, rel_path, md5=None, use_upstream=True):
+        from util import md5_for_file
         
         abs_path = os.path.join(self.cache_dir, rel_path)
      
         
-        if os.path.exists(abs_path):
+        if os.path.exists(abs_path) and ( not md5 or md5 == md5_for_file(abs_path)):
             return abs_path
         
         if self.upstream and use_upstream:
@@ -1033,13 +1168,9 @@ class FsCache(Cache):
                 self._upstream = upstream
                 self._repo_path = repo_path
                 self._rel_path = rel_path
-            
-            @property
-            def repo_path(self):
-                return self._repo_path
+
             
             def write(self, str_):
-                
                 self._sink.write(str_)
             
             def close(self):
@@ -1049,9 +1180,11 @@ class FsCache(Cache):
                     self._sink.close()
                     
                     if self._upstream and not self._upstream.readonly and not self._upstream.usreadonly:
-                        self._upstream.put(self._repo_path, self._rel_path) 
+                        self._upstream.put(self._repo_path, self._rel_path, metadata=metadata) 
 
       
+        self.put_metadata(rel_path, metadata)
+        
         return flo(sink, upstream, repo_path, rel_path)
     
 
@@ -1074,11 +1207,9 @@ class FsCache(Cache):
             self.upstream.clean()
 
         
-    def list(self, path=None):
+    def list(self, path=None,with_metadata=False):
         '''get a list of all of the files in the repository'''
-        
-        path = path.strip('/')
-        
+
         raise NotImplementedError() 
 
 
@@ -1389,7 +1520,9 @@ class FsLimitedCache(FsCache):
                 this.add_record(rel_path, size)
 
                 this._free_up_space(size, this_rel_path=rel_path)
-                    
+             
+        self.put_metadata(rel_path, metadata) 
+              
         return flo()
     
     def find(self,query):
@@ -1415,13 +1548,14 @@ class FsLimitedCache(FsCache):
             self.upstream.remove(rel_path, propagate)    
 
 
-    def list(self, path=None):
+    def list(self, path=None,with_metadata=False):
         '''get a list of all of the files in the repository'''
         
-        path = path.strip('/')
+        
+        path = path.strip('/') if path else ''
         
         if self.upstream:
-            return self.upstream.list(path)
+            return self.upstream.list(path, with_metadata=with_metadata)
         else:
             raise NotImplementedError() 
 
@@ -1446,7 +1580,7 @@ class FsCompressionCache(Cache):
     another cache.
      '''
 
-    def __init__(self, upstream=None):
+    def __init__(self, upstream=None,**kwargs):
         
         super(FsCompressionCache, self).__init__(upstream)
 
@@ -1459,6 +1593,8 @@ class FsCompressionCache(Cache):
     def cache_dir(self):
         return self.upstream.cache_dir
   
+    def path(self, rel_path, **kwargs):
+        return self.upstream.path(self._rename(rel_path), **kwargs)
       
     @property
     def remote(self):
@@ -1499,7 +1635,7 @@ class FsCompressionCache(Cache):
 
         copy_file_or_flo(source,  sink) 
         
-        return self.upstream.get(uc_rel_path)
+        return self.path(self._rename(rel_path))
 
     def put(self, source, rel_path, metadata=None):
         from databundles.util import bundle_file_type
@@ -1524,7 +1660,7 @@ class FsCompressionCache(Cache):
       
         sink.close()
         
-        return self.upstream.get(self._rename(rel_path))
+        return self.path(self._rename(rel_path))
     
     def put_stream(self, rel_path,  metadata=None):
         
@@ -1537,6 +1673,8 @@ class FsCompressionCache(Cache):
         metadata['Content-Encoding'] = 'gzip'
         
         sink = self.upstream.put_stream(self._rename(rel_path),  metadata=metadata)
+        
+        self.put_metadata(rel_path, metadata)
         
         return gzip.GzipFile(fileobj=sink,  mode='wb')
 
@@ -1561,13 +1699,23 @@ class FsCompressionCache(Cache):
     
         self.upstream.remove(uc_rel_path)
 
-    def list(self, rel_path=None):
+    def list(self, path=None,with_metadata=False):
         '''get a list of all of the files in the repository'''
-        return self.upstream.list(self._rename(rel_path))
+        return self.upstream.list(path,with_metadata=with_metadata)
 
 
     def has(self, rel_path, md5=None, use_upstream=True):
-        return self.upstream.has(self._rename(rel_path), md5=md5, use_upstream=use_upstream)
+        
+        # This odd structure is because the MD5 check won't work if it is computed on a uncompressed
+        # file and checked on a compressed file. But it will work if the check is done on an s#
+        # file, which stored the md5 as metadada
+        
+        r =  self.upstream.has(self._rename(rel_path), md5=md5, use_upstream=use_upstream)
+
+        if not r:
+            return self.upstream.has(self._rename(rel_path), md5=None, use_upstream=use_upstream)
+        else:
+            return True
 
     def metadata(self, rel_path):
         return self.upstream.metadata(self._rename(rel_path))
@@ -1588,12 +1736,12 @@ class FsCompressionCache(Cache):
         return "FsCompressionCache: upstream=({})".format(self.upstream)
     
 
-class S3Cache(Cache):
+class S3Cache(Cache, RemoteMarker):
     '''A cache that transfers files to and from an S3 bucket
     
      '''
 
-    def __init__(self, bucket=None, prefix=None, account=None, upstream=None):
+    def __init__(self, bucket=None, prefix=None, account=None, upstream=None,**kwargs):
         '''Init a new S3Cache Cache
 
         '''
@@ -1614,6 +1762,27 @@ class S3Cache(Cache):
     def _rename(self, rel_path):
         import re
         return re.sub('\.gz$','',rel_path)
+  
+    def path(self, rel_path, **kwargs):
+        
+        rel_path = self._rename(rel_path)
+        
+        if self.upstream:
+            return self.upstream.path(rel_path, **kwargs)
+        else:
+            
+            if 'method' in kwargs:
+                method = kwargs['method'].upper()
+            else:
+                method = 'GET'
+            
+            from boto.s3.key import Key
+            k = Key(self.bucket)
+            if self.prefix is not None:
+                rel_path = self.prefix+"/"+rel_path
+            k.key = rel_path
+            return k.generate_url(300, method=method) # expires in 5 minutes
+            
   
     @property
     def cache_dir(self):
@@ -1892,12 +2061,12 @@ class S3Cache(Cache):
             self.upstream.remove(rel_path)
              
         
-    def list(self, path=None):
+    def list(self, path=None,with_metadata=False):
         '''Get a list of all of bundle files in the cache. Does not return partition files'''
         
         path = self.prefix+'/'+path.strip('/') if path else self.prefix
         
-        l = []
+        l = {}
         for e in self.bucket.list(path):
             path = e.name.replace(self.prefix,'',1).strip('/')
             if path.startswith('_'):
@@ -1906,7 +2075,12 @@ class S3Cache(Cache):
             if path.count('/') > 1:
                 continue # partition files
             
-            l.append(path)
+            if with_metadata:
+                d = self.metadata(path)
+            else:
+                d = {}
+            
+            l[path] = d
 
         return l
 

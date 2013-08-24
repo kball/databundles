@@ -108,7 +108,7 @@ def library_command(args, rc, src):
     else:
         config = rc
     
-    l = library.get_library(config=config, name=args.name)
+    l = library.new_library(config.library(args.name))
 
     globals()['library_'+args.subcommand](args, l,config)
 
@@ -208,12 +208,12 @@ def library_server(args, l, config):
     from databundles.server.main import production_run
 
     def run_server(args, config):
-        production_run(config, library_name = args.name)
+        production_run(config.library(args.name))
     
     if args.daemonize:
         daemonize(run_server, args,  config)
     else:
-        production_run(config, library_name = args.name)
+        production_run(config.library(args.name))
         
 def library_drop(args, l, config):   
 
@@ -262,8 +262,9 @@ def library_info(args, l, config):
     print "Library Info"
     print "Name:     {}".format(args.name)
     print "Database: {}".format(l.database.dsn)
-    print "Remote:   {}".format(l.remote.connection_info if l.remote else 'None')
-    print "Cache:    {}, {}".format(type(l.cache), l.cache.cache_dir)
+    print "Cache:    {}".format(l.cache)
+    print "Remote:   {}".format(l.remote if l.remote else 'None')
+
     
 def library_push(args, l, config):
 
@@ -436,29 +437,7 @@ def library_load(args, l, config):
         
     if path:
         print get_identity(path).name
-        
-def library_listremote(args, l, config):          
 
-    if args.datasets:
-        for ds in args.datasets:
-            dsi = l.remote.dataset(ds)
-
-            print "dataset {0:11s} {1}".format(dsi['dataset']['id'],dsi['dataset']['name'])
-
-            for id_, p in dsi['partitions'].items():
-                vs = ''
-                for v in ['time','space','table','grain','format']:
-                    val = p.get(v,False)
-                    if val:
-                        vs += "{}={} ".format(v, val)
-                print ("        {0:11s} {1:50s} {2} ".format(id_,  p['name'], vs))
-            
-    else:
-
-        datasets = l.remote.list()
-
-        for id_, data in datasets.items():
-            print "{0:4s} {1:50s} {2}".format('remote',id_,data['identity']['name'])
     
 def library_unknown(args, l, config):
     print "Unknown subcommand"
@@ -472,7 +451,7 @@ def remote_command(args, rc, src):
     else:
         config = rc
     
-    l = library.get_library(config=config, name=args.name)
+    l = library.new_library(config.library(args.name))
 
     if args.subcommand == 'info':
         if not l.remote:
@@ -482,35 +461,26 @@ def remote_command(args, rc, src):
 
     elif args.subcommand == 'list':
         
-        from identity import new_identity
-        import json
-
-        o = []
-
-        if l.remote.connection_info['service'] == 'remote':
-            for name, d in l.remote.list().items():
-                identity = d['identity']
-                o.append((identity['id'], identity['name'], None))
-           
+        if args.datasets:
+            for ds in args.datasets:
+                dsi = l.remote.dataset(ds)
+    
+                print "dataset {0:11s} {1}".format(dsi['dataset']['id'],dsi['dataset']['name'])
+    
+                for id_, p in dsi['partitions'].items():
+                    vs = ''
+                    for v in ['time','space','table','grain','format']:
+                        val = p.get(v,False)
+                        if val:
+                            vs += "{}={} ".format(v, val)
+                    print ("        {0:11s} {1:50s} {2} ".format(id_,  p['name'], vs))
+                
         else:
-            for i in l.remote.list():
-                try: name = i.name
-                except: name = i
-            
-                if args.meta:
-                    meta = l.remote.metadata(name)
-
-                    o.append((meta['id'],
-                              new_identity(json.loads(meta['identity'])) , 
-                              meta['size']
-                              ))
-
-                else:
-
-                    o.append((name,None,'' ))
-
-        for id, name, size in sorted(o, key = lambda i: i[0]):
-            print "{:5s} {:8s} {}".format( id,  str(size),  name)          
+    
+            datasets = l.remote.list(with_metadata=args.meta)
+    
+            for id_, data in datasets.items():
+                print "{0:4s} {1:50s} {2}".format('remote',id_,data, None)       
 
 def ckan_command(args,rc, src):
     from databundles.dbexceptions import ConfigurationError
@@ -557,7 +527,7 @@ def source_command(args,rc, src):
         from databundles.bundle import BuildBundle
         from databundles.util import toposort
         
-        l = library.get_library(config=rc)
+        l = library.new_library(rc.library(args.name))
         
         if not os.path.exists(args.term) and os.path.isdir(args.term):
             print "ERROR: '{}' is not a valid directory ".format(args.term)
@@ -747,9 +717,7 @@ def main():
     sp.set_defaults(subcommand='find')   
     sp.add_argument('term', type=str, nargs=argparse.REMAINDER,help='Query term')
 
-    sp = asp.add_parser('listremote', help='List the datasets stored on the remote')
-    sp.set_defaults(subcommand='listremote')   
-    sp.add_argument('datasets', nargs=argparse.REMAINDER)
+
    
     #
     # warehouse  Command
@@ -844,6 +812,7 @@ def main():
     sp = asp.add_parser('list', help='List remote files')
     sp.set_defaults(subcommand='list')
     sp.add_argument('-m','--meta', default=False,  action='store_true',  help="Force fetching metadata for remotes that don't provide it while listing, like S3")
+    sp.add_argument('datasets', nargs=argparse.REMAINDER)
         
                        
     #

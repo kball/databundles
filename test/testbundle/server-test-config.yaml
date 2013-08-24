@@ -20,6 +20,12 @@ library:
         database: server  
         host: localhost   
         port: 7979
+        remote:
+          options: [compress]
+          prefix: library-test
+          bucket: devtest.clarinova.net
+          account: devtest.clarinova.net
+        
 
 
 database:
@@ -38,13 +44,13 @@ database:
 
 filesystem:  
     writer:
-        dbname: '/tmp/server/writer'
+        dir: '/tmp/server/writer'
         
     reader:
-        dbname: '/tmp/server/reader'
+        dir: '/tmp/server/reader'
         
     server:
-        dbname: '/tmp/server/server'
+        dir: '/tmp/server/server'
    
    
     remote:

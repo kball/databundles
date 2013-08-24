@@ -114,7 +114,7 @@ class Bundle(object):
         if self._library:
             l = self._library
         else:
-            l =  library.get_library()
+            l =  library.new_library(self.config.library('default'))
             
         l.logger = self.logger
         l.database.logger = self.logger
@@ -520,7 +520,7 @@ class BuildBundle(Bundle):
         if library_name is None:
             library_name = vars(self.run_args).get('library', 'default')
 
-        library = databundles.library.get_library(name=library_name)
+        library = databundles.library.new_library(self.config.library(library_name))
      
         self.log("Install bundle {} to  library {}".format(self.identity.name, library_name))  
         dest = library.put(self)
@@ -1143,7 +1143,11 @@ class BundleDbConfig(BundleConfig):
  
         s = self.database.session
 
-        return  (s.query(Dataset).one())
+        try:
+            return  (s.query(Dataset).one())
+        except:
+            #print "!!!", self.database.path
+            raise 
 
     @property
     def partition(self):
