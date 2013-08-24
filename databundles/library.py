@@ -1294,6 +1294,7 @@ class Library(object):
         '''Load a record into the cache from the remote'''
         from filesystem import copy_file_or_flo
         
+        
         if not self.remote.has(rel_path):
             return None
         
