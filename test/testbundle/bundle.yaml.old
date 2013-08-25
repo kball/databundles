@@ -42,12 +42,12 @@ identity:
     dataset: dataset
     id: a1DxuZ
     name: source-dataset-subset-variation-ca0d
-    revision: 3
+    revision: 1
     source: source
     subset: subset
     variation: variation
-    vid: a1DxuZ/003
-    vname: source-dataset-subset-variation-ca0d-r3
+    vid: a1DxuZ/001
+    vname: source-dataset-subset-variation-ca0d-r1
 partitions:
 - source-dataset-subset-variation-ca0d.tone
 - source-dataset-subset-variation-ca0d.ttwo

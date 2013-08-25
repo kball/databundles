@@ -428,20 +428,16 @@ class Schema(object):
                                    universe=row.get('universe',None)
                                    )
 
-    def as_csv(self, f=None):
+    def _dump_gen(self):
         """Return the current schema as a CSV file
         
         :param f: A file-like object where the CSV data will be written. If ``None``, 
         will default to stdout. 
         
         """
-        import csv, sys
+        
         from collections import OrderedDict
 
-        if f is None:
-            f = sys.stdout
-
-        w = None
         
         # Collect indexes
         indexes = {}
@@ -453,6 +449,8 @@ class Schema(object):
         for table in self.tables:
             for col in table.columns: 
                 for index_set in [col.indexes, col.uindexes, col.unique_constraints]:
+                    if not index_set:
+                        continue # HACK. This probably shouldnot happen
                     for idx in index_set.split(','):
                         
                         idx = idx.replace(table.name+'_','')
@@ -472,6 +470,7 @@ class Schema(object):
 
         indexes = OrderedDict(sorted(indexes.items(), key=lambda t: t[0]))
 
+        first = True
         for table in self.tables:
             for col in table.columns:
                 row = OrderedDict()
@@ -498,12 +497,57 @@ class Schema(object):
 
                 row['id'] = col.id_
 
-                if not w:
-                    w = csv.DictWriter(f,row.keys())
-                    w.writeheader()
-                
-                w.writerow(row)
-            w.writerow({})
+                if first:
+                    first = False
+                    yield row.keys()
+                    
+                yield row
+  
+             
+    def as_csv(self, f = None):
+        import csv, sys
+        
+        if f is None:
+            f = sys.stdout
+        
+        g = self._dump_gen()
+        
+        header = g.next()
+        
+        w = csv.DictWriter(f,header)
+        w.writeheader()
+        last_table = None
+        for row in g:
+            
+            # Blank row to seperate tables. 
+            if last_table and row['table'] != last_table:
+                w.writerow({})
+            
+            w.writerow(row)
+        
+            last_table = row['table']
+             
+    def as_struct(self):
+        from collections import defaultdict
+        
+        class GrowingList(list): # http://stackoverflow.com/a/4544699/1144479
+            def __setitem__(self, index, value):
+                if index >= len(self):
+                    self.extend([None]*(index + 1 - len(self)))
+                list.__setitem__(self, index, value)
+        
+        o = defaultdict(GrowingList)
+        
+        g = self._dump_gen()
+        
+        header = g.next()
+    
+        for row in g:
+            o[row['table']][row['seq']-1] = row
+            
+        return o      
+        
+        
                 
     def as_orm(self):
         """Return a string that holds the schema represented as Sqlalchemy

@@ -83,6 +83,7 @@ class RunConfig(object):
         return self.config.get(name,{})
 
     def group_item(self, group, name):
+        import copy
         
         g = self.group(group)
         
@@ -91,7 +92,7 @@ class RunConfig(object):
             pprint.pprint(name)
             raise KeyError("Could not find name '{}' in group '{}'".format(name, group))
         
-        return g[name]
+        return  copy.deepcopy(g[name])
         
 
     def _yield_string(self, e):
@@ -197,6 +198,7 @@ class RunConfig(object):
                                      'remote': lambda k,v: self.filesystem(v),
                                      'database': lambda k,v: self.database(v),
                                      'account': lambda k,v: self.account(v),
+                                     'upstream': lambda k,v: self.filesystem(v)
                                      }  )
      
         e['_name'] = name

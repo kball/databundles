@@ -80,9 +80,16 @@ class DependencyError(Exception):
 
 def _new_library(config):
 
+    import copy
+    
+    config = copy.deepcopy(config)
+    
+   
+
     from filesystem import new_filesystem, RemoteMarker
 
-   
+    #import pprint; pprint.pprint(config.to_dict())
+
     cache = new_filesystem(config['filesystem'])
     
     database = LibraryDb(**dict(config['database']))    
@@ -91,7 +98,7 @@ def _new_library(config):
     
     remote = new_filesystem(config['remote']) if 'remote' in config else None
 
-    config = dict(config)
+    
     config['name'] = config['_name'] if '_name' in config else 'NONE'
 
     for key in ['_name', 'filesystem', 'database', 'remote' ]:
@@ -835,6 +842,9 @@ class LibraryDb(object):
      
         return query
 
+    def add_remote_file(self, identity):
+        self.add_file(identity.cache_key, 'remote', identity.vid, state='remote')
+
         
     def add_file(self,path, group, ref, state='new'):
         from databundles.orm import  File
@@ -1293,8 +1303,7 @@ class Library(object):
     def load(self, rel_path):
         '''Load a record into the cache from the remote'''
         from filesystem import copy_file_or_flo
-        
-        
+   
         if not self.remote.has(rel_path):
             return None
         
@@ -1307,10 +1316,7 @@ class Library(object):
         sink.close()
         
         return self.cache.path(rel_path)
-        
-        
-  
-            
+
     def get_ref(self,bp_id):
         from databundles.identity import ObjectNumber, DatasetNumber, PartitionNumber, Identity, PartitionIdentity
 
@@ -1646,7 +1652,7 @@ class Library(object):
         if identity.is_bundle:
             self.database.install_bundle_file(identity, file_path)
 
-        return dst, identity.cache_key, self.cache.public_url_f()(identity.cache_key)
+        return dst, identity.cache_key, self.cache.last_upstream().path(identity.cache_key)
      
     def put(self, bundle):
         '''Install a bundle or partition file into the library.
@@ -1729,8 +1735,8 @@ class Library(object):
                 identity = partition.identity
             else:
                 identity = dataset.identity
-            
-            self.remote.put(file_.path, identity)
+
+            self.remote.put(file_.path, identity.cache_key, metadata=identity.to_meta(file=file_.path))
             file_.state = 'pushed'
             self.database.commit()
         else:
@@ -1814,9 +1820,10 @@ class Library(object):
             self.database.install_bundle_file(identity, path)
             
             for p in bundle.partitions:  
-                if self.cache.has(p.identity.cache_key, use_upstream=False): # This only installs the partitions that we already have locally
+                if self.remote.last_upstream().has(p.identity.cache_key):
+                    self.database.add_remote_file(p.identity)
                     self.logger.info('            {} '.format(p.identity.name))
-                    self.database.add_file(p.database.path, self.cache.repo_id, p.identity.vid,  'rebuilt')
+
 
 
     def rebuild(self):

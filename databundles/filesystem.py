@@ -93,10 +93,8 @@ class Filesystem(object):
             from databundles.dbexceptions import ConfigurationError
             raise ConfigurationError("Can't determine cache type: {} ".format(config))
 
-        
         if 'options' in config and 'compress' in config['options'] :
             config['options'] = [ i for i in config['options'] if i !=  'compress']
-
             return FsCompressionCache(upstream=config)
         else:
             return  fsclass(**dict(config))
@@ -772,13 +770,13 @@ class RestRemote(RemoteInterface):
         from databundles.util import md5_for_file
         import json
         from dbexceptions import ConfigurationError
-     
+
         if not self.upstream:
             raise ConfigurationError("Can't put to a RestRemote without an s3 upstream")
      
         if not metadata:
             raise ConfigurationError("Must have metadata")
-     
+
         if set(['id','identity','name','md5']) != set(metadata.keys()):
             raise ConfigurationError("Metadata is missing keys: {}".format(metadata.keys()))
 
@@ -789,6 +787,7 @@ class RestRemote(RemoteInterface):
         else:
             r = self.upstream.path(rel_path)
             
+  
         self.api.put(metadata)
 
         return r
@@ -835,15 +834,41 @@ class RestRemote(RemoteInterface):
     
     def find(self,query): raise NotImplementedError()
     
-    def list(self, path=None,with_metadata=False): raise NotImplementedError()
-   
+    def list(self, path=None,with_metadata=False): 
+        
+        return  self.api.list()
+
+        path = self.prefix+'/'+path.strip('/') if path else self.prefix
+        
+        l = {}
+        for e in self.bucket.list(path):
+            path = e.name.replace(self.prefix,'',1).strip('/')
+            if path.startswith('_'):
+                continue
+            
+            if path.count('/') > 1:
+                continue # partition files
+            
+            if with_metadata:
+                d = self.metadata(path)
+            else:
+                d = {}
+            
+            l[path] = d
+
+        return l
+        
+        
     def get_upsream(self, type_):
         ''''''
          
         return self._upstream  
        
-   
-  
+    def __repr__(self):
+        return "RestRemote: url={}  upstream=({})".format(self.url, self.upstream)
+       
+       
+       
 class Cache(CacheInterface):
     
     upstream = None
@@ -968,13 +993,6 @@ class Cache(CacheInterface):
             return self.upstream.list(path, with_metadata=with_metadata)
         
         return None
-
-
-    def public_url_f(self, public=False, expires_in=None):
-        if self.upstream:
-            return self.upstream.public_url_f(self, public=public, expires_in=expires_in)
-        
-        return None  
 
 
     def __repr__(self):
@@ -1211,15 +1229,6 @@ class FsCache(Cache):
         raise NotImplementedError() 
 
 
-    def public_url_f(self, public=False, expires_in=None):
-        ''' Returns a function that will convert a rel_path into a public URL'''
-        if self.upstream:
-            upstream_f = self.upstream.public_url_f(public=public, expires_in=expires_in)
-            return lambda rel_path: upstream_f(rel_path)
-        else:
-            cache_dir = self.cache_dir
-            return lambda rel_path: 'file://{}'.format(os.path.join(cache_dir, rel_path))      
-              
     def __repr__(self):
         return "FsCache: dir={} upstream=({})".format(self.cache_dir, self.upstream)
 
@@ -1557,17 +1566,7 @@ class FsLimitedCache(FsCache):
         else:
             raise NotImplementedError() 
 
-    
-    def public_url_f(self, public=False, expires_in=None):
-        ''' Returns a function that will convert a rel_path into a public URL'''
 
-        if self.upstream:
-            upstream_f = self.upstream.public_url_f(public=public, expires_in=expires_in)
-            return lambda rel_path: upstream_f(rel_path)
-        else:
-            cache_dir = self.cache_dir
-            return lambda rel_path: 'file://{}'.format(os.path.join(cache_dir, rel_path))     
-    
     def __repr__(self):
         return "FsLimitedCache: dir={} size={} upstream=({})".format(self.cache_dir, self.maxsize, self.upstream)
     
@@ -1605,7 +1604,7 @@ class FsCompressionCache(Cache):
     
     def get_stream(self, rel_path, cb=None):
         from databundles.util import bundle_file_type
-        
+
         source = self.upstream.get_stream(self._rename(rel_path))
    
         if not source:
@@ -1625,7 +1624,7 @@ class FsCompressionCache(Cache):
         source = self.get_stream(rel_path)
         
         if not source:
-            raise Exception()
+            raise Exception('Failed to get a source for rel_path {} for {}, upstream {} '.format(rel_path, self, self.upstream))
         
         uc_rel_path = os.path.join('uncompressed',rel_path)
         
@@ -1640,23 +1639,22 @@ class FsCompressionCache(Cache):
 
         # Pass through if the file is already compressed
     
-        if isinstance(rel_path, Identity):
-            rel_path = rel_path.cache_key
-    
+       
         if not metadata:
             metadata = {}
-    
-      
+     
         metadata['Content-Encoding'] = 'gzip'
     
+        sink = self.upstream.put_stream(self._rename(rel_path), metadata = metadata)
+
         if bundle_file_type(source) == 'gzip':
-            sink = self.upstream.put_stream(rel_path, metadata = metadata)
             copy_file_or_flo(source,  sink)
         else:
-            sink = self.upstream.put_stream(self._rename(rel_path), metadata = metadata)
             copy_file_or_flo(source,  gzip.GzipFile(fileobj=sink,  mode='wb'))
       
         sink.close()
+        
+        #self.put_metadata(rel_path, metadata)
         
         return self.path(self._rename(rel_path))
     
@@ -1664,9 +1662,6 @@ class FsCompressionCache(Cache):
         
         if not metadata:
             metadata = {}
-    
-        if isinstance(rel_path, Identity):
-            rel_path = rel_path.cache_key
 
         metadata['Content-Encoding'] = 'gzip'
         
@@ -1710,26 +1705,16 @@ class FsCompressionCache(Cache):
         
         r =  self.upstream.has(self._rename(rel_path), md5=md5, use_upstream=use_upstream)
 
-        if not r:
-            return self.upstream.has(self._rename(rel_path), md5=None, use_upstream=use_upstream)
-        else:
+        if r:
             return True
+
+        return self.upstream.has(self._rename(rel_path), md5=None, use_upstream=use_upstream)
+
 
     def metadata(self, rel_path):
         return self.upstream.metadata(self._rename(rel_path))
 
 
-      
-    def public_url_f(self, public=False, expires_in=None):
-        ''' Returns a function that will convert a rel_path into a public URL'''
-        
-        if not self.upstream:
-            raise Exception("CompressionCache must have an upstream")
-        
-        upstream_f = self.upstream.public_url_f(public=public, expires_in=expires_in)
-        rename_f = self._rename
-        return lambda rel_path: upstream_f(rename_f(rel_path))
-    
     def __repr__(self):
         return "FsCompressionCache: upstream=({})".format(self.upstream)
     
@@ -1756,31 +1741,31 @@ class S3Cache(Cache, RemoteMarker):
         self.conn = S3Connection(self.access_key, self.secret, is_secure = False )
         self.bucket = self.conn.get_bucket(self.bucket_name)
   
-  
     def _rename(self, rel_path):
+        '''Remove the .gz suffix that may have been added by a compression cache.
+        In s3, compression is indicated by the content encoding.  '''
         import re
-        return re.sub('\.gz$','',rel_path)
-  
-    def path(self, rel_path, **kwargs):
+        rel_path =  re.sub('\.gz$','',rel_path)
+        return rel_path
         
-        rel_path = self._rename(rel_path)
+    def _prefix(self, rel_path):
         
-        if self.upstream:
-            return self.upstream.path(rel_path, **kwargs)
+        if self.prefix is not None:
+            return self.prefix+"/"+rel_path
         else:
-            
-            if 'method' in kwargs:
-                method = kwargs['method'].upper()
-            else:
-                method = 'GET'
-            
-            from boto.s3.key import Key
-            k = Key(self.bucket)
-            if self.prefix is not None:
-                rel_path = self.prefix+"/"+rel_path
-            k.key = rel_path
-            return k.generate_url(300, method=method) # expires in 5 minutes
-            
+            return rel_path
+
+    def path(self, rel_path, **kwargs):
+
+        if 'method' in kwargs:
+            method = kwargs['method'].upper()
+        else:
+            method = 'GET'
+        
+        k = self._get_boto_key(rel_path)
+        
+        return k.generate_url(300, method=method) # expires in 5 minutes
+        
   
     @property
     def cache_dir(self):
@@ -1810,22 +1795,14 @@ class S3Cache(Cache, RemoteMarker):
         """Return the object as a stream"""
         from boto.s3.key import Key
         from boto.exception import S3ResponseError 
-        
-        rel_path = self._rename(rel_path)
-        
+     
         import StringIO
-        
-        if self.prefix is not None:
-            rel_path = self.prefix+"/"+rel_path
-        
-        logger.debug("3C {} get_stream looking for {}".format(self.repo_id,rel_path)) 
-        
-        k = Key(self.bucket)
 
-        k.key = rel_path
- 
         b = StringIO.StringIO()
         try:
+            k = self._get_boto_key(rel_path)
+            if not k:
+                return None
             k.get_contents_to_file(b, cb=cb, num_cb=100)
             b.seek(0)
             return b;
@@ -1834,50 +1811,24 @@ class S3Cache(Cache, RemoteMarker):
                 return None
             else:
                 raise e
-   
         
     def get(self, rel_path, cb=None):
-        '''For S3, get requires and upstream, where the downloaded file can be stored
+        '''For S3, get requires an upstream, where the downloaded file can be stored
         '''
-        from dbexceptions import ConfigurationError
-        source = self.get_stream(rel_path)
         
-        if not source:
-            raise Exception()
-        
-        if not self.upstream:
-            raise ConfigurationError("Can't use get() on S3 without an upstream ")
-        
-        sink = self.upstream.put_stream(rel_path)
-
-        copy_file_or_flo(source, sink) 
-        
-        sink.close()
-        
-        return self.upstream.get(rel_path)
+        raise NotImplemented("Can't get() from an S3, since it has no plae to put a file. Wrap with an FsCache. ")
     
     def _get_boto_key(self, rel_path):
         from boto.s3.key import Key
 
         rel_path = self._rename(rel_path)
+        path = self._prefix(rel_path)
 
-        if self.prefix is not None:
-            rel_path = self.prefix+"/"+rel_path
-
-        k = self.bucket.get_key(rel_path)
+        k = self.bucket.get_key(path)
         
         return k        
   
     def put(self, source, rel_path,  metadata=None):  
-        
-        if isinstance(rel_path, Identity):
-            rel_path = rel_path.cache_key
-        
-        if isinstance(rel_path, Identity):
-            rel_path = rel_path.cache_key
-        
-        rel_path = self._rename(rel_path)
-        
 
         sink = self.put_stream(rel_path, metadata = metadata)
         
@@ -1895,19 +1846,7 @@ class S3Cache(Cache, RemoteMarker):
             rel_path: path relative to the root of the repository
         
         '''
-
-        if isinstance(rel_path, Identity):
-            rel_path = rel_path.cache_key
-        
-        from boto.s3.key import Key
-
-        rel_path = self._rename(rel_path)
-
-        if self.prefix is not None:
-            rel_path = self.prefix+"/"+rel_path
-        
-        k = Key(self.bucket)
-        k.key = rel_path
+        k = self._get_boto_key(rel_path)
 
         try:
             k.set_contents_from_file(source)
@@ -1926,14 +1865,11 @@ class S3Cache(Cache, RemoteMarker):
         import Queue
         import time
         import threading
-        
-        if isinstance(rel_path, Identity):
-            rel_path = rel_path.cache_key
-        
+
         md5 = metadata.get('md5',None) if metadata else None
         public = metadata.get('public',False) if metadata else None
 
-        rel_path = self._rename(rel_path)
+        path = self._prefix(self._rename(rel_path))
 
         class ThreadUploader(threading.Thread):
             """Thread class for uploading a part to S3"""
@@ -1961,9 +1897,6 @@ class S3Cache(Cache, RemoteMarker):
                                      .format(self.n, part_number, round(t2-t1,3), round((float(buf.tell())/(t2-t1)), 2)))
                     
                         
-            
-        if self.prefix is not None:
-            rel_path = self.prefix+"/"+rel_path
 
         if metadata is None:
             metadata = {}
@@ -1988,7 +1921,7 @@ class S3Cache(Cache, RemoteMarker):
        
             def __init__(self):
 
-                self.mp = this.bucket.initiate_multipart_upload(rel_path, metadata=metadata)
+                self.mp = this.bucket.initiate_multipart_upload(path, metadata=metadata)
                 self.part_number = 1;
                 self.buffer = io.BytesIO()
                 self.total_size = 0
@@ -2030,34 +1963,24 @@ class S3Cache(Cache, RemoteMarker):
                 self.mp.complete_upload()
                 
                 if public:
-                    this.bucket.set_acl('public-read', rel_path)
+                    this.bucket.set_acl('public-read', path)
                 
-            
+
         return flo()
      
             
     def find(self,query):
         '''Passes the query to the upstream, if it exists'''
 
-        if  self.upstream:
-            return self.upstream.find(query)
-        else:
-            # Can't search on an S3 stream
-            return False
+        raise NotImplemented()
     
     def remove(self,rel_path, propagate = False):
         '''Delete the file from the cache, and from the upstream'''
-        from boto.s3.key import Key
-        
-        rel_path = self._rename(rel_path)
-        
+
         key = self._get_boto_key(rel_path)
         if key:
             key.delete()   
-            
-        if self.upstream: # In case someone called get(0
-            self.upstream.remove(rel_path)
-             
+
         
     def list(self, path=None,with_metadata=False):
         '''Get a list of all of bundle files in the cache. Does not return partition files'''
@@ -2083,20 +2006,20 @@ class S3Cache(Cache, RemoteMarker):
         return l
 
     def has(self, rel_path, md5=None, use_upstream=True):
-        
-        rel_path = self._rename(rel_path)
-        
+
         k = self._get_boto_key(rel_path)
         
+        if not k:
+            return False
+        
         if not md5:
-            return k and k.exists()
+            return  k.exists()
         else:
-            return (k and k.exists() and  md5 == k.get_metadata('md5'))
+            remote_md5 = k.get_metadata('md5')
+            return k.exists() and  str(md5) == str(remote_md5) 
 
     def metadata(self, rel_path):
-        
-        rel_path = self._rename(rel_path)
-        
+
         k = self._get_boto_key(rel_path)
         
         if not k or not k.exists():
@@ -2109,44 +2032,9 @@ class S3Cache(Cache, RemoteMarker):
         return d
 
 
-    def public_url_f(self, public=False, expires_in=None):
-        ''' Returns a function that will convert a rel_path into a public URL'''
-        from dbexceptions import NotFoundError
-        
-        
-        if self.prefix is not None:
-            prefix = self.prefix
-        else:
-            prefix = ''
-            
-        bucket = self.bucket_name
-
-        xpin = expires_in
-        
-        def public_url_f_inner(rel_path):
-            
-            expires_in = xpin
-            
-            rel_path = self._rename(rel_path)
-
-            key =  self._get_boto_key(rel_path)
-            if not key:
-                raise NotFoundError("Failed to get key for path: {}".format(rel_path))
-            if public:
-                key =  prefix.strip('/')+"/"+rel_path.strip('/'); 
-                return "https://s3.amazonaws.com/{}/{}".format(bucket, key)
-        
-            else:
-                if not expires_in:
-                    expires_in=60
-                return key.generate_url(expires_in)
-            
-        return public_url_f_inner
-     
-     
     
     def __repr__(self):
-        return "S3Cache: bucket={} prefix={} access={} upstream=({})".format(self.bucket, self.prefix, self.access_key, self.upstream)
+        return "S3Cache: bucket={} prefix={} access={} ".format(self.bucket, self.prefix, self.access_key, self.upstream)
        
 
 # Stolen from : https://bitbucket.org/fabian/filechunkio/src/79ba1388ee96/LICENCE?at=default

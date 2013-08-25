@@ -42,7 +42,7 @@ class Bundle(object):
  
     logger = None
  
-    def __init__(self):
+    def __init__(self, logger=None):
         '''
         '''
 
@@ -52,8 +52,11 @@ class Bundle(object):
         self._identity = None
         self._repository = None
 
-        self.logger = databundles.util.get_logger(__name__)
-        
+        if not logger:
+            self.logger = databundles.util.get_logger(__name__)
+        else:
+            self.logger = logger 
+            
         import logging
         self.logger.setLevel(logging.INFO) 
         
@@ -150,7 +153,7 @@ class Bundle(object):
     
 class DbBundle(Bundle):
 
-    def __init__(self, database_file):
+    def __init__(self, database_file, logger=None):
         '''Initialize a bundle and all of its sub-components. 
         
         If it does not exist, creates the bundle database and initializes the
@@ -162,7 +165,7 @@ class DbBundle(Bundle):
             Create bundle.db if it does not exist
         '''
         
-        super(DbBundle, self).__init__()
+        super(DbBundle, self).__init__(logger=logger)
        
         self.database_file = database_file
         self.database = Database(self, database_file)
@@ -517,10 +520,10 @@ class BuildBundle(Bundle):
      
         import databundles.library
 
-        if library_name is None:
-            library_name = vars(self.run_args).get('library', 'default')
+        library_name = vars(self.run_args).get('library', 'default') if library_name is None else 'default'
+        library_name = library_name if library_name else 'default'
 
-        library = databundles.library.new_library(self.config.library(library_name))
+        library = databundles.library.new_library(self.config.config.library(library_name))
      
         self.log("Install bundle {} to  library {}".format(self.identity.name, library_name))  
         dest = library.put(self)
@@ -1138,16 +1141,16 @@ class BundleDbConfig(BundleConfig):
     def get_dataset(self):
         '''Initialize the identity, creating a dataset record, 
         from the bundle.yaml file'''
-        
         from databundles.orm import Dataset
+        from sqlalchemy.exc import DatabaseError
  
         s = self.database.session
 
         try:
             return  (s.query(Dataset).one())
         except:
-            #print "!!!", self.database.path
-            raise 
+            print "ERROR: BundleDbConfig.get_dataset() got bad database: '{}'".format(self.database.path)
+            raise
 
     @property
     def partition(self):

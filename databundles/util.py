@@ -545,8 +545,8 @@ def md5_for_file(f, block_size=2**20):
             if not data:
                 break
             md5.update(data)
-            return md5.hexdigest()  
-    except AttributeError:     
+        return md5.hexdigest()  
+    except AttributeError as e: 
         file_name = f
         with open(file_name) as f:
             return md5_for_file(f, block_size)

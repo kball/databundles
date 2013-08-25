@@ -298,7 +298,7 @@ class Test(TestBase):
         print cache.get_upstream(RemoteMarker)
         
             
-    def x_test_caches(self):
+    def test_caches(self):
         '''Basic test of put(), get() and has() for all cache types'''
         from functools import partial
         from databundles.run import  get_runconfig, RunConfig
@@ -315,23 +315,23 @@ class Test(TestBase):
         fn = self.bundle.database.path
       
         md5 = md5_for_file(fn)
-      
+        
+        print "MD5 {}  = {}".format(fn, md5)
+
         rc = get_runconfig((os.path.join(self.bundle_dir,'test-run-config.yaml'),RunConfig.USER_CONFIG))
         
-        for i, fsname in enumerate(['fscache', 'limitedcache', 'compressioncache', 's3cache','cached-s3', 'cached-compressed-s3', 'rest-cache']): #'compressioncache',
-
-        #for i, fsname in enumerate([ 'rest-cache']): #'compressioncache',
+        for i, fsname in enumerate(['fscache', 'limitedcache', 'compressioncache','cached-s3', 'cached-compressed-s3', 'rest-cache']): #'compressioncache',
 
 
             config = rc.filesystem(fsname)
             cache = Filesystem.get_cache(config)
+            print '---', fsname, cache
+            identity = self.bundle.identity
 
-            print '--', cache
-            relpath = "{}/f".format(i,'f')
+            relpath = identity.cache_key
 
-            r = cache.put(fn, relpath,{'md5':md5,'path':relpath})
+            r = cache.put(fn, relpath,identity.to_meta(md5=md5))
             r = cache.get(relpath)
-            print cache.path(relpath), cache.metadata(relpath)
 
             if not r.startswith('http'):
                 self.assertTrue(os.path.exists(r), str(cache))

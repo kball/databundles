@@ -243,7 +243,7 @@ def library_list(args, l, config):
     if not args.term:
         for i in l.database.connection.execute('SELECT * from datasets'):
             d =  dict(i)
-            prt("{:10s} {}", d['d_id'], d['d_name'])
+            prt("{:10s} {}", d['d_vid'], d['d_name'])
     else:
         d = l.get(args.term)
         
@@ -370,6 +370,39 @@ def library_find(args, l, config):
 
     return 
 
+def library_schema(args, l, config):
+    from databundles.bundle import DbBundle    
+    
+    def progress(i, n):
+        print i,n
+
+    # This will fetch the data, but the return values aren't quite right
+    r = l.get(args.term, cb=progress)
+
+
+    abs_path = os.path.join(l.cache.cache_dir, r.identity.cache_key)
+    b = DbBundle(abs_path)
+
+    if args.format == 'csv':
+        b.schema.as_csv()
+    elif args.format == 'json':
+        import json
+        s = b.schema.as_struct()
+        if args.pretty:
+            print json.dumps(s, sort_keys=True,indent=4, separators=(',', ': '))
+        else:
+            print json.dumps(s)
+    elif args.format == 'yaml': 
+        import yaml 
+        s = b.schema.as_struct()
+        if args.pretty:
+            print yaml.dump(s,indent=4, default_flow_style=False)
+        else:
+            print yaml.dump(s)
+    else:
+        raise Exception("Unknown format" )    
+        
+  
 def library_get(args, l, config):
 
     def progress(i, n):
@@ -380,19 +413,20 @@ def library_get(args, l, config):
   
     if not r:
         print "{}: Not found".format(args.term)
-    elif not args.schema:
-        print "--- Dataset ---"
-        print "Dataset   : ",r.identity.id_, r.identity.name
-        print "Is Local: ",l.cache.has(r.identity.cache_key) is not False
-        print "Rel Path  : ",r.identity.cache_key
-        print "Abs Path  : ",l.cache.has(r.identity.cache_key)
-        
-        if r.partition:
-            print "--- Partition ---"
-            print "Partition : ",r.partition.identity.id_, r.partition.name
-            print "Is Local: ",(l.cache.has(r.partition.identity.cache_key) is not False) if r.partition else ''
-            print "Rel Path  : ",r.partition.identity.cache_key
-            print "Abs Path  : ",l.cache.has(r.partition.identity.cache_key)
+        return  
+
+    print "--- Dataset ---"
+    print "Dataset   : ",r.identity.id_, r.identity.name
+    print "Is Local: ",l.cache.has(r.identity.cache_key) is not False
+    print "Rel Path  : ",r.identity.cache_key
+    print "Abs Path  : ",l.cache.has(r.identity.cache_key)
+    
+    if r.partition:
+        print "--- Partition ---"
+        print "Partition : ",r.partition.identity.id_, r.partition.name
+        print "Is Local: ",(l.cache.has(r.partition.identity.cache_key) is not False) if r.partition else ''
+        print "Rel Path  : ",r.partition.identity.cache_key
+        print "Abs Path  : ",l.cache.has(r.partition.identity.cache_key)
 
     if r and args.open:
         
@@ -405,20 +439,7 @@ def library_get(args, l, config):
 
         os.execlp('sqlite3','sqlite3',abs_path )
         
-    elif r and args.schema:
-        from databundles.bundle import DbBundle
-        import csv, sys, itertools
-        from collections import OrderedDict
-        
-        abs_path = os.path.join(l.cache.cache_dir, r.identity.cache_key)
-        b = DbBundle(abs_path)
-        
-        w = None
-        
-        print b.schema.as_csv()
-        
-       
-     
+
 def library_load(args, l, config):       
 
     from bundle import get_identity
@@ -480,7 +501,8 @@ def remote_command(args, rc, src):
             datasets = l.remote.list(with_metadata=args.meta)
     
             for id_, data in datasets.items():
-                print "{0:4s} {1:50s} {2}".format('remote',id_,data, None)       
+                print "{:10s} {:50s} {:s}".format(data['identity']['vid'],data['identity']['vname'],id_)  
+
 
 def ckan_command(args,rc, src):
     from databundles.dbexceptions import ConfigurationError
@@ -705,7 +727,6 @@ def main():
     sp.set_defaults(subcommand='get')   
     sp.add_argument('term', type=str,help='Query term')
     sp.add_argument('-o','--open',  default=False, action="store_true",  help='Open the database with sqlite')
-    sp.add_argument('-s','--schema',  default=False, action="store_true",  help='Dump the schema as a CSV file.')
     sp.add_argument('-f','--force',  default=False, action="store_true",  help='Force retrieving from the remote')
 
     sp = asp.add_parser('load', help='Search for the argument as a bundle or partition name or id. Possible download the file from the remote library')
@@ -718,7 +739,15 @@ def main():
     sp.add_argument('term', type=str, nargs=argparse.REMAINDER,help='Query term')
 
 
-   
+    sp = asp.add_parser('schema', help='Dump the schema for a bundle')
+    sp.set_defaults(subcommand='schema')   
+    sp.add_argument('term', type=str,help='Query term')
+    sp.add_argument('-p','--pretty',  default=False, action="store_true",  help='pretty, formatted output')
+    group = sp.add_mutually_exclusive_group()
+    group.add_argument('-y', '--yaml',  default='csv', dest='format',  action='store_const', const='yaml')
+    group.add_argument('-j', '--json',  default='csv', dest='format',  action='store_const', const='json')
+    group.add_argument('-c', '--csv',  default='csv', dest='format',  action='store_const', const='csv')
+
     #
     # warehouse  Command
     #

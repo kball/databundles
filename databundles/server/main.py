@@ -20,8 +20,6 @@ import databundles.client.exceptions as exc
 
 logger = databundles.util.get_logger(__name__)
 logger.setLevel(logging.DEBUG)
-    
-
 
 #
 # The LibraryPlugin allows the library to be inserted into a reuest handler with a
@@ -153,11 +151,27 @@ def error500(error):
 def close_library_db():
     pass
 
+def _host_port(library):
+    return  'http://{}{}'.format(library.host, ':'+str(library.port) if library.port != 80 else '')
+
+
 @get('/datasets')
 def get_datasets(library):
     '''Return all of the dataset identities, as a dict, 
     indexed by id'''
-    return { i.identity.cache_key : { 'identity': i.identity.to_dict() } for i in library.datasets}
+    from databundles.filesystem import RemoteMarker
+    
+    remote = library.remote.get_upstream(RemoteMarker)
+    l = library
+  
+    return { i.identity.cache_key : { 
+                                     'identity': i.identity.to_dict() ,
+                                     'urls': {
+                                              'info': "{}/datasets/{}".format(_host_port(library), i.identity.vid_enc),
+                                              'file': "{}/datasets/{}/db".format(_host_port(library), i.identity.vid_enc)
+                                              }
+                                     } 
+            for i in library.datasets}
    
 @get('/datasets/find/<term>')
 def get_datasets_find(term, library):
@@ -191,7 +205,6 @@ def post_datasets_find(library):
     return out
 
 @post('/datasets/<did>')
-
 @CaptureException
 def post_dataset(did,library): 
     '''Accept a payload that describes a bundle in the remote. Download the
@@ -213,24 +226,26 @@ def post_dataset(did,library):
     db_path = library.load(identity.cache_key)
 
     if not db_path:
-        logger.error("Failed to get {}".format(identity.cache_key))
+        logger.error("Failed to get {} from cache while posting dataset".format(identity.cache_key))
         logger.error("  cache =  {}".format(library.cache))
         logger.error("  remote = {}".format(library.remote))
         raise exc.NotFound("Didn't  get bundle file for cache key {} ".format(identity.cache_key))
 
     logger.debug("Loading {} for identity {} ".format(db_path, identity))
 
-    b = DbBundle(db_path)
+    b = DbBundle(db_path, logger=logger)
 
-    
     md5 = md5_for_file(db_path)
+    
+    print md5
+    print payload
     
     if md5 != payload['md5']:
         logger.debug('MD5 Mismatch: {} != {} '.format( md5 , payload['md5']))
         # First, try deleting the cached copy and re-fetching
         # but don't delete it unless there is an intervening cache
-        if library.remote.path(identity.cache_key).startswith('http'):
-            raise exc.Conflict("MD5 Mismatch (a)")
+        #if library.remote.path(identity.cache_key).startswith('http'):
+        #    raise exc.Conflict("MD5 Mismatch (a)")
         
         library.remote.remove(identity.cache_key)
         db_path = library.remote.get(identity.cache_key)
@@ -276,7 +291,7 @@ def get_dataset(did, library):
     # we can get a URL with path()
     remote = library.remote.get_upstream(RemoteMarker)
     if remote:
-        d['dataset']['url'] = remote.path(gr.identity.cache_key)
+        d['dataset']['url'] = "{}/datasets/{}/db".format(_host_port(library), gr.identity.vid_enc)
     
     if file:
         d['dataset']['file'] = file.to_dict()
@@ -292,7 +307,7 @@ def get_dataset(did, library):
             d['partitions'][partition.identity.id_]['file']  = { k:v for k,v in fd.items() if k in ['state'] }
 
         if remote:
-            d['partitions'][partition.identity.id_]['url'] = remote.path(partition.identity.cache_key)
+            d['partitions'][partition.identity.id_]['url'] ="{}/datasets/{}/partitions/{}/db".format(_host_port(library), gr.identity.vid_enc, partition.identity.vid_enc)
         
     return d
 
@@ -321,11 +336,113 @@ def post_partition(did, pid, library):
     if not pid in set([identity.id_, identity.vid]):
         raise exc.Conflict("Partition address '{}' doesn't match payload id '{}'".format(pid, identity.vid))
 
-    library.database.add_file(identity.cache_key, 'remote', identity.vid, state='remote')
-
+    library.database.add_remote_file(identity)
 
     return identity.to_dict()
 
+@get('/datasets/<did>/db') 
+@CaptureException   
+def get_dataset_file(did, library):
+    from databundles.filesystem import RemoteMarker
+    
+    did = did.replace('|','/')
+
+    dataset, _ = library.get_ref(did)
+    
+    if not dataset:
+        raise exc.NotFound("No dataset found for identifier '{}' ".format(did))
+    
+    remote = library.remote.get_upstream(RemoteMarker)
+    
+    if not remote:
+        raise exc.InternalError("No remote configured")
+   
+  
+    url =  remote.path(dataset.cache_key)   
+    
+    return redirect(url)
+  
+def _get_ct(typ):
+    ct = ({'application/json':'json',
+          'application/x-yaml':'yaml',
+          'text/x-yaml':'yaml',
+          'text/csv':'csv'}
+          .get(request.headers.get("Content-Type"), None))
+    
+    if ct is None:
+        try:
+            _, ct = typ.split('.',2)
+        except: 
+            ct = 'json'
+        
+    return ct
+    
+  
+@get('/datasets/<did>/<typ:re:schema\\.?.*>') 
+@CaptureException   
+def get_dataset_schema(did, typ, library):
+    from databundles.filesystem import RemoteMarker
+    
+    ct = _get_ct(typ)
+
+    did = did.replace('|','/')
+ 
+    b =  library.get(did)
+
+    if not b:
+        raise exc.NotFound("No bundle found for id {}".format(did))
+
+
+    if ct == 'csv':
+        from StringIO import StringIO
+        output = StringIO()
+        response.content_type = 'text/csv'
+        b.schema.as_csv(output)
+        static_file(output)
+    elif ct == 'json':
+        import json
+        s = b.schema.as_struct()
+        return s
+    elif ct == 'yaml': 
+        import yaml 
+        s = b.schema.as_struct()
+        response.content_type = 'application/x-yaml'
+        return  yaml.dump(s)
+    else:
+        raise Exception("Unknown format" )   
+    
+    
+@get('/datasets/<did>/partitions/<pid>/db') 
+@CaptureException   
+def get_partition_file(did, pid, library):
+    from databundles.filesystem import RemoteMarker
+    from databundles.identity import new_identity, Identity
+    
+    did = did.replace('|','/')
+    pid = pid.replace('|','/')
+
+    b =  library.get(did)
+
+    if not b:
+        raise exc.NotFound("No bundle found for id {}".format(did))
+
+    payload = request.json
+    identity = new_identity(payload['identity'])
+
+    p = b.partitions.get(pid)
+
+    if not p:
+        raise exc.NotFound("No partition found for identifier '{}' ".format(pid))
+
+    remote = library.remote.get_upstream(RemoteMarker)
+    
+    if not remote:
+        raise exc.InternalError("No remote configured")
+   
+  
+    url =  remote.path(p.identity.cache_key)   
+    
+    return redirect(url)
 
 
 def _read_body(request):
@@ -499,6 +616,7 @@ def local_debug_run(config):
 def production_run(config, reloader=False):
 
     lf = lambda:  new_library(config, True)  
+
 
     l = lf()
     l.database.create()
