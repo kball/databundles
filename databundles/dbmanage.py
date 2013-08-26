@@ -306,15 +306,17 @@ def library_find(args, l, config):
 
     qc = QueryCommand.parse(' '.join(terms))
     
+    prt("Query: {}", qc)
+    
     identities = l.find(qc)
-   
+
     try: first = identities[0]
     except: first = None
     
     if not first:
         return
     
-    t = ['{id:<8s}','{vname:20s}']
+    t = ['{id:<14s}','{vname:20s}']
     header = {'id': 'ID', 'vname' : 'Versioned Name'}
     
     multi = False
@@ -328,6 +330,7 @@ def library_find(args, l, config):
         t.append('{table:12s}')
         header['table'] = 'table'
 
+
     ts = ' '.join(t)
     
     dashes = { k:'-'*len(v) for k,v in header.items() }
@@ -339,8 +342,8 @@ def library_find(args, l, config):
     first_rec_line = True
     for r in identities:
         
-        if not last_rec or last_rec['id'] != r['identity'].id_:
-            rec = {'id': r['identity'].id_, 'vname':r['identity'].vname}
+        if not last_rec or last_rec['id'] != r['identity'].vid:
+            rec = {'id': r['identity'].vid, 'vname':r['identity'].vname}
             last_rec = rec
             first_rec_line = True
         else:
@@ -351,7 +354,7 @@ def library_find(args, l, config):
             
         if 'table' in r:
             rec['table'] = ''
-            
+
            
         if multi and first_rec_line:
             prt(ts, **rec)
@@ -365,6 +368,7 @@ def library_find(args, l, config):
         if 'table' in r:
             rec['id'] = r['table'].id_
             rec['table'] = r['table'].name
+
 
         prt(ts, **rec)
 

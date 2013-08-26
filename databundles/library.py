@@ -1805,12 +1805,18 @@ class Library(object):
     def remote_rebuild(self):
         '''Rebuild the library from the contents of the remote'''
 
+        self.logger.info("Rebuild library from: {}".format(self.remote))
+
         self.database.drop()
         self.database.create()
         
         for rel_path in self.remote.list():
 
-            path = self.cache.get(rel_path) # The cache and the remote must be connected!
+            path = self.load(rel_path)
+  
+            if not path or not os.path.exists(path):
+                self.logger.error("ERROR: Failed to get load for relpath: '{}' ( '{}' )".format(rel_path, path))
+                continue
      
             bundle = DbBundle(path)
             identity = bundle.identity
