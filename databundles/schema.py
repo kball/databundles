@@ -477,6 +477,7 @@ class Schema(object):
                 row['table'] = table.name
                 row['seq'] = col.sequence_id
                 row['column'] = col.name
+                row['description'] = col.description
                 row['is_pk'] = 1 if col.is_primary_key else ''
                 
             

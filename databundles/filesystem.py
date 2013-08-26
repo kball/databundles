@@ -659,12 +659,13 @@ class BundleFilesystem(Filesystem):
 class CacheInterface(object):
 
     config = None
+    upstream = None
 
     def path(self, rel_path, **kwargs): raise NotImplementedError()
 
     def get(self, rel_path, cb=None): raise NotImplementedError()
     
-    def get_stream(self, rel_path, cb=None):  raise NotImplementedError()
+    def get_stream(self, rel_path, cb=None):  raise NotImplementedError(type(self))
     
     def last_upstream(self):  raise NotImplementedError()
     
@@ -680,11 +681,19 @@ class CacheInterface(object):
     
     def list(self, path=None, with_metadata=False): raise NotImplementedError()
    
-    def get_upsream(self, type_):
+    def get_upstream(self, type_):
         '''Return self, or an upstream, that has the given class type.
         This is typically used to find upstream s that impoement the RemoteInterface
         ''' 
-        raise NotImplementedError()
+
+        if isinstance(self, type_):
+            return self
+        elif self.upstream and isinstance(self.upstream, type_):
+            return self.upstream
+        elif self.upstream:
+            return self.upstream.get_upstream(type_)
+        else:
+            return None
 
 class RemoteMarker(object):
     pass
@@ -739,9 +748,12 @@ class RestRemote(RemoteInterface):
         
         return url
         
-    
-    def get_stream(self, rel_path, cb=None):  raise NotImplementedError()
-    
+    def get_stream(self, rel_path, cb=None): 
+        
+        return self.api.get_stream_by_key(rel_path)
+
+        
+
     def has(self, rel_path, md5=None, use_upstream=True):
         if self.upstream:
             return self.upstream.has(rel_path)
@@ -763,6 +775,8 @@ class RestRemote(RemoteInterface):
         return self.put(partition.database.path, 
                          partition.identity.cache_key,
                          metadata = metadata)
+   
+   
    
     def put(self, source, rel_path, metadata=None):
         
@@ -889,15 +903,7 @@ class Cache(CacheInterface):
             else:
                 self.upstream = Filesystem.get_cache(upstream)
     
-    def get_upstream(self, type_): 
-        if isinstance(self, type_):
-            return self
-        elif self.upstream and isinstance(self.upstream, type_):
-            return self.upstream
-        elif self.upstream:
-            return self.upstream.get_upstream(type_)
-        else:
-            return None
+
 
     def last_upstream(self):
         us = self
@@ -925,6 +931,7 @@ class Cache(CacheInterface):
         return None
 
     def get_stream(self, rel_path, cb=None):
+
         if self.upstream:
             return self.upstream.get_stream(rel_path, cb)
         
@@ -1148,8 +1155,14 @@ class FsCache(Cache):
 
         sink = self.put_stream(rel_path, metadata=metadata)
         
-        copy_file_or_flo(source, sink)
-        
+        try:
+            copy_file_or_flo(source, sink)
+        except (KeyboardInterrupt, SystemExit):
+            path_ = self.path(rel_path)
+            if os.path.exists(path_):
+                os.remove(path_)
+            raise
+
         sink.close()
 
         return os.path.join(self.cache_dir, rel_path)
@@ -1479,7 +1492,13 @@ class FsLimitedCache(FsCache):
 
         sink = self.put_stream(rel_path, metadata=metadata)
         
-        copy_file_or_flo(source, sink)
+        try:
+            copy_file_or_flo(source, sink)
+        except (KeyboardInterrupt, SystemExit):
+            path_ = self.path(rel_path)
+            if os.path.exists(path_):
+                os.remove(path_)
+            raise
         
         sink.close()
 
@@ -1630,7 +1649,13 @@ class FsCompressionCache(Cache):
         
         sink = self.upstream.put_stream(uc_rel_path)
 
-        copy_file_or_flo(source,  sink) 
+        try:
+            copy_file_or_flo(source, sink)
+        except (KeyboardInterrupt, SystemExit):
+            path_ = self.upstream.path(uc_rel_path)
+            if os.path.exists(path_):
+                os.remove(path_)
+            raise
         
         return self.path(self._rename(rel_path))
 

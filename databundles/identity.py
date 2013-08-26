@@ -431,7 +431,8 @@ class ObjectNumber(object):
     TYPE.TABLE ='c'
     TYPE.COLUMN = 'd'
 
-    TCMAXVAL = 62*62 -1; # maximum for table and column values. 
+    TCMAXVAL = 62*62 -1; # maximum for table values. 
+    CCMAXVAL = 62*62*62 -1; # maximum for column values. 
     PARTMAXVAL = 62*62*62 -1; # maximum for table and column values. 
      
     EPOCH = 1325376000 # Jan 1, 2012 in UNIX time
@@ -469,9 +470,9 @@ class ObjectNumber(object):
             dataset = int(ObjectNumber.base62_decode(input[1:-3]))  
             return PartitionNumber(DatasetNumber(dataset), partition, revision=revision)              
         elif input[0] == cls.TYPE.COLUMN:       
-            column = int(ObjectNumber.base62_decode(input[-2:]))
-            table = int(ObjectNumber.base62_decode(input[-4:-2]))
-            dataset = int(ObjectNumber.base62_decode(input[1:-4]))
+            column = int(ObjectNumber.base62_decode(input[-3:]))
+            table = int(ObjectNumber.base62_decode(input[-5:-3]))
+            dataset = int(ObjectNumber.base62_decode(input[1:-5]))
             return ColumnNumber(TableNumber(DatasetNumber(dataset), table), column, revision=revision)
         else:
             raise ValueError('Unknow type character: '+input[0]+ ' in '+str(input))
@@ -601,7 +602,7 @@ class TableNumber(ObjectNumber):
     def __str__(self):        
         return (ObjectNumber.TYPE.TABLE+
                 ObjectNumber.base62_encode(self.dataset.dataset)+
-                ObjectNumber.base62_encode(self.table).rjust(2,'0')+
+                ObjectNumber.base62_encode(self.table).rjust(3,'0')+
                 ('/'+ObjectNumber.base62_encode(self.revision).rjust(3,'0') if self.revision else ''))
                   
          
@@ -613,7 +614,7 @@ class ColumnNumber(ObjectNumber):
 
         column = int(column)
 
-        if column > ObjectNumber.TCMAXVAL:
+        if column > ObjectNumber.CCMAXVAL:
             raise ValueError("Value {} is too large ( max is {} ) ".format(column, ObjectNumber.TCMAXVAL))
 
         self.table = table

@@ -377,6 +377,20 @@ def _get_ct(typ):
         
     return ct
     
+@get('/key/<key:path>') 
+@CaptureException   
+def get_key(key, library):
+    from databundles.filesystem import RemoteMarker
+    
+    remote = library.remote.get_upstream(RemoteMarker)
+    
+    if not remote:
+        raise exc.InternalError("No remote configured")
+   
+    url =  remote.path(key)   
+    
+    return redirect(url)    
+    
   
 @get('/datasets/<did>/<typ:re:schema\\.?.*>') 
 @CaptureException   

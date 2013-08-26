@@ -117,7 +117,7 @@ class Bundle(object):
         if self._library:
             l = self._library
         else:
-            l =  library.new_library(self.config.library('default'))
+            l =  library.new_library(self.config.config.library('default'))
             
         l.logger = self.logger
         l.database.logger = self.logger
@@ -439,7 +439,7 @@ class BuildBundle(Bundle):
             with open(sf, 'rbU') as f:
                 self.schema.clean()
                 self.schema.schema_from_file(f)      
-                self.schema.create_tables()
+                #self.schema.create_tables()
 
         return True
     

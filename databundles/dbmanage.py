@@ -291,8 +291,13 @@ def library_files(args, l, config):
         print "-- Display {} files".format(args.file_state)
         for f in files_:
             print "{0:11s} {1:4s} {2}".format(f.ref,f.state,f.path)
+      
+
             
 def library_find(args, l, config):
+    return _find(args, l, config, False)
+
+def _find(args, l, config, remote):
 
     from databundles.library import QueryCommand
 
@@ -308,7 +313,10 @@ def library_find(args, l, config):
     
     prt("Query: {}", qc)
     
-    identities = l.find(qc)
+    if remote:
+        identities = l.remote_find(qc)
+    else:
+        identities = l.find(qc)
 
     try: first = identities[0]
     except: first = None
@@ -330,7 +338,11 @@ def library_find(args, l, config):
         t.append('{table:12s}')
         header['table'] = 'table'
 
-
+    if 'partition' in first:
+        multi = True
+        t.append('{partition:50s}')
+        header['partition'] = 'partition'
+        
     ts = ' '.join(t)
     
     dashes = { k:'-'*len(v) for k,v in header.items() }
@@ -341,9 +353,9 @@ def library_find(args, l, config):
     last_rec = None
     first_rec_line = True
     for r in identities:
-        
-        if not last_rec or last_rec['id'] != r['identity'].vid:
-            rec = {'id': r['identity'].vid, 'vname':r['identity'].vname}
+
+        if not last_rec or last_rec['id'] != r['identity']['vid']:
+            rec = {'id': r['identity']['vid'], 'vname':r['identity']['vname']}
             last_rec = rec
             first_rec_line = True
         else:
@@ -355,6 +367,8 @@ def library_find(args, l, config):
         if 'table' in r:
             rec['table'] = ''
 
+        if 'partition' in r:
+            rec['partition'] = ''
            
         if multi and first_rec_line:
             prt(ts, **rec)
@@ -362,12 +376,16 @@ def library_find(args, l, config):
             first_rec_line = False
            
         if 'column' in r:
-            rec['id'] = r['column'].id_
-            rec['column'] = r['column'].name
+            rec['id'] = r['column']['vid']
+            rec['column'] = r['column']['name']
 
         if 'table' in r:
-            rec['id'] = r['table'].id_
-            rec['table'] = r['table'].name
+            rec['id'] = r['table']['vid']
+            rec['table'] = r['table']['name']
+
+        if 'partition' in r:
+            rec['id'] = r['partition']['vid']
+            rec['partition'] = r['partition']['vname']
 
 
         prt(ts, **rec)
@@ -478,34 +496,43 @@ def remote_command(args, rc, src):
     
     l = library.new_library(config.library(args.name))
 
-    if args.subcommand == 'info':
-        if not l.remote:
-            print "No remote"
-        else:
-            print l.remote.connection_info
+    globals()['remote_'+args.subcommand](args, l,config)
 
-    elif args.subcommand == 'list':
+
+
+def remote_info(args, l, rc):
+    
+    if not l.remote:
+        print "No remote"
+    else:
+        print l.remote.connection_info
+
+def remote_list(args, l, rc):
         
-        if args.datasets:
-            for ds in args.datasets:
-                dsi = l.remote.dataset(ds)
-    
-                print "dataset {0:11s} {1}".format(dsi['dataset']['id'],dsi['dataset']['name'])
-    
-                for id_, p in dsi['partitions'].items():
-                    vs = ''
-                    for v in ['time','space','table','grain','format']:
-                        val = p.get(v,False)
-                        if val:
-                            vs += "{}={} ".format(v, val)
-                    print ("        {0:11s} {1:50s} {2} ".format(id_,  p['name'], vs))
-                
-        else:
-    
-            datasets = l.remote.list(with_metadata=args.meta)
-    
-            for id_, data in datasets.items():
-                print "{:10s} {:50s} {:s}".format(data['identity']['vid'],data['identity']['vname'],id_)  
+    if args.datasets:
+        for ds in args.datasets:
+            dsi = l.remote.dataset(ds)
+
+            print "dataset {0:11s} {1}".format(dsi['dataset']['id'],dsi['dataset']['name'])
+
+            for id_, p in dsi['partitions'].items():
+                vs = ''
+                for v in ['time','space','table','grain','format']:
+                    val = p.get(v,False)
+                    if val:
+                        vs += "{}={} ".format(v, val)
+                print ("        {0:11s} {1:50s} {2} ".format(id_,  p['name'], vs))
+            
+    else:
+
+        datasets = l.remote.list(with_metadata=args.meta)
+
+        for id_, data in datasets.items():
+            print "{:10s} {:50s} {:s}".format(data['identity']['vid'],data['identity']['vname'],id_)  
+
+
+def remote_find(args, l, config):
+    return _find(args, l, config, False)
 
 
 def ckan_command(args,rc, src):
@@ -847,6 +874,11 @@ def main():
     sp.add_argument('-m','--meta', default=False,  action='store_true',  help="Force fetching metadata for remotes that don't provide it while listing, like S3")
     sp.add_argument('datasets', nargs=argparse.REMAINDER)
         
+    sp = asp.add_parser('find', help='Search for the argument as a bundle or partition name or id')
+    sp.set_defaults(subcommand='find')   
+    sp.add_argument('term', type=str, nargs=argparse.REMAINDER,help='Query term')
+
+
                        
     #
     # Test Command

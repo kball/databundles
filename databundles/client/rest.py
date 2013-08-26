@@ -140,8 +140,28 @@ class RestApi(object):
 
         response  = self.remote.datasets(id_or_name).get()
 
-        return self._process_get_response(id_or_name, response, file_path, uncompress, cb=cb)
-                
+        return response # self._process_get_response(id_or_name, response, file_path, uncompress, cb=cb)
+    
+    def get_stream_by_key(self, key):
+        import requests, urllib
+        
+        r1  = self.remote.key(key).get()
+
+        raise_for_status(r1)
+
+        location = r1.get_header('location')
+
+        r = requests.get(location, verify=False, stream=True)
+              
+        if r.headers['content-encoding'] == 'gzip':
+            from ..util import FileLikeFromIter   
+           
+            response = FileLikeFromIter(r.iter_content()) # In  the requests library, iter_content will auto-decompress
+        else:
+            response = r.raw
+            
+        return response     
+              
     def get_partition(self, d_id_or_name, p_id_or_name, file_path=None, uncompress=False, cb=False):
         '''Get a partition by name or id and either return a file object, or
         store it in the given file object
@@ -210,6 +230,8 @@ class RestApi(object):
        
     
         # Convert the result back to the form we get from the Library query 
+        
+        return r
         
         from collections import namedtuple
         Ref1= namedtuple('Ref1','Dataset Partition')

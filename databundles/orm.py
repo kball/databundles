@@ -422,7 +422,10 @@ class Column(Base):
         self.vid = str(con)
         self.id = str(con.rev(None))
 
-
+    def to_dict(self):
+        return {k:v for k,v in self.__dict__.items() if k in ['id','vid','sequence_id', 't_vid', 'name', 'description', 'keywords', 'datatype', 'size', 'is_primary_kay', 'data']}
+    
+    
     @staticmethod
     def mangle_name(name):
         import re
@@ -505,6 +508,9 @@ class Table(Base):
             self.name = self.mangle_name(self.name)
 
         self.init_on_load()
+    
+    def to_dict(self):
+        return {k:v for k,v in self.__dict__.items() if k in ['id','vid', 'sequence_id', 'name', 'vname', 'description', 'keywords', 'data']}
     
     @orm.reconstructor
     def init_on_load(self):

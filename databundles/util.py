@@ -670,11 +670,14 @@ class FileLikeFromIter(object):
     def __init__(self, content_iter):
         self._iter = content_iter
         self.data = ''
+        self.time = 0
+        self.n = 0
 
     def __iter__(self):
         return self._iter
 
     def read(self, n=None):
+
         if n is None:
             return self.data + ''.join(l for l in self._iter)
         else:
@@ -683,7 +686,9 @@ class FileLikeFromIter(object):
                     self.data = ''.join((self.data, self._iter.next()))
                 except StopIteration:
                     break
+            
             result, self.data = self.data[:n], self.data[n:]
+
             return result
 
 

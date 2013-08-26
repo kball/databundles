@@ -771,20 +771,18 @@ class LibraryDb(object):
         for r in query.all():
             o = {}
 
-            o['dataset'] = r.Dataset
-            
             try: 
-                o['identity'] = r.Partition.identity
-                o['partition'] = r.Partition
+                o['identity'] = r.Dataset.identity.to_dict()
+                o['partition'] = r.Partition.identity.to_dict()
                
             except: 
-                o['identity'] =  r.Dataset.identity
+                o['identity'] =  r.Dataset.identity.to_dict()
 
 
-            try: o['table'] = r.Table
+            try: o['table'] = r.Table.to_dict()
             except: pass
             
-            try: o['column'] = r.Column 
+            try:o['column'] = r.Column.to_dict()
             except: pass
             
             out.append(o)
@@ -1333,6 +1331,7 @@ class Library(object):
                     term = bp_id.id_
                 else:
                     term = bp_id.name
+                    
         elif isinstance(bp_id, basestring):
             
             try:
@@ -1351,7 +1350,6 @@ class Library(object):
         # If dataset is not None, it means the file already is in the cache.
         dataset = None
 
-        
         queries = []
         
         queries.append(QueryCommand().partition(name = term))
@@ -1381,8 +1379,11 @@ class Library(object):
                 r = r.pop(0)            
             
             if r:
-                dataset, partition  = self.database.get(r['identity'].vid)
-
+                if 'partition' in r:
+                    dataset, partition  = self.database.get(r['partition']['vid'])
+                else:
+                    dataset, partition = self.database.get(r['identity']['vid'])
+                
                 break
                     
         # No luck so far, so now try to get it from the remote library
@@ -1390,7 +1391,8 @@ class Library(object):
             import socket
          
             try:
-                r = self.remote.find(bp_id)
+
+                r = self.remote_find(bp_id)
 
                 if r:
                     r = r[0]
@@ -1418,20 +1420,33 @@ class Library(object):
 
     def _get_remote_dataset(self, dataset, cb=None):
         from databundles.identity import Identity
-        
+        from databundles.filesystem import copy_file_or_flo
+                
         try:# ORM Objects
             identity = Identity(**(dataset.to_dict()))
         except:# Tuples
             identity = Identity(**(dataset._asdict()))        
 
-        r = self.remote.get(identity.id_, cb=cb)
+        source = self.remote.get_stream(identity.cache_key, cb=cb)
         
-        if not r:
+        if not source:
             return False
         
         # Store it in the local cache. 
-        abs_path = self.cache.put(r, identity.cache_key )
+
+        sink = self.cache.put_stream(identity.cache_key)
         
+        try:
+            copy_file_or_flo(source, sink)
+        except (KeyboardInterrupt, SystemExit):
+            path_ = self.cache.path(identity.cache_key)
+            if os.path.exists(path_):
+                os.remove(path_)
+            raise
+        
+        copy_file_or_flo(source, sink)
+        
+        abs_path = self.cache.path(identity.cache_key)
         
         #if not self.cache.has(identity.cache_key):
         #    abs_path = self.cache.put(r, identity.cache_key )
@@ -1453,6 +1468,7 @@ class Library(object):
     def _get_remote_partition(self, bundle, partition, cb = None):
         
         from databundles.identity import PartitionIdentity, new_identity 
+        from databundles.filesystem import copy_file_or_flo
 
         identity = new_identity(partition.to_dict(), bundle=bundle) 
 
@@ -1467,10 +1483,21 @@ class Library(object):
             os.remove(p.database.path)
 
         # Now actually get it from the remote. 
-        r = self.remote.get(p.identity.vid,cb=cb)
+
+        source = self.remote.get_stream(p.identity.cache_key,cb=cb)
         
         # Store it in the local cache. 
-        p_abs_path = self.cache.put(r,p.identity.cache_key)
+        sink = self.cache.put_stream(p.identity.cache_key)
+        
+        try:
+            copy_file_or_flo(source, sink)
+        except (KeyboardInterrupt, SystemExit):
+            path_ = self.cache.path(p.identity.cache_key)
+            if os.path.exists(path_):
+                os.remove(path_)
+            raise
+            
+        p_abs_path = self.cache.path(p.identity.cache_key)
 
 
         if os.path.realpath(p.database.path) != os.path.realpath(p_abs_path):
@@ -1547,7 +1574,7 @@ class Library(object):
                                 .format(partition, r.identity.name ))
         
         rp = self.cache.get(p.identity.cache_key, cb=cb)
-    
+
         if not os.path.exists(p.database.path) or p.database.is_empty() or force:
             if self.remote:
                 self._get_remote_partition(r,partition, cb=cb)
@@ -1568,8 +1595,23 @@ class Library(object):
 
         
     def find(self, query_command):
+
         return self.database.find(query_command)
         
+        
+    def remote_find(self, query_command):
+        from filesystem import RestRemote
+
+        
+        try:
+            api = self.remote.get_upstream(RestRemote).api
+        except AttributeError: # No api
+            return None
+        
+        r = api.find(query_command)
+
+        return r
+
     def path(self, rel_path):
         """Return the cache path for a cache key"""
         
