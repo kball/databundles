@@ -387,8 +387,10 @@ def get_key(key, library):
     if not remote:
         raise exc.InternalError("No remote configured")
    
-    url =  remote.path(key)   
-    
+    try:
+        url =  remote.path(key)   
+    except AttributeError:
+        raise exc.NotFound("No object for key: {}".format(key))
     return redirect(url)    
     
   
