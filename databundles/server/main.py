@@ -189,7 +189,7 @@ def get_datasets_find(term, library):
     if partition:
         qc =  QueryCommand().partition(vid=partition.vid)
     else:
-        qc =  QueryCommand().identity(vid=partition.vid)
+        qc =  QueryCommand().identity(vid=dataset.vid)
   
     results = library.find(qc)
 
