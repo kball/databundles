@@ -1316,8 +1316,9 @@ class Library(object):
         return self.cache.path(rel_path)
 
     def get_ref(self,bp_id):
-        from databundles.identity import ObjectNumber, DatasetNumber, PartitionNumber, Identity, PartitionIdentity
-
+        from databundles.identity import ObjectNumber, DatasetNumber, PartitionNumber, Identity
+        from identity import new_identity
+        
         term = None
 
         if isinstance(bp_id, Identity):
@@ -1364,7 +1365,7 @@ class Library(object):
         queries.append(QueryCommand().identity(id_ = term) )
         queries.append(QueryCommand().identity(vid = term) )
                               
-
+        r = None
         for q in queries:
           
             r = self.find(q)
@@ -1373,49 +1374,30 @@ class Library(object):
                 # Names aren't unique ( vnames are )  and they are ordered so the highest 
                 # version is first, so return that one
                 r = r.pop(0)
+                break
             elif len(r) == 0:
                 r = None
             else:
-                r = r.pop(0)            
-            
-            if r:
-                if 'partition' in r:
-                    dataset, partition  = self.database.get(r['partition']['vid'])
-                else:
-                    dataset, partition = self.database.get(r['identity']['vid'])
-                
-                break
-                    
+                r = r.pop(0)  
+                break          
+       
         # No luck so far, so now try to get it from the remote library
-        if not dataset and self.remote:
+        if not r and self.remote:
             import socket
          
             try:
 
                 r = self.remote_find(bp_id)
-
                 if r:
-                    r = r[0]
-                    
-                    
-                    if 'partition' in r:
-                        dataset, partition  = self.database.get(r['partition']['vid'])
-                    else:
-                        dataset, partition = self.database.get(r['identity']['vid'])
-                    
+                    r = r.pop(0)
 
             except socket.error:
                 self.logger.error("Connection to remote ")
-        elif dataset:
-            from identity import new_identity
-            dataset = Identity(**dataset.to_dict())
-            
-            partition = new_identity(partition.to_dict()) if partition else None
-            
-        if not dataset:
+           
+        if r:
+            return new_identity(r['identity']),new_identity(r['partition']) if 'partition' in r else None
+        else:
             return False, False
-   
-        return  dataset, partition
 
     def _get_remote_dataset(self, dataset, cb=None):
         from databundles.identity import Identity
