@@ -209,7 +209,7 @@ class RestApi(object):
         if isinstance(query, basestring):
             response =  self.remote.datasets.find(query).get()
             raise_for_status(response)
-            r = [response.object]
+            r = response.object
             
         elif isinstance(query, dict):
             # Dict form of  QueryCOmmand
