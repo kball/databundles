@@ -469,7 +469,7 @@ class ObjectNumber(object):
             partition = int(ObjectNumber.base62_decode(input[-3:]))
             dataset = int(ObjectNumber.base62_decode(input[1:-3]))  
             return PartitionNumber(DatasetNumber(dataset), partition, revision=revision)              
-        elif input[0] == cls.TYPE.COLUMN:       
+        elif input[0] == cls.TYPE.COLUMN:     
             column = int(ObjectNumber.base62_decode(input[-3:]))
             table = int(ObjectNumber.base62_decode(input[-5:-3]))
             dataset = int(ObjectNumber.base62_decode(input[1:-5]))
@@ -602,7 +602,7 @@ class TableNumber(ObjectNumber):
     def __str__(self):        
         return (ObjectNumber.TYPE.TABLE+
                 ObjectNumber.base62_encode(self.dataset.dataset)+
-                ObjectNumber.base62_encode(self.table).rjust(3,'0')+
+                ObjectNumber.base62_encode(self.table).rjust(2,'0')+
                 ('/'+ObjectNumber.base62_encode(self.revision).rjust(3,'0') if self.revision else ''))
                   
          
@@ -637,7 +637,7 @@ class ColumnNumber(ObjectNumber):
         return (ObjectNumber.TYPE.COLUMN+
                 ObjectNumber.base62_encode(self.table.dataset.dataset)+
                 ObjectNumber.base62_encode(self.table.table).rjust(2,'0')+
-                ObjectNumber.base62_encode(self.column).rjust(2,'0')+
+                ObjectNumber.base62_encode(self.column).rjust(3,'0')+
                 ('/'+ObjectNumber.base62_encode(self.revision).rjust(3,'0') if self.revision else '')
                 )
            

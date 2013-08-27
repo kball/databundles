@@ -99,82 +99,17 @@ class Filesystem(object):
         else:
             return  fsclass(**dict(config))
             
-            
-        
 
-    @classmethod
-    def _get_cache(cls, filesystem_config, cache_name, subconfig=None):
-        import tempfile
-        from databundles.dbexceptions import ConfigurationError
+    def get_cache_by_name(self, name):
+        from dbexceptions import ConfigurationError
         
-        if not filesystem_config:
-            raise ConfigurationError("Didn't get filesystem configuration value. from config files: ")
-
-        if subconfig is None:
-            subconfig = filesystem_config.get(cache_name)
+        config = self.config.filesystem(name)
         
-        if subconfig is None:
-            raise ConfigurationError("Didn't get cache name '{}' from config. keys: {}".format(cache_name, filesystem_config.keys()))
+        if not config:
+            raise ConfigurationError('No filesystem cache by name of {}'.format(name))
         
-        root_dir = filesystem_config.get('root_dir',tempfile.gettempdir())
-        
-        from databundles.dbexceptions import ConfigurationError
-        
-        cache = None
-        if subconfig.get('dir',False):
-
-            dir = subconfig.get('dir').format(root=root_dir)
-            
-            if subconfig.get('size', False):
-                cache =  FsLimitedCache(dir, maxsize=subconfig.get('size',10000))
-            else:
-                cache =  FsCache(dir)               
-                
-        elif subconfig.get('bucket',False):
-            
-            cache =  S3Cache(bucket=subconfig.get('bucket'), 
-                    prefix=subconfig.get('prefix', None),
-                    access_key=subconfig.get('access_key'),
-                    secret=subconfig.get('secret'))
-        else:
-            raise ConfigurationError("Can't determine type of cache for key: {}".format(cache_name))
-        
-        if subconfig.get('upstream',False):
-            up_name = cache_name+'.upstream'
-
-            upstream = subconfig.get('upstream')
-
-            # If it is a string, its a name of another filesystem entry
-            if isinstance(upstream, basestring):
-                upstream_name = upstream
-                upstream = filesystem_config.get(upstream_name,False)
-                
-                if not upstream:
-                    raise ConfigurationError("Failed to get config for: {}".format(upstream_name))
-
-            cache.upstream = cls._get_cache(filesystem_config, up_name, upstream)
-        
-        if subconfig.get('options',False) and isinstance(subconfig.get('options',False), list):
-         
-            # Must come before 'compress'!
-            if 'remote' in subconfig.get('options'):
-                cache.usreadonly = True
-                cache.is_remote = True
-         
-            if 'compress' in subconfig.get('options'):
-                cache = FsCompressionCache(cache)
-
-            if 'readonly' in subconfig.get('options'):
-                cache.readonly = True
-                
-            if 'usreadonly' in subconfig.get('options'):
-                cache.usreadonly = True
-
-                
-                
-
-        return cache
-        
+        return Filesystem.get_cache(config)
+ 
     @classmethod
     def find_f(cls, config, key, value):
         '''Find a filesystem entry where the key `key` equals `value`'''
@@ -354,7 +289,7 @@ class BundleFilesystem(Filesystem):
         it when finished'''
         import tempfile, uuid
         
-        cache = self.get_cache('extracts')
+        cache = self.get_cache_by_name('extracts')
 
         tmpdir = tempfile.mkdtemp(str(uuid.uuid4()))
    
@@ -383,7 +318,7 @@ class BundleFilesystem(Filesystem):
         it when finished'''
         import tempfile, uuid
         
-        cache = self.get_cache('extracts')
+        cache = self.get_cache_by_name('extracts')
 
         tmpdir = tempfile.mkdtemp(str(uuid.uuid4()))
    
@@ -416,7 +351,7 @@ class BundleFilesystem(Filesystem):
         import urlparse
         import urllib2
       
-        cache = self.get_cache('downloads')
+        cache = self.get_cache_by_name('downloads')
         parsed = urlparse.urlparse(url)
         file_path = parsed.netloc+'/'+urllib.quote_plus(parsed.path.replace('/','_'),'_')
 

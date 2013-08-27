@@ -32,7 +32,8 @@ class Test(unittest.TestCase):
         print part.name, Identity.parse_name(part.name).vname
         print part.vname, Identity.parse_name(part.vname).vname
         
-        print Identity.parse_name('foobar')
+        self.assertRaises(ValueError, Identity.parse_name, 'foobar')
+
 
     def test_id(self):
         dnn = 1000000
@@ -49,7 +50,7 @@ class Test(unittest.TestCase):
         tn = TableNumber(dn, 1)
 
         self.assertEquals('c4c9201/01C', str(tn))
-        
+
         self.assertEquals('c4c9201/01C', str(ObjectNumber.parse(str(tn))))
 
         tnnr = tn.rev(None)
