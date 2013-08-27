@@ -1397,13 +1397,12 @@ class Library(object):
                 if r:
                     r = r[0]
                     
-                    if r.is_partition:
-                        dataset = r.as_dataset
-                        partition = r
+                    
+                    if 'partition' in r:
+                        dataset, partition  = self.database.get(r['partition']['vid'])
                     else:
-                        dataset = r
-                        partition = None
-
+                        dataset, partition = self.database.get(r['identity']['vid'])
+                    
 
             except socket.error:
                 self.logger.error("Connection to remote ")
