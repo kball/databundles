@@ -176,16 +176,29 @@ def get_datasets(library):
 @get('/datasets/find/<term>')
 def get_datasets_find(term, library):
     '''Find a partition or data bundle with a, id or name term '''
+    from databundles.library import QueryCommand
     
     dataset, partition  = library.get_ref(term)
      
     if dataset is False:
         return False
      
+    # if found, find again to put it in the same for as the
+    # POST version, which uses the find() method. 
+
     if partition:
-        return partition.to_dict() 
+        qc =  QueryCommand().partition(vid=partition.vid)
     else:
-        return dataset.to_dict()
+        qc =  QueryCommand().identity(vid=partition.vid)
+  
+    results = library.find(qc)
+
+    out = []
+    for r in results:
+        out.append(r)
+        
+    return out
+    
   
 @post('/datasets/find')
 def post_datasets_find(library):
@@ -199,7 +212,6 @@ def post_datasets_find(library):
 
     out = []
     for r in results:
-
         out.append(r)
         
     return out
