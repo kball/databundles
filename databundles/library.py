@@ -1482,6 +1482,8 @@ class Library(object):
         if not r:
             return False, False
 
+        r = r[0]
+
         return new_identity(r['identity']),new_identity(r['partition']) if 'partition' in r else None
 
 
