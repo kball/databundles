@@ -204,13 +204,13 @@ class RestApi(object):
         '''Find datasets, given a QueryCommand object'''
         from databundles.library import QueryCommand
         from databundles.identity import Identity, PartitionIdentity, new_identity
-            
 
         if isinstance(query, basestring):
             response =  self.remote.datasets.find(query).get()
             raise_for_status(response)
             r = response.object
-            
+
+
         elif isinstance(query, dict):
             # Dict form of  QueryCOmmand
             response =  self.remote.datasets.find.post(query)

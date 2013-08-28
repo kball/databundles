@@ -193,6 +193,7 @@ def get_datasets_find(term, library):
   
     results = library.find(qc)
 
+
     out = []
     for r in results:
         out.append(r)
@@ -209,6 +210,7 @@ def post_datasets_find(library):
    
     bq = QueryCommand(q)
     results = library.find(bq)
+
 
     out = []
     for r in results:

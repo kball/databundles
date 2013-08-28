@@ -1388,12 +1388,14 @@ class Library(object):
             try:
 
                 r = self.remote_find(bp_id)
+
                 if r:
                     r = r.pop(0)
 
             except socket.error:
                 self.logger.error("Connection to remote ")
-           
+
+
         if r:
             return new_identity(r['identity']),new_identity(r['partition']) if 'partition' in r else None
         else:
