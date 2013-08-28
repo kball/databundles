@@ -81,7 +81,8 @@ class Partition(object):
     def tables(self):
         return self.data.get('tables',[])
 
-    def delete_database(self):
+    def unset_database(self):
+        '''Removes the database record from the object'''
         self._database = None
 
     def query(self,*args, **kwargs):

@@ -21,6 +21,8 @@ class Bundle(BuildBundle):
                 partition = self.partitions.new_partition(pid)  
                 partition.create_with_tables(table.name)
   
+        self.schema.create_tables()
+  
         return True
   
     def build(self):

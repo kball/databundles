@@ -93,6 +93,9 @@ class Identity(object):
                 'name':self.name, 
                 'md5':md5}
  
+    def id_string(self):
+        return self.vid
+ 
     def clone(self):
         return self.__class__(**self.to_dict())
  

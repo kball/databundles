@@ -147,9 +147,11 @@ class RestApi(object):
         
         r1  = self.remote.key(key).get()
 
-        raise_for_status(r1)
 
         location = r1.get_header('location')
+
+        if not location:
+            raise_for_status(r1)
 
         r = requests.get(location, verify=False, stream=True)
               

@@ -194,13 +194,13 @@ class Test(TestBase):
     
         r = l.find(QueryCommand().table(name='tone'))
 
-        self.assertEquals('source-dataset-subset-variation-ca0d',r[0]['identity'].name)  
+        self.assertEquals('source-dataset-subset-variation-ca0d',r[0]['identity']['name'])  
     
         r = l.find(QueryCommand().table(name='tone').partition(any=True))
-        self.assertEquals('source-dataset-subset-variation-ca0d.tone',r[0]['identity'].name)
+        self.assertEquals('source-dataset-subset-variation-ca0d.tone',r[0]['partition']['name'])
         
         r = l.find(QueryCommand().table(name='tthree').partition(any=True))
-        self.assertEquals('source-dataset-subset-variation-ca0d.tthree',r[0]['identity'].name)
+        self.assertEquals('source-dataset-subset-variation-ca0d.tthree',r[0]['partition']['name'])
         
         #
         #  Try getting the files 
@@ -208,7 +208,7 @@ class Test(TestBase):
         
         r = l.find(QueryCommand().table(name='tthree').partition(any=True)) #@UnusedVariable
        
-        bp = l.get(r[0]['identity'].id_)
+        bp = l.get(r[0]['identity']['id'])
         
         self.assertTrue(os.path.exists(bp.database.path))
         
