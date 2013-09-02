@@ -18,7 +18,7 @@ class Bundle(BuildBundle):
         for table in self.schema.tables:   
             pid = PartitionIdentity(self.identity, table=table.name)
             if table.data.get('make_partition', False):
-                partition = self.partitions.new_partition(pid)  
+                partition = self.partitions.new_db_partition(pid)  
                 partition.create_with_tables(table.name)
   
         self.schema.create_tables()
@@ -78,6 +78,9 @@ class Bundle(BuildBundle):
         ds = hdf.database.create_dataset('hdf', data=a, compression=9)
         hdf.database.close()
 
+
+    def build_csv(self):
+        pass
 
     def install(self):
         self.log("Install bundle")  

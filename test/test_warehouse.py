@@ -9,7 +9,7 @@ import os.path
 from  testbundle.bundle import Bundle
 from sqlalchemy import * #@UnusedWildImport
 from databundles.run import  get_runconfig
-from databundles.library import QueryCommand, get_library
+from databundles.library import QueryCommand, new_library
 import logging
 import databundles.util
 
@@ -53,7 +53,7 @@ class Test(TestBase):
     def get_library(self):
         """Clear out the database before the test run"""
 
-        return get_library(self.rc, reset = True)
+        raise NotImplementedError()
         
         
     def tearDown(self):

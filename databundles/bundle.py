@@ -5,22 +5,24 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from databundles.database import Database
-from databundles.identity import Identity 
-from databundles.filesystem import  BundleFilesystem
-from databundles.schema import Schema
-from databundles.partition import Partitions
+
+from .identity import Identity 
+from .filesystem import  BundleFilesystem
+from .schema import Schema
+from .partitions import Partitions
+
 import os.path
-from databundles.dbexceptions import  ConfigurationError, ProcessError
-from databundles.run import get_runconfig
-import databundles.util
+from .dbexceptions import  ConfigurationError, ProcessError
+from .run import get_runconfig
+import util
 import yaml
 
 
 def get_identity(path):
     '''Get an identity from a database, either a bundle or partition'''
-    from database import BundleDb
-    db = BundleDb(path)
+    from .database.bundle import InstalledBundleDb
+    
+    db = InstalledBundleDb(path)
     
 
     bdc = BundleDbConfig(db)
@@ -53,7 +55,8 @@ class Bundle(object):
         self._repository = None
 
         if not logger:
-            self.logger = databundles.util.get_logger(__name__)
+            from .util import get_logger
+            self.logger = get_logger(__name__)
         else:
             self.logger = logger 
             
@@ -164,11 +167,15 @@ class DbBundle(Bundle):
         Order of operations is:
             Create bundle.db if it does not exist
         '''
+        from .database.bundle import InstalledBundleDb
+        import os
         
         super(DbBundle, self).__init__(logger=logger)
        
         self.database_file = database_file
-        self.database = Database(self, database_file)
+
+
+        self.database = InstalledBundleDb(self, database_file)
         self.db_config = self.config = BundleDbConfig(self.database)
         
         self.partition = None # Set in Library.get() and Library.find() when the user requests a partition. 
@@ -177,8 +184,13 @@ class DbBundle(Bundle):
         
     @property
     def path(self):
-        base, ext = os.path.splitext(self.database_file)
+        base, _ = os.path.splitext(self.database_file)
         return base
+        
+    def sub_path(self, *args):
+        '''For constructing paths to partitions'''
+        import os
+        return os.path.join(self.path, *args) 
         
     def table_data(self, query):
         '''Return a petl container for a data table'''
@@ -238,18 +250,21 @@ class BuildBundle(Bundle):
         self._build_time = None
         self._update_time = None
 
-
     @property
     def path(self):
         return self.filesystem.path(
                     self.filesystem.BUILD_DIR,
                     self.identity.path) 
 
+    def sub_path(self, *args):
+        '''For constructing paths to partitions'''
+        return self.filesystem.path(self.filesystem.BUILD_DIR, self.identity.path,  *args) 
+
     @property
     def database(self):
-        
+        from .database.bundle import BuildBundleDb
         if self._database is None:
-            self._database  = Database(self, self.path)
+            self._database  = BuildBundleDb(self, self.path)
             
             def add_type(database):
                 self.db_config.set_value('info','type','bundle')

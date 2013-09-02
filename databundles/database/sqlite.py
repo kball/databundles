@@ -1,56 +1,24 @@
-"""Base class for Bundle and Partition databases. This module also includes
-interfaces for temporary CSV files and HDF files.
 
+"""
 Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-import os.path
-import anydbm
-from databundles.geo.sfschema import TableShapefile
-from .hdf5 import Hdf5File
+from . import DatabaseInterface #@UnresolvedImport
+import os 
 
-class FeatureInserter(object):
-    def __init__(self, partition, table, dest_srs=4326, source_srs=None, layer_name = None):
-
-        self.bundle = partition.bundle
-        
-        self.sf = TableShapefile(self.bundle, partition.database.path, table, dest_srs, source_srs, name=layer_name)
-        
-    
-    def __enter__(self):
-        return self
-    
-    def __exit__(self, type_, value, traceback):
-        
-        self.close()
-               
-        if type_ is not None:
-            self.bundle.error("Got Exception: "+str(value))
-            return False
-                
-        return self
-    
-    def insert(self, row, source_srs=None):
-        from sqlalchemy.engine.result import RowProxy
-        
-        if isinstance(row, RowProxy):
-            row  = dict(row)
-        
-        return self.sf.add_feature( row, source_srs)
-    
-    def close(self):
-        self.sf.close()
 
 class ValueWriter(object):
     '''Inserts arrays of values into  database table'''
     def __init__(self, bundle,  db, cache_size=50000, text_factory = None, replace=False):
         import string 
+        self.cache = []
+        
         self.bundle = bundle
         self.db = db
         self.session = self.db.session
         self.connection = self.db.connection
-        self.cache = []
+
         self.transaction = None
         self.cache_size = cache_size
         self.statement = None
@@ -63,29 +31,37 @@ class ValueWriter(object):
         self.transaction = self.connection.begin()
         return self
         
+    def rollback_end(self):
+        if self.transaction:
+            self.transaction.rollback()
+            self.transaction = None
+    
+    def commit_end(self):
+        if self.transaction:
+            self.transaction.commit()
+            self.transaction = None
+        
+    def commit_continue(self):
+        if self.transaction:
+            self.transaction = None
+                
+        
     def close(self):
 
         if len(self.cache) > 0 :       
             try:
                 self.connection.execute(self.statement, self.cache)
-                if self.transaction:
-                    self.transaction.commit()
-                    self.transaction = None
+                self.commit_end()
                 self.cache = []
             except (KeyboardInterrupt, SystemExit):
-                if self.transaction:
-                    self.transaction.rollback()
-                    self.transaction = None
+                self.rollback_end()
                 raise
             except Exception as e:
                 self.bundle.error("Exception during ValueWriter.insert: "+str(e))
-                if self.transaction:
-                    self.transaction.rollback()
-                    self.transaction = None
+                self.rollback_end()
                 raise
         else:
-            if self.transaction:
-                self.transaction.commit()    
+                self.commit_continue()
                     
     def __exit__(self, type_, value, traceback):
 
@@ -130,23 +106,14 @@ class ValueInserter(ValueWriter):
                 
         except (KeyboardInterrupt, SystemExit):
             self.bundle.log("Processing keyboard interrupt or system exist")
-            if self.transaction:
-                self.transaction.rollback()
-                self.transaction = None
-            else:
-                self.bundle.error("No transaction")
+            self.rollback_end()
             self.cache = []
             raise
         except Exception as e:
             self.bundle.error("Exception during ValueInserter.insert: {}".format(e))
-            if self.transaction:
-                self.transaction.rollback()
-                self.transaction = None
-            else:
-                self.bundle.error("No transaction")
-                
+            self.rollback_end()
             self.cache = []
-            raise e
+            raise
 
         return True
    
@@ -214,246 +181,6 @@ class ValueUpdater(ValueWriter):
             raise e
 
         return True    
-class TempFile(object): 
-           
-    def __init__(self, bundle,  db, table, suffix=None, header=None, ignore_first=False):
-        self.bundle = bundle
-        self.db = db 
-        self.table = table
-        self.file = None
-        self.suffix = suffix
-        self.ignore_first = ignore_first
-
-
-
-        if header is None:
-            header = [ c.name for c in table.columns ]
-        else:
-            pass
-
-        self.header = header
-
-        name = table.name
-        
-        if suffix:
-            name += "-"+suffix
-
-        self._path = str(self.db.path)+'.d/'+name+".csv"
-        
-        self._writer = None
-        self._reader = None
-        
-    def __enter__(self): 
-        return self
-        
-    def insert(self, row):
-        self.writer.writerow(row)
-        
-        
-    @property
-    def writer(self):
-        if self._writer is None:
-            import csv
-            self.close()
-            
-            if self.exists:
-                mode = 'a+'
-
-            else:
-                mode = 'w'
-                try: os.makedirs(os.path.dirname(self.path))
-                except: pass
-
-            self.file = open(self.path, mode)
-            self._writer = csv.writer(self.file)
-            
-            if mode == 'w':
-                if self.ignore_first:
-                    self._writer.writerow(self.header[1:])
-                else:
-                    self._writer.writerow(self.header)
-                
-        return self._writer
-     
-    @property
-    def linewriter(self):
-        '''Like writer, but does not write a header. '''
-        if self._writer is None:
-            import csv
-            self.close()
-            
-            if self.exists:
-                mode = 'a+'
-            else:
-                mode = 'w'
-            
-            if not os.path.exists(self.path):
-                if not os.path.exists(os.path.dirname(self.path)):
-                    os.makedirs(os.path.dirname(self.path))
-            
-            self.file = open(self.path, mode)
-            self._writer = csv.writer(self.file)
-
-        return self._writer
-            
-  
-    @property
-    def reader(self, mode='r'):
-        '''Open a DictReader on the temp file. '''
-        if self._reader is None:
-            import csv
-            self.close()
-            self.file = open(self.path, mode, buffering=1*1024*1024)
-            self._reader = csv.DictReader(self.file)
-            
-        return self._reader
-       
-    @property
-    def linereader(self, mode='r', skip_header = True):
-        '''Open a regular, list-oriented reader on the temp file
-        '''
-        if self._reader is None:
-            import csv
-            self.close()
-            self.file = open(self.path, mode, buffering=1*1024*1024)
-            self._reader = csv.reader(self.file)
-            
-        return self._reader
-       
-    @property 
-    def path(self):
-        return self._path
-
-    @property
-    def exists(self):
-        return os.path.exists(self.path)
-    
-    def delete(self):
-        self.close()
-        if self.exists:
-            os.remove(self.path)
-    
-    def close(self):
-        if self.file:
-            self.file.flush()
-            self.file.close()
-            self.file = None
-            self._writer = None
-            
-            hk = self.table.name+'-'+str(self.suffix)
-            if hk in self.db._tempfiles:
-                del self.db._tempfiles[hk]
-  
-    
-    def __exit__(self, type_, value, traceback):
-        
-        self.close()
-               
-        if type_ is not None:
-            self.bundle.error("Got Exception: "+str(value))
-            return False
-                
-        return self
-
-class DbmFile(object):
-    
-    def __init__(self, bundle, db, table=None, suffix=None):
-
-        self.bundle = bundle
-
-        self.suffix = suffix
-
-        self._table = table
-        try:
-            table_name = table.name
-        except:
-            table_name = table
-
-        self._path = str(db.path)
-
-        if table_name:
-            self._path += '-'+table_name
-            
-        if suffix:
-            self._path += '-'+suffix
-            
-        self._path += '.dbm'
-       
-            
-        self._file = None
-      
-        
-    @property
-    def reader(self):
-        self.close()
-        self._file = anydbm.open(self._path, 'r')
-        return self
-   
-    @property
-    def writer(self):
-        self.close()
-        self._file = anydbm.open(self._path, 'c')
-        return self
-        
-    def delete(self):
-        
-        if os.path.exists(self._path):
-            os.remove(self._path)
-        
-        
-    def close(self):
-        if self._file:
-            self._file.close()
-            self._file = None
-
-    
-    def __getitem__(self, key):
-        return self._file[key]
-        
-
-    def __setitem__(self, key, val):
-        #print key,'<-',val
-        self._file[str(key)] =  str(val)
-    
-
-class DatabaseInterface(object):
-    
-    @property
-    def name(self):  
-        raise NotImplementedError() 
-    
-    @property 
-    def path(self):
-        raise NotImplementedError() 
-   
-    def exists(self):
-        raise NotImplementedError() 
-    
-    def create(self):
-        raise NotImplementedError() 
-    
-    def add_post_create(self, f):
-        raise NotImplementedError() 
-    
-    def delete(self):
-        raise NotImplementedError() 
-    
-    def open(self):
-        raise NotImplementedError() 
-    
-    def close(self):
-        raise NotImplementedError() 
-    
-    def inserter(self, table_or_name=None,**kwargs):
-        raise NotImplementedError() 
-
-    def updater(self, table_or_name=None,**kwargs):
-        raise NotImplementedError() 
-
-    def commit(self):
-        raise NotImplementedError() 
-   
-
 
 class Database(DatabaseInterface):
     '''Represents a Sqlite database'''
@@ -461,6 +188,7 @@ class Database(DatabaseInterface):
     BUNDLE_DB_NAME = 'bundle'
     PROTO_SQL_FILE = 'support/configuration-sqlite.sql' # Stored in the databundles module. 
     EXTENSION = '.db'
+    SCHEMA_VERSION = 10
 
     def __init__(self, bundle, base_path, post_create=None):   
         '''Initialize the a database object
@@ -475,7 +203,8 @@ class Database(DatabaseInterface):
             signature post_create(database)
        
         '''
-        self.container = self.bundle = bundle 
+        
+        self.bundle = bundle 
         
         self._engine = None
         self._session = None
@@ -513,17 +242,7 @@ class Database(DatabaseInterface):
     def name(self):
         return Database.BUNDLE_DB_NAME
 
-    @classmethod
-    def make_path(cls, container):
-        return container.path + cls.EXTENSION
 
-    @property 
-    def path(self):
-        return self.make_path(self.container)
-    
-    def sub_dir(self, *args):
-        return  self.container.sub_dir(*args)
-      
     @property
     def metadata(self):
         '''Return an SqlAlchemy MetaData object, bound to the engine'''
@@ -547,6 +266,7 @@ class Database(DatabaseInterface):
             #self._engine = create_engine('sqlite://') 
             from sqlalchemy import event
             event.listen(self._engine, 'connect', _on_connect)
+            event.listen(self._engine, 'connect', _on_connect_update_schema)
              
         return self._engine
 
@@ -589,32 +309,6 @@ class Database(DatabaseInterface):
             self._dbapi_connection.close();
             self._dbapi_connection = None            
         
-
-    def tempfile(self, table=None, header=None, suffix=None, ignore_first=False):
-        
-        if table is None: # Assumes it is a partition
-            table =  self.container.identity.table
-        
-        if isinstance(table, basestring):
-            table = self.bundle.schema.table(table)
-            
-        hk = (table,suffix)
-    
-        if hk not in self._tempfiles:
-            self._tempfiles[hk] = TempFile(self.bundle, self, table, header=header, 
-                                          suffix=suffix, ignore_first=ignore_first)
-      
-        return self._tempfiles[hk]
-
-    def dbm(self,table=None, suffix=None):
-        
-        hk = (table,suffix)
-    
-        if hk not in self._dbmfiles:
-            self._dbmfiles[hk] = DbmFile(self.bundle, self, table=table, suffix=suffix)
-      
-        return self._dbmfiles[hk]
-   
 
     @property
     def inspector(self):
@@ -823,13 +517,15 @@ class Database(DatabaseInterface):
             # Create the Dataset
 
             ds = Dataset(**self.bundle.config.identity)
-            ds.name = Identity.name_str(ds)
-            ds.vname = Identity.name_str(ds, use_revision=True)
+            ds.name = self.bundle.config.identity.name
+            ds.vname = self.bundle.config.identity.vname
             
             
             s.add(ds)
             s.commit()
  
+            s.execute("PRAGMA user_version = {}".format(self.SCHEMA_VERSION))
+            
             
             # call the post create function
             for f in self._post_create:
@@ -934,9 +630,9 @@ class Database(DatabaseInterface):
             name by whih the database was attached
                 
         """
-        from identity import Identity
-        from partition import Partition
-        from bundle import Bundle
+        from ..identity import Identity
+        from ..partition import PartitionInterface
+        from ..bundle import Bundle
     
         if isinstance(id_,basestring):
             #  Strings are path names
@@ -945,7 +641,7 @@ class Database(DatabaseInterface):
             path = id_.path
         elif isinstance(id_,Database):
             path = id_.path
-        elif isinstance(id_,Partition):
+        elif isinstance(id_,PartitionInterface):
             path = id_.database.path
         elif isinstance(id_,Bundle):
             path = id_.database.path
@@ -1038,138 +734,6 @@ class Database(DatabaseInterface):
         raise NotImplemented
 
 
-class PartitionDb(Database):
-    '''a database for a partition file. Partition databases don't have a full schema
-    and can load tables as they are referenced, by copying them from the prototype. '''
-
-    def __init__(self, bundle, partition, base_path, **kwargs):
-        '''''' 
-        
-        super(PartitionDb, self).__init__(bundle, base_path, **kwargs)  
-        self.container = self.partition = partition
-    
-    @property
-    def name(self):
-        return self.partition.name
-
-    def inserter(self, table_or_name=None,**kwargs):
-        
-        if table_or_name is None and self.table:
-            table_or_name = self.partition.identity.table
-
-        return super(PartitionDb, self).inserter(table_or_name, **kwargs)
-        
-    
-    def create(self, copy_tables = True):
-        from databundles.orm import Dataset
-        from databundles.orm import Table
-        
-        '''Like the create() for the bundle, but this one also copies
-        the dataset and makes and entry for the partition '''
-        
-        if super(PartitionDb, self).create():
-        
-            # Copy the dataset record
-            bdbs = self.bundle.database.session 
-            s = self.session
-            dataset = bdbs.query(Dataset).one()
-            s.merge(dataset)
-            s.commit()
-            
-            # Copy the partition record
-            from databundles.orm import Partition as OrmPartition 
-        
-            orm_p = bdbs.query(OrmPartition).filter(
-                            OrmPartition.id_ == self.partition.identity.id_).one()
-            s.merge(orm_p)
-          
-            #Copy the tables and columns
-            if copy_tables:
-                if orm_p.t_id is not None:
-                    table = bdbs.query(Table).filter(Table.id_ == orm_p.t_id).one()
-                    s.merge(table)
-                    for column in table.columns:
-                        s.merge(column)
-                else:
-                    for table in dataset.tables:
-                        s.merge(table)
-                        for column in table.columns:
-                            s.merge(column)
-                
-            s.commit()
-                  
-            # Create a config key to mark this as a partition
-     
-class GeoDb(PartitionDb):
-    
-    def __init__(self, bundle, partition, base_path, **kwargs):
-        ''''''    
-        super(GeoDb, self).__init__(bundle, partition, base_path, **kwargs)  
-
-        #self.connection.execute("SELECT load_extension('libspatialite.dylib');")
-
-        def load_spatialite(this):
-            
-            pass # SHould load the spatialite library into sqlite here. 
-
-        self.add_post_create(load_spatialite)
-   
-    def inserter(self,  table = None, dest_srs=4326, source_srs=None, layer_name=None):
-        
-        if table is None and self.partition.identity.table:
-            table = self.partition.identity.table
-        
-        return FeatureInserter(self.partition,  table, dest_srs, source_srs, layer_name = layer_name)
-   
-class HdfDb(Hdf5File, DatabaseInterface):
-    
-    EXTENSION = '.hdf5'
-    
-    def __init__(self,  partition):
-        self.partition = partition
-        self.bundle = partition.bundle
-
-        self.container = self.partition
-
-        dir_ = os.path.dirname(self.path)
-        if not os.path.exists(dir_):
-            os.makedirs(dir_)
-
-        super(HdfDb, self).__init__(self.path)  
-   
-    @classmethod
-    def make_path(cls, container):
-        return container.path + cls.EXTENSION
-
-    @property 
-    def path(self):
-        return self.make_path(self.container)
-   
-    def is_empty(self):
-        # If the file is open, it will exist, so we need to check for stuff inside. 
-        return not self.keys()
-   
-    def add_post_create(self, f):
-        pass
-   
-class BundleDb(Database):
-    
-    '''Represents the database version of a bundle that is installed in a library'''
-    def __init__(self, path):
-
-        super(BundleDb, self).__init__(None, path)  
-        
-        self.base_path = path
-        
-    @classmethod
-    def make_path(cls, container):
-        raise NotImplementedError()
-    
-    @property 
-    def path(self):
-        return self.base_path
-    
-        
 def _on_connect(dbapi_con, con_record):
     '''ISSUE some Sqlite pragmas when the connection is created'''
 
@@ -1181,7 +745,21 @@ def _on_connect(dbapi_con, con_record):
     #dbapi_con.enable_load_extension(True)
     #dbapi_con.execute('PRAGMA synchronous = OFF')
 
+def _on_connect_update_schema(dbapi_con, con_record):
+    '''Perform on-the-fly schema updates based on the user version'''
     
+    version = dbapi_con.execute('PRAGMA user_version').fetchone()[0]
+
+    if version < 10:
+        try: dbapi_con.execute('ALTER TABLE partitions ADD COLUMN p_format VARCHAR(50);')
+        except: pass
+        
+        try: dbapi_con.execute('ALTER TABLE partitions ADD COLUMN p_segment INTEGER;')
+        except: pass
+                
+        dbapi_con.execute('PRAGMA user_version = 10;')
+
+
 def insert_or_ignore(table, columns):
     return  ("""INSERT OR IGNORE INTO {table} ({columns}) VALUES ({values})"""
                             .format(
@@ -1190,4 +768,4 @@ def insert_or_ignore(table, columns):
                                  values = ','.join(['?' for c in columns]) #@UnusedVariable
                             )
                          )
-
+    

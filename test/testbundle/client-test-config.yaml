@@ -85,7 +85,11 @@ filesystem:
           bucket: devtest.clarinova.net
           prefix: cache-test/cache3
 
-              
+             
+    google:
+      bucket: sdrdl-test  
+      account: clarinova.com-sdrdl-demo
+      prefix: prefix
       
     
 downloads:

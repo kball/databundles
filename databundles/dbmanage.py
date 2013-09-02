@@ -535,6 +535,31 @@ def remote_find(args, l, config):
     return _find(args, l, config, False)
 
 
+def bq_command(args, rc, src):
+    import library
+
+
+    globals()['bq_'+args.subcommand](args,rc)
+
+
+def bq_cred(args, config):
+
+    from databundles.client.bigquery import BigQuery
+
+    bq = BigQuery(config.account('bq-server'))
+    
+    bq.authorize_server()
+
+def bq_list(args, config):
+
+    from databundles.client.bigquery import BigQuery
+         
+    bq = BigQuery(config.account('bq-server'))
+
+    bq.authorize_server()
+    
+    bq.list()
+
 def ckan_command(args,rc, src):
     from databundles.dbexceptions import ConfigurationError
     import databundles.client.ckan
@@ -879,7 +904,19 @@ def main():
     sp.add_argument('term', type=str, nargs=argparse.REMAINDER,help='Query term')
 
 
-                       
+    #
+    # BigQuery
+    #
+    lib_p = cmd.add_parser('bq', help='BigQuery administration')
+    lib_p.set_defaults(command='bq')
+    asp = lib_p.add_subparsers(title='Bigquerry Commands', help='command help')
+    
+    sp = asp.add_parser('cred', help='Setup access credentials')
+    sp.set_defaults(subcommand='cred')
+    
+    sp = asp.add_parser('list', help='List datasets')
+    sp.set_defaults(subcommand='list')
+          
     #
     # Test Command
     #
@@ -912,7 +949,8 @@ def main():
         'test':test_command,
         'install':install_command,
         'ckan':ckan_command,
-        'source': source_command
+        'source': source_command,
+        'bq': bq_command
     }
         
     f = funcs.get(args.command, False)

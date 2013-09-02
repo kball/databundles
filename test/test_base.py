@@ -40,11 +40,8 @@ class TestBase(unittest.TestCase):
             logger.info( "Build dir marker ({}) is missing".format(marker))
             # There is a good reason to create a seperate instance, 
             # but don't remember what it is ... 
-            
-                        
-            
+
             bundle.clean()
-            
             bundle = Bundle()   
             if not os.path.exists(save_dir):
                 logger.info( "Save dir is missing; re-build bundle. ")
@@ -60,6 +57,8 @@ class TestBase(unittest.TestCase):
         # Always copy, just to be safe. 
         logger.info(  "Copying bundle from {}".format(save_dir))
         os.system("rm -rf {0}; rsync -arv {1} {0}  > /dev/null ".format(build_dir, save_dir))
+
+        
         
     def start_server(self, config=None, name='default'):
         '''Run the Bottle server as a thread'''

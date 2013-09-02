@@ -7,7 +7,6 @@ Revised BSD License, included in this distribution as LICENSE.txt
 from databundles.client.siesta  import API 
 import databundles.client.exceptions 
 
-
 class NotFound(Exception):
     pass
 

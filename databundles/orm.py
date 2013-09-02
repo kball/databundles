@@ -842,7 +842,8 @@ class Partition(Base):
     time = SAColumn('p_time',String(20))
     space = SAColumn('p_space',String(50))
     grain = SAColumn('p_grain',String(50))
-    #format = SAColumn('p_format',Text)
+    format = SAColumn('p_format',String(50))
+    segment = SAColumn('p_segment',Integer)
     state = SAColumn('p_state',String(50))
     data = SAColumn('p_data',MutationDict.as_mutable(JSONEncodedObj))
 
@@ -850,6 +851,8 @@ class Partition(Base):
                      )
 
     table = relationship('Table', backref='partitions')
+    # Already have a 'partitions' replationship on Dataset
+    #dataset = relationship('Dataset', backref='partitions')
     
     def __init__(self,dataset, **kwargs):
         self.id_ = kwargs.get("id",kwargs.get("id_",None)) 
@@ -861,7 +864,8 @@ class Partition(Base):
         self.time = kwargs.get("time",None)  
         self.t_id = kwargs.get("t_id",None) 
         self.grain = kwargs.get('grain',None)
-
+        self.format = kwargs.get('format',None)
+        self.segment = kwargs.get('segment',None)
         self.data = kwargs.get('data',None)
         
         self.d_id = dataset.id_
@@ -877,33 +881,39 @@ class Partition(Base):
     def identity(self):
         '''Return this partition information as a PartitionId'''
         from sqlalchemy.orm import object_session
-        from identity import PartitionIdentity, GeoPartitionIdentity, HdfPartitionIdentity
-        
-        #args = {'id': self.id_, 'space':self.space, 'time':self.time, 'grain':self.grain, 'format':self.format}
-        args = {'id': self.id_, 'space':self.space, 'time':self.time, 'grain':self.grain}
-        
-        table = self.table
-        
-        if table is not None:
-            args['table'] = table.name
-        
+        from partition import new_identity
+
         if self.dataset is None:
             # The relationship will be null until the object is committed
             s = object_session(self)
 
             ds = s.query(Dataset).filter(Dataset.id_ == self.d_id).one()
-            id_ = ds.identity
         else:
-            id_ = self.dataset.identity
+            ds = self.dataset
             
-        if self.data.get('db_type') == 'geo':
-            return GeoPartitionIdentity(id_, **args)
-        elif self.data.get('db_type') == 'hdf':
-            return HdfPartitionIdentity(id_, **args)
-        else:
-            return PartitionIdentity(id_, **args)
+        d = dict(ds.to_dict().items() + self.to_dict().items())
+
+            
+        return new_identity(d)
+    
 
     def to_dict(self):
+
+        return {
+                 'id':self.id_, 
+                 'vid':self.vid,
+                 'd_id': self.d_id,
+                 'd_vid': self. d_vid,
+                 't_id': self.t_id,
+                 't_vid': self. t_vid,
+                 'space':self.space, 
+                 'time':self.time, 
+                 'table': self.table.name if self.t_vid is not None else None,
+                 'grain':self.grain, 
+                 'segment':self.segment, 
+                 'format': self.format if self.format else 'db'
+                }
+      
         return self.identity.to_dict()
 
     def __repr__(self):
@@ -938,5 +948,16 @@ class Partition(Base):
         dataset = ObjectNumber.parse(target.d_id)
         target.id_ = str(PartitionNumber(dataset, target.sequence_id))
         
+    @staticmethod
+    def after_load(target, context):
+        '''Move older way of noting format types to the newer format var'''
+        if not target.format:
+            if 'db_type' in target.data:
+                target.format = target.data['db_type']
+                del target.data['db_type']
+            else:
+                target.format = 'db'
+        
 event.listen(Partition, 'before_insert', Partition.before_insert)
 event.listen(Partition, 'before_update', Partition.before_update)
+event.listen(Partition, 'load', Partition.after_load)

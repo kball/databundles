@@ -12,7 +12,6 @@ import databundles.util
 from databundles.run import  get_runconfig #@UnresolvedImport
 from databundles.util import temp_file_name
 from databundles.dbexceptions import ConfigurationError, NotFoundError
-from databundles.filesystem import  Filesystem, CacheInterface
 from databundles.identity import new_identity
 from databundles.bundle import DbBundle
 from databundles.util import lru_cache
@@ -86,17 +85,18 @@ def _new_library(config):
     
    
 
-    from filesystem import new_filesystem, RemoteMarker
+    from cache import new_cache
+    from cache import RemoteMarker
 
     #import pprint; pprint.pprint(config.to_dict())
 
-    cache = new_filesystem(config['filesystem'])
+    cache = new_cache(config['filesystem'])
     
     database = LibraryDb(**dict(config['database']))    
     
     database.create()
     
-    remote = new_filesystem(config['remote']) if 'remote' in config else None
+    remote = new_cache(config['remote']) if 'remote' in config else None
 
     
     config['name'] = config['_name'] if '_name' in config else 'NONE'
@@ -1252,7 +1252,7 @@ class Library(object):
   
     def load(self, rel_path):
         '''Load a record into the cache from the remote'''
-        from filesystem import copy_file_or_flo
+        from util import copy_file_or_flo
    
         if not self.remote.has(rel_path):
             return None
@@ -1287,8 +1287,8 @@ class Library(object):
         return d, p
 
     def _get_remote_dataset(self, dataset, cb=None):
-        from databundles.identity import Identity
-        from databundles.filesystem import copy_file_or_flo
+        from identity import Identity
+        from util import copy_file_or_flo
 
                 
         try:# ORM Objects
@@ -1329,8 +1329,8 @@ class Library(object):
       
     def _get_remote_partition(self, bundle, partition, cb = None):
         
-        from databundles.identity import PartitionIdentity, new_identity 
-        from databundles.filesystem import copy_file_or_flo
+        from identity import PartitionIdentity, new_identity 
+        from util import copy_file_or_flo
 
         identity = new_identity(partition.to_dict(), bundle=bundle) 
 
@@ -1470,10 +1470,10 @@ class Library(object):
         
         
     def remote_find(self, query_command):
-        from filesystem import RestRemote
+        from cache import RemoteMarker
 
         try:
-            api = self.remote.get_upstream(RestRemote).api
+            api = self.remote.get_upstream(RemoteMarker).api
         except AttributeError: # No api
             return False, False
         
@@ -1579,9 +1579,9 @@ class Library(object):
         
         '''
         from bundle import Bundle
-        from partition import Partition
+        from partition import PartitionInterface
         
-        if not isinstance(bundle, (Partition, Bundle)):
+        if not isinstance(bundle, (PartitionInterface, Bundle)):
             raise ValueError("Can only install a Partition or Bundle object")
         
         # In the past, Partitions could be cloaked as Bundles. Disallow this 
@@ -1589,7 +1589,7 @@ class Library(object):
             raise RuntimeError("Don't allow partitions cloaked as bundles anymore ")
         
         bundle.identity.name # throw exception if not right type. 
-
+        
         dst, cache_key, url = self.put_file(bundle.identity, bundle.database.path)
 
         return dst, cache_key, url

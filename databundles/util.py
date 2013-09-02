@@ -718,3 +718,37 @@ def walk_dict(d):
             # for each result, stick key in path and pass on
             res = ('/%s' % k + res[0], res[1], res[2])
             yield res
+
+
+def copy_file_or_flo(input_, output):
+    """ Copy a file name or file-like-object to another
+    file name or file-like object"""
+    import shutil 
+    
+    input_opened = False
+    output_opened = False
+    try:
+        if isinstance(input_, basestring):
+            
+            if not os.path.isdir(os.path.dirname(input_)):
+                os.makedirs(os.path.dirname(input_))
+            
+            input_ = open(input_,'r')
+            input_opened = True
+    
+        if isinstance(output, basestring):
+            
+            if not os.path.isdir(os.path.dirname(output)):
+                os.makedirs(os.path.dirname(output))
+            
+            output = open(output,'wb')   
+            output_opened = True 
+            
+        shutil.copyfileobj(input_,  output)
+    finally:
+        if input_opened:
+            input_.close()
+            
+        if output_opened:
+            output.close()
+        

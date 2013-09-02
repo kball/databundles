@@ -88,9 +88,7 @@ class RunConfig(object):
         g = self.group(group)
         
         if not name in g:
-            import pprint
-            pprint.pprint(name)
-            raise KeyError("Could not find name '{}' in group '{}'".format(name, group))
+            raise KeyError("Could not find name '{}' in group '{}'. Config has: {}".format(name, group, g.keys()))
         
         return  copy.deepcopy(g[name])
         
@@ -180,7 +178,11 @@ class RunConfig(object):
                                      }  )
     
     def account(self,name):
-        return  self.group_item('accounts', name) 
+        e = self.group_item('accounts', name) 
+
+        e =  self._sub_strings(e, {'store': lambda k,v: self.filesystem(v)}  )
+        
+        return e
 
 
     def repository(self,name):

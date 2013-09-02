@@ -41,7 +41,7 @@ class Test(TestBase):
         self.assertEquals('c'+base+'0a',str(tn))
         
         cn = ColumnNumber(tn, 20)
-        self.assertEquals('d'+base+'0a0k',str(cn))
+        self.assertEquals('d'+base+'0a00k',str(cn))
         
         pn = PartitionNumber(dn, 30)
         self.assertEquals('b'+base+'00u',str(pn))
@@ -144,12 +144,13 @@ class Test(TestBase):
         self.assertEqual("source-dataset-subset-variation-ca0d", dbb.config.identity.name)
 
     def test_paths(self):
+        ''' Test that abuild bundle and a db bundle both produce the same paths. '''
         
         from databundles.bundle import BuildBundle, DbBundle
         
         b = self.bundle
-        db  =DbBundle(b.database.path)
-        
+        db  = DbBundle(b.database.path)
+
         self.assertEqual(b.path, db.path)
         self.assertTrue(os.path.exists(b.path))
         
@@ -161,7 +162,7 @@ class Test(TestBase):
         for p in zip(b.partitions, db.partitions):
             self.assertEqual(p[0].path, p[1].path)
             self.assertTrue(p[0].path)
-                
+     
     def test_schema_direct(self):
         '''Test adding tables directly to the schema'''
         
@@ -187,9 +188,9 @@ class Test(TestBase):
       
         self.bundle.database.session.commit()
         
-        self.assertIn('d1DxuZ0a01', [c.id_ for c in t.columns])
-        self.assertIn('d1DxuZ0a02', [c.id_ for c in t.columns])
-        self.assertIn('d1DxuZ0a03', [c.id_ for c in t.columns])
+        self.assertIn('d1DxuZ0a001', [c.id_ for c in t.columns])
+        self.assertIn('d1DxuZ0a002', [c.id_ for c in t.columns])
+        self.assertIn('d1DxuZ0a003', [c.id_ for c in t.columns])
         
     def test_generate_schema(self):
         '''Uses the generateSchema method in the bundle'''
@@ -346,13 +347,13 @@ class Test(TestBase):
         pid3 = PartitionIdentity(self.bundle.identity, space=30,)
         
         
-        self.bundle.partitions.new_partition(pid1, data={'pid':'pid1'})
+        self.bundle.partitions.new_db_partition(pid1, data={'pid':'pid1'})
     
-        self.bundle.partitions.new_partition(pid2, data={'pid':'pid2'})
-        self.bundle.partitions.new_partition(pid3, data={'pid':'pid3'})
-        self.bundle.partitions.new_partition(pid1, data={'pid':'pid1'})
-        self.bundle.partitions.new_partition(pid2, data={'pid':'pid21'})
-        self.bundle.partitions.new_partition(pid3, data={'pid':'pid31'})
+        self.bundle.partitions.new_db_partition(pid2, data={'pid':'pid2'})
+        self.bundle.partitions.new_db_partition(pid3, data={'pid':'pid3'})
+        self.bundle.partitions.new_db_partition(pid1, data={'pid':'pid1'})
+        self.bundle.partitions.new_db_partition(pid2, data={'pid':'pid21'})
+        self.bundle.partitions.new_db_partition(pid3, data={'pid':'pid31'})
         
         self.bundle.database.session.commit()
         
@@ -361,15 +362,15 @@ class Test(TestBase):
 
         self.assertEqual(10, len(self.bundle.partitions.all))
         
-        p = self.bundle.partitions.new_partition(pid1)
+        p = self.bundle.partitions.new_db_partition(pid1)
         p.database.create() # Find will go to the library if the database doesn't exist. 
         self.assertEquals('pid1',p.data['pid'] )
       
-        p = self.bundle.partitions.new_partition(pid2) 
+        p = self.bundle.partitions.new_db_partition(pid2) 
         p.database.create()  
         self.assertEquals('pid2',p.data['pid'] ) 
 
-        p = self.bundle.partitions.new_partition(pid3)
+        p = self.bundle.partitions.new_db_partition(pid3)
         p.database.create()   
         self.assertEquals('pid3',p.data['pid'] ) 
 
@@ -415,7 +416,7 @@ class Test(TestBase):
             pids.append(pid)
         
         for pid in pids:
-            part = self.bundle.partitions.new_partition(pid)
+            part = self.bundle.partitions.new_db_partition(pid)
             part.create()
             
             parts = self.bundle.partitions.find_orm(pid).all()
@@ -450,6 +451,14 @@ class Test(TestBase):
         for i in range(10):
             w.writerow([i,i,i])
         
+    def test_make_bundles(self):        
+        bundle = Bundle()   
+        bundle.clean()
+        bundle = Bundle()   
+        bundle.prepare()
+        bundle.build()
+
+
 def suite():
     suite = unittest.TestSuite()
     suite.addTest(unittest.makeSuite(Test))

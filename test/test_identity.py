@@ -18,15 +18,24 @@ class Test(unittest.TestCase):
 
 
     def test_name(self):
-
+        
+        from databundles.partition import  new_identity
     
         idnt = Identity(source='source.com', dataset='dataset', 
                          subset='subset', variation='variation', 
                          revision=1, creator='xxx')
        
-        part = PartitionIdentity(idnt, table='table',grain='grain')
+        part = new_identity(dict(table='table',grain='grain', **(idnt.to_dict())))
 
-
+        print part.name
+        print part.vname
+        print part.path
+        print part.cache_key
+        print '---'
+        for p in self.bundle.partitions:
+            print p.name, p.path
+        
+        print '---'
         print idnt.name, Identity.parse_name(idnt.name).vname
         print idnt.vname, Identity.parse_name(idnt.vname).vname
         print part.name, Identity.parse_name(part.name).vname

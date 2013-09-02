@@ -9,23 +9,25 @@ import os.path
 
 def new_identity(d, bundle=None):
     """Create a new identity from a dict form """
+    from partition import PartitionIdentity
+    from partition import new_identity as p_new_identity
+    
     on = ObjectNumber.parse(d.get('id'))
     
     if  on: 
         if isinstance(on, DatasetNumber):
             return Identity(**d)
         elif isinstance(on, PartitionNumber):
+
             return PartitionIdentity(**d)
         else:
             raise ValueError("parameter was not  dataset nor partition id: {} ".format(d))
 
-    elif bundle: 
-        return PartitionIdentity(bundle.identity, **d)
-    elif set(['time','space','table','grain', 'format']).intersection(set(d.keys())):
-
-        try : return PartitionIdentity(**d)
-        except Exception as e:
-            raise Exception("Failed for {}: {}".format(d, e))
+    elif bundle:
+        return p_new_identity(d, bundle=bundle)
+    
+    elif set(['time','space','table','grain', 'format']).intersection(set(d.keys())):    
+        return p_new_identity(d)
     
     else:
         return Identity(**d)
@@ -40,6 +42,8 @@ class Identity(object):
 
     NONE = '<none>'
     ANY = '<any>'
+
+    PATH_EXTENSION = '.db'
 
     def __init__(self, *args, **kwargs):
         self.from_dict(kwargs)
@@ -142,95 +146,87 @@ class Identity(object):
             raise ValueError('Got identity object with None for creator')
         
         return hashlib.sha1(o.creator).hexdigest()[0:4]
-           
-    @property
-    def name(self):
-        """The name of the bundle, excluding the revision"""
-        return self.name_str(self, use_revision=False)
- 
-    @property
-    def vname(self):
-        """The name of the bundle, including the revision"""
-        return self.name_str(self, use_revision=True if self.revision else False)
     
-    @property
-    def path(self):
-        '''The name is a form suitable for use in a filesystem'''
-        return self.path_str(self)
-  
-    @property
-    def cache_key(self):
-        '''The name is a form suitable for use in a filesystem'''
-        return self.path_str(self)+".db"
-    
-    @classmethod
-    def path_str(cls,o=None):
-        '''Return the path name for this bundle'''
+    #
+    # Naming, paths and cache_keys
+    #
 
-        parts = cls.name_parts(o)
-        source = parts.pop(0)
-        
-        return os.path.join(source, '-'.join(parts) )
     
-    @classmethod
-    def name_str(cls,o=None, use_revision=False):
-        
-        return '-'.join(cls.name_parts(o,use_revision=use_revision))
-    
-    @staticmethod
-    def name_parts(o=None, use_revision=True):
+    def _name_parts(self, use_revision=True):
         """Return the parts of the name as a list, for additional processing. """
+        
         from databundles.dbexceptions import ConfigurationError
-        name_parts = [];
-    
-     
-        if o is None:
-            raise ConfigurationError('name_parts must be given an object')  
-
+        nparts = [];
+ 
         try: 
-            if o.source is None:
+            if self.source is None:
                 raise ConfigurationError('Source is None ')  
-            name_parts.append(o.source)
+            nparts.append(self.source)
         except Exception as e:
-            raise ConfigurationError('Missing identity.source for {},  {} '.format(o.__dict__, e))  
+            raise ConfigurationError('Missing identity.source for {},  {} '.format(self.__dict__, e))  
   
         try: 
-            if o.dataset is None:
+            if self.dataset is None:
                 raise ConfigurationError('Dataset is None ')  
-            name_parts.append(str(o.dataset))
+            nparts.append(str(self.dataset))
         except Exception as e:
             raise ConfigurationError('Missing identity.dataset: '+str(e))  
         
         try: 
-            if o.subset is not None:
-                name_parts.append(str(o.subset))
+            if self.subset is not None:
+                nparts.append(str(self.subset))
         except Exception as e:
             pass
         
         try: 
-            if o.variation is not None:
-                name_parts.append(str(o.variation))
+            if self.variation is not None:
+                nparts.append(str(self.variation))
         except Exception as e:
             pass
         
         try: 
-            name_parts.append(o.creatorcode)
+            nparts.append(self.creatorcode)
         except AttributeError:
             # input object doesn't have 'creatorcode'
-            name_parts.append(Identity._creatorcode(o))
+            nparts.append(Identity._creatorcode(self))
         except Exception as e:
             raise ConfigurationError('Missing identity.creatorcode: '+str(e))
    
         if use_revision:
             try: 
-                name_parts.append('r'+str(o.revision))
+                nparts.append('r'+str(self.revision))
             except Exception as e:
                 raise ConfigurationError('Missing identity.revision: '+str(e))  
 
         
         import re
-        return [re.sub('[^\w\.]','_',s).lower() for s in name_parts]
-       
+        return [re.sub('[^\w\.]','_',s).lower() for s in nparts]
+
+
+    @property
+    def name(self):
+        """The name of the bundle, excluding the revision"""
+        return '-'.join(self._name_parts(use_revision=False))
+
+    @property
+    def vname(self):
+        """The name of the bundle, including the revision"""
+        return '-'.join(self._name_parts(use_revision = True if self.revision else False))
+
+
+    @property
+    def path(self):
+        '''The name is a form suitable for use in a filesystem'''
+        parts = self._name_parts(use_revision=True)
+        source = parts.pop(0)
+        
+        return os.path.join(source, '-'.join(parts) )
+  
+    @property
+    def cache_key(self):
+        '''The name is a form suitable for use in a filesystem'''
+        return self.path+self.PATH_EXTENSION
+ 
     @classmethod
     def parse_name(cls,input):
         '''Parse a name to return the Identity. Will discard the Partition parts. '''
@@ -270,150 +266,6 @@ class Identity(object):
     def __str__(self):
         return self.name
        
-
-class PartitionIdentity(Identity):
-    '''Subclass of Identity for partitions'''
-    
-    is_bundle = False
-    is_partition = True
-    
-    time = None
-    space = None
-    table = None
-    grain = None
-    format = None
-    
-    def __init__(self, *args, **kwargs):
-
-        d = {}
-
-        for arg in args:
-            if isinstance(arg, Identity):
-                d = arg.to_dict()
-       
-    
-        d = dict(d.items() + kwargs.items())
-    
-        self.from_dict(d)
-        
-        self.name # Trigger some errors immediately. 
-            
-    def from_dict(self,d):
-        
-        super(PartitionIdentity, self).from_dict(d)
-        
-        self.time = d.get('time',None)
-        self.space = d.get('space',None)
-        self.table = d.get('table',None)
-        self.grain = d.get('grain',None)
-        self.format = d.get('format',None)
-    
-        if self.id_ is not None and self.id_[0] != ObjectNumber.TYPE.PARTITION:
-            self.id_ = None
-
-       
-    def to_dict(self):
-        '''Returns the identity as a dict. values that are empty are removed'''
-        
-        d =  super(PartitionIdentity, self).to_dict()
-        
-        d['time'] = self.time
-        d['space'] = self.space
-        d['table'] = self.table
-        d['grain'] = self.grain
-        d['format'] = self.format
-
-        return { k:v for k,v in d.items() if v}
-    
-    
-    @classmethod
-    def path_str(cls,o=None):
-        '''Return the path name for this bundle'''
-        import re
-        
-        id_path = Identity.path_str(o)
-
-        # HACK HACK HACK!
-        # The table,space,time,grain order must match up with Partition._path_parts
-        partition_parts = [re.sub('[^\w\.]','_',str(s))
-                         for s in filter(None, [o.table, o.space, o.time, o.grain, o.format])]
-    
-       
-        return  os.path.join(id_path ,  *partition_parts )
-        
-    @property
-    def cache_key(self):
-        '''The name is a form suitable for use in a filesystem'''
-        return self.path_str(self)+".db"
-      
-    @classmethod
-    def name_str(cls,o=None, use_revision=False):
-        import re 
-
-        return Identity.name_str(o, use_revision) +  '.' + '.'.join([re.sub('[^\w\.]','_',str(s))
-                         for s in filter(None, [o.table, o.space, o.time, o.grain, o.format])])
-    
-
-    @property
-    def as_dataset(self):
-        """Convert this identity to the identity of the correcsponding dataset. """
-        
-        on = ObjectNumber.parse(self.id_)
-        d = self.to_dict()
-        d['id'] = str(on.dataset)
-        
-        return  Identity(**d)
-    
-    
-
-    
-    @staticmethod
-    def convert(arg, bundle=None):
-        """Try to convert the argument to a PartitionIdentity"""
-        from databundles.orm import Partition
-             
-             
-        raise Exception("Use new_identity instead")   
-                
-        if isinstance(arg, Partition):
-            identity = PartitionIdentity(**(arg.to_dict()))
-        elif isinstance(arg, tuple):
-            identity = PartitionIdentity(**(arg._asdict())) 
-        elif isinstance(arg, PartitionIdentity):
-            identity = arg
-        elif isinstance(arg, PartitionNumber):
-            if bundle is not None:
-                partition = bundle.partitions.get(str(arg))
-                if partition:
-                    identity = partition.identity
-                else:
-                    identity = None
-                    raise ValueError("Could not find partition number {} in bundle"
-                                     .format(arg))
-            else:
-                raise Exception("Must specify a bundle to convert PartitionNumbers")
-        elif isinstance(arg, basestring):
-            try:
-                id = ObjectNumber.parse(arg)
-                raise NotImplementedError("Converting PartitionNumber strings")
-            except:
-                raise ValueError("Can't convert string '{}' to a arg identity"
-                             .format(type(arg)))
-        else:
-            raise ValueError("Can't convert type {} to a arg identity"
-                             .format(type(arg)))
-
-        return identity
-
-   
-class GeoPartitionIdentity(PartitionIdentity):
-    pass
-  
-class HdfPartitionIdentity(PartitionIdentity):
-    @property
-    def cache_key(self):
-        '''The name is a form suitable for use in a filesystem'''
-        return self.path_str(self)+".hdf5"
 
    
 class ObjectNumber(object):

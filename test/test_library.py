@@ -277,7 +277,8 @@ class Test(TestBase):
 
 
     def test_cache(self):
-        from databundles.filesystem import  FsCache, FsLimitedCache
+        
+        from databundles.cache.filesystem import  FsCache, FsLimitedCache
      
         root = self.rc.group('filesystem').root_dir
       
@@ -396,7 +397,7 @@ class Test(TestBase):
                                            
     def test_compression_cache(self):
         '''Test a two-level cache where the upstream compresses files '''
-        from databundles.filesystem import  FsCache,FsCompressionCache
+        from databundles.cache.filesystem import  FsCache,FsCompressionCache
          
         root = self.rc.group('filesystem').root_dir
       
@@ -433,7 +434,7 @@ class Test(TestBase):
         
 
     def test_partitions(self):
-        from databundles.identity import PartitionIdentity
+        from databundles.partition import PartitionIdentity
 
       
         l = self.get_library()
@@ -458,7 +459,7 @@ class Test(TestBase):
             pids.append(pid)
         
         for pid in pids:
-            part = self.bundle.partitions.new_partition(pid)
+            part = self.bundle.partitions.new_db_partition(pid)
             part.create()
             
             parts = self.bundle.partitions.find_orm(pid).all()
@@ -491,7 +492,8 @@ class Test(TestBase):
 
         #databundles.util.get_logger('databundles.filesystem').setLevel(logging.DEBUG) 
         # Set up the test directory and make some test files. 
-        from databundles.filesystem import new_filesystem
+        from databundles.cache import new_cache
+        
         root = self.rc.group('filesystem').root_dir
         os.makedirs(root)
                 
@@ -505,7 +507,7 @@ class Test(TestBase):
         #fs = self.bundle.filesystem
         #local = fs.get_cache('downloads')
         
-        cache = new_filesystem(self.rc.filesystem('s3'))
+        cache = new_cache(self.rc.filesystem('s3'))
         repo_dir  = cache.cache_dir
       
         print "Repo Dir: {}".format(repo_dir)

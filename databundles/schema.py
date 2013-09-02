@@ -31,18 +31,17 @@ class Schema(object):
     """Represents the table and column definitions for a bundle
     """
     def __init__(self, bundle):
-        from partition import  Partition
+        from bundle import  Bundle
         self.bundle = bundle # COuld also be a partition
         
         # the value for a Partition will be a PartitionNumber, and
         # for the schema, we want the dataset number
-        if isinstance(self.bundle, Partition):
-            self.d_id=self.bundle.bundle.identity.id_
-        else:
-            self.d_id=self.bundle.identity.id_
+        if not isinstance(self.bundle, Bundle):
+            raise Exception("Can only construct schema on a Bundle")
 
-        if not self.d_id:
-            raise ValueError("self.bundle.identity.oid not set")
+        self.d_id=self.bundle.identity.id_
+
+        
         self._seen_tables = {}
       
         self.table_sequence = len(self.tables)+1
@@ -526,6 +525,21 @@ class Schema(object):
             
             w.writerow(row)
         
+            last_table = row['table']
+             
+    def as_gs_json(self, table):
+
+        
+        g = self._dump_gen()
+        
+        header = g.next()
+
+        last_table = None
+        for row in g:
+            
+            # Blank row to seperate tables. 
+            if last_table and row['table'] != last_table:
+                pass
             last_table = row['table']
              
     def as_struct(self):

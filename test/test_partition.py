@@ -28,6 +28,23 @@ class Test(TestBase):
         p.create()
         print p.database.path
         
+    def test_segments(self):
+        
+        from databundles.partition import PartitionIdentity
+        from databundles.identity import Identity
+        
+        for i in range(1,10):
+            pid = PartitionIdentity(self.bundle.identity, space='city', segment = i)
+            print pid
+            
+            p = self.bundle.partitions.new_db_partition(pid)
+
+
+        for p in self.bundle.partitions.find_all(space='city', segment=Identity.ANY):
+            print 'Found', p.identity.name
+
+        
+        
 
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']
