@@ -339,6 +339,9 @@ class Partitions(object):
         p = self.partition(op)
         return p
 
+    def new_partition(self, pid=None, **kwargs):
+        return self.new_db_partition( pid, **kwargs)
+
     def new_db_partition(self, pid=None, **kwargs):
         
         if pid:
@@ -381,7 +384,8 @@ class Partitions(object):
         
         return self._new_partition(pid, **kwargs)
         
- 
+    def find_or_new(self, pid=None, clean = False,  **kwargs):
+        return self.find_or_new_db(pid, clean = False,  **kwargs)
 
     def find_or_new_db(self, pid=None, clean = False,  **kwargs):
         '''Find a partition identified by pid, and if it does not exist, create it. 

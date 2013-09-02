@@ -58,8 +58,8 @@ class Test(TestBase):
         return True
 
     def test_simple_install(self):
-        from databundles.library import QueryCommand, new_library
-        from databundles.filesystem import RestRemote, new_filesystem
+
+        from databundles.cache.remote import RestRemote
         
         config = self.start_server()
         
@@ -282,13 +282,14 @@ class Test(TestBase):
     def test_find_upstream(self):
 
         from databundles.run import  get_runconfig
-        from databundles.filesystem import Filesystem, RemoteMarker
+        from databundles.filesystem import Filesystem
+        from databundles.cache import RemoteMarker, new_cache
 
    
         def get_cache(fsname):
             rc = get_runconfig((os.path.join(self.bundle_dir,'test-run-config.yaml'),RunConfig.USER_CONFIG))
             config = rc.filesystem(fsname)
-            cache = Filesystem.get_cache(config)
+            cache = new_cache(config)
             return cache
         
         cache = get_cache("cached-compressed-s3")
@@ -303,8 +304,9 @@ class Test(TestBase):
         from functools import partial
         from databundles.run import  get_runconfig, RunConfig
         from databundles.filesystem import Filesystem
+        from databundles.cache import new_cache
         from databundles.util import md5_for_file
-   
+        from databundles.bundle import DbBundle
         
         self.start_server() # For the rest-cache
         
@@ -314,7 +316,12 @@ class Test(TestBase):
       
         fn = self.bundle.database.path
       
+        # Opening the file might run the database updates in 
+        # database.sqlite._on_connect_update_schema, which can affect the md5.
+        b = DbBundle(fn)
+      
         md5 = md5_for_file(fn)
+    
         
         print "MD5 {}  = {}".format(fn, md5)
 
@@ -322,9 +329,8 @@ class Test(TestBase):
         
         for i, fsname in enumerate(['fscache', 'limitedcache', 'compressioncache','cached-s3', 'cached-compressed-s3', 'rest-cache']): #'compressioncache',
 
-
             config = rc.filesystem(fsname)
-            cache = Filesystem.get_cache(config)
+            cache = new_cache(config)
             print '---', fsname, cache
             identity = self.bundle.identity
 
@@ -344,7 +350,7 @@ class Test(TestBase):
             self.assertFalse(cache.has(relpath))
             
 
-        cache = Filesystem.get_cache(rc.filesystem('s3cache-noupstream'))         
+        cache = new_cache(rc.filesystem('s3cache-noupstream'))         
         r = cache.put(fn, 'a')
  
             

@@ -86,10 +86,13 @@ class PartitionIdentity(Identity):
             self.id_ = None
 
        
-    def to_dict(self):
+    def to_dict(self, include_parent=True):
         '''Returns the identity as a dict. values that are empty are removed'''
         
-        d =  super(PartitionIdentity, self).to_dict()
+        if include_parent:
+            d =  super(PartitionIdentity, self).to_dict()
+        else:
+            d = {}
         
         d['time'] = self.time
         d['space'] = self.space
@@ -108,8 +111,11 @@ class PartitionIdentity(Identity):
         if use_format:
             parts += [self.format]
         
-        return [re.sub('[^\w\.]','_',str(s))  for s in filter(None, parts )]
+        p =  [re.sub('[^\w\.]','_',str(s))  for s in filter(None, parts )]
 
+        assert len(p) != 0, "No parts for partition name: {}".format(self.to_dict(include_parent=False))
+           
+        return p
        
     @property
     def partition_path(self):

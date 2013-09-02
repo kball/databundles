@@ -404,7 +404,7 @@ class Test(TestBase):
         s = set()
         table = self.bundle.schema.tables[0]
         
-        p = (('time',1),('space',2),('table',table.name),('grain',4))
+        p = (('time','time1'),('space','space2'),('table',table.name),('grain','grain4'))
         p += p
         pids = []
         for i in range(4):
@@ -415,7 +415,24 @@ class Test(TestBase):
             pid = PartitionIdentity(self.bundle.identity,**dict(v))
             pids.append(pid)
         
+        s = self.bundle.database.session
+        
+        # These two deletely bits clear out all of the old
+        # partitions, to avoid a conflict with the next section. We also have
+        # to delete the files, since create() adds a partition record to the database, 
+        # and if one arealy exists, it will throw and Integrity Error. 
+        for p in self.bundle.partitions:
+            if os.path.exists(p.database.path):
+                os.remove(p.database.path)
+        
+        for p in self.bundle.dataset.partitions:
+            s.delete(p)
+
+        s.commit()
+
+
         for pid in pids:
+
             part = self.bundle.partitions.new_db_partition(pid)
             part.create()
             

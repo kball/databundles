@@ -247,12 +247,9 @@ def post_dataset(did,library):
 
     logger.debug("Loading {} for identity {} ".format(db_path, identity))
 
-    b = DbBundle(db_path, logger=logger)
+    #b = DbBundle(db_path, logger=logger)
 
     md5 = md5_for_file(db_path)
-    
-    print md5
-    print payload
     
     if md5 != payload['md5']:
         logger.debug('MD5 Mismatch: {} != {} '.format( md5 , payload['md5']))
@@ -266,10 +263,10 @@ def post_dataset(did,library):
         
         md5 = md5_for_file(db_path)
         if md5 != payload['md5']:
-            logger.debug('MD5 Mismatch, persiting ater refetch: {} != {} '.format( md5 , payload['md5']))
+            logger.debug('MD5 Mismatch, persiting after refetch: {} != {} '.format( md5 , payload['md5']))
             raise exc.Conflict("MD5 Mismatch (b)")
 
-        b = DbBundle(db_path)
+    b = DbBundle(db_path)
 
     if b.identity.cache_key != identity.cache_key:
         logger.debug("Identity mismatch while posting dataset: {} != {}".format(b.identity.cache_key, identity.cache_key))
@@ -287,7 +284,8 @@ def post_dataset(did,library):
 def get_dataset(did, library):
     '''Return the complete record for a dataset, including
     the schema and all partitions. '''
-    from databundles.filesystem import RemoteMarker
+    
+    from databundles.cache import RemoteMarker
 
     did = did.replace('|','/')
 

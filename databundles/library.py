@@ -264,7 +264,7 @@ class LibraryDb(object):
         return Inspector.from_engine(self.engine)
 
     def inserter(self,table_name, **kwargs):
-        from databundles.database import ValueInserter
+        from database.sqlite import ValueInserter
         from sqlalchemy.schema import Table
         
         table = Table(table_name, self.metadata, autoload=True, autoload_with=self.engine)
@@ -1329,7 +1329,7 @@ class Library(object):
       
     def _get_remote_partition(self, bundle, partition, cb = None):
         
-        from identity import PartitionIdentity, new_identity 
+        from identity import  new_identity 
         from util import copy_file_or_flo
 
         identity = new_identity(partition.to_dict(), bundle=bundle) 
@@ -1840,18 +1840,20 @@ class Warehouse(object):
     
     def install(self, b_or_p, progress_cb=None):
         from bundle import Bundle
-        from partition import Partition, GeoPartition, HdfPartition
-        
+        from partition import PartitionInterface
+
         if isinstance(b_or_p, Bundle):
             self._install_bundle( b_or_p)
-        elif isinstance(b_or_p, Partition):
+            
+        elif isinstance(b_or_p, PartitionInterface):
             
             if not self.has(b_or_p.bundle.identity.vname):
                 self.install_dependency(b_or_p.bundle.identity.vname, progress_cb)
 
-            if isinstance(b_or_p, GeoPartition):
+            if b_or_p.record.format == 'geo':
                 self._install_geo_partition( b_or_p)
-            elif isinstance(b_or_p, HdfPartition):
+                
+            elif b_or_p.record.format == 'hdf':
                 self._install_hdf_partition( b_or_p)
             else:
                 self._install_partition( b_or_p, progress_cb)
