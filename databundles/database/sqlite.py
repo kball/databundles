@@ -5,10 +5,11 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 from . import DatabaseInterface #@UnresolvedImport
+from inserter import InserterInterface, UpdaterInterface
 import os 
 
 
-class ValueWriter(object):
+class ValueWriter(InserterInterface):
     '''Inserts arrays of values into  database table'''
     def __init__(self, bundle,  db, cache_size=50000, text_factory = None, replace=False):
         import string 
@@ -117,7 +118,7 @@ class ValueInserter(ValueWriter):
 
         return True
    
-class ValueUpdater(ValueWriter):
+class ValueUpdater(ValueWriter, UpdaterInterface):
     '''Updates arrays of values into  database table'''
     def __init__(self, bundle, table, db,  cache_size=50000, text_factory = None): 
         

@@ -32,3 +32,8 @@
 "geot2"	4	"wkt"					"BLOB"									
 																
 "hdf5"	1	"hdf5_id"	1				"INTEGER"									
+																
+"csv"	1	"csv_id"	1				"INTEGER"									
+"csv"	2	"text"					"TEXT"					20				
+"csv"	3	"integer"					"INTEGER"									
+"csv"	4	"real"					"REAL"									

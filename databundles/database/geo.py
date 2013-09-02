@@ -8,6 +8,7 @@ from .partition import PartitionDb
 from ..geo.sfschema import TableShapefile
 
 class FeatureInserter(InserterInterface):
+    
     def __init__(self, partition, table, dest_srs=4326, source_srs=None, layer_name = None):
 
         self.bundle = partition.bundle

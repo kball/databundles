@@ -225,6 +225,7 @@ class LibraryDb(object):
     def engine(self):
         '''return the SqlAlchemy engine for this database'''
         from sqlalchemy import create_engine  
+        from database.sqlite import _on_connect_update_schema
         
         if not self._engine:
           
@@ -235,6 +236,9 @@ class LibraryDb(object):
             
             from sqlalchemy import event
             event.listen(self._engine, 'connect', _pragma_on_connect)
+            
+            event.listen(self._engine, 'connect', _on_connect_update_schema)
+             
             
         return self._engine
 

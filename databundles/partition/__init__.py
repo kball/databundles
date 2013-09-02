@@ -17,6 +17,9 @@ def new_partition(bundle, orm_partition):
     elif db_type == 'hdf':
         from hdf import HdfPartition
         return HdfPartition(bundle, orm_partition)
+    elif db_type == 'csv':
+        from csv import CsvPartition
+        return CsvPartition(bundle, orm_partition)
     elif db_type == 'db':
         from sqlite import SqlitePartition 
         return SqlitePartition(bundle, orm_partition)
@@ -37,6 +40,10 @@ def new_identity(d, bundle=None):
     elif d['format'] == 'hdf':
         from hdf import HdfPartitionIdentity
         return HdfPartitionIdentity(**d)
+    elif d['format'] == 'csv':
+        from csv import CsvPartitionIdentity
+        return CsvPartitionIdentity(**d)
+    
     elif d['format'] == 'db':
         from sqlite import SqlitePartitionIdentity
         return SqlitePartitionIdentity(**d)

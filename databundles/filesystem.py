@@ -74,13 +74,14 @@ class Filesystem(object):
 
     def get_cache_by_name(self, name):
         from dbexceptions import ConfigurationError
+        from cache import new_cache
         
         config = self.config.filesystem(name)
         
         if not config:
             raise ConfigurationError('No filesystem cache by name of {}'.format(name))
         
-        return Filesystem.get_cache(config)
+        return new_cache(config)
  
     @classmethod
     def find_f(cls, config, key, value):

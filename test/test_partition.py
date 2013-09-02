@@ -18,7 +18,7 @@ class Test(TestBase):
         self.bundle = Bundle()    
         self.bundle_dir = self.bundle.bundle_dir
 
-    def test_basic(self):
+    def x_test_basic(self):
 
         for p in self.bundle.partitions:
             print type(p.identity),  p.identity.name
@@ -33,17 +33,18 @@ class Test(TestBase):
         from databundles.partition import PartitionIdentity
         from databundles.identity import Identity
         
+        names = []
         for i in range(1,10):
             pid = PartitionIdentity(self.bundle.identity, space='city', segment = i)
-            print pid
-            
+
             p = self.bundle.partitions.new_db_partition(pid)
 
+            names.append(p.identity.name)
 
         for p in self.bundle.partitions.find_all(space='city', segment=Identity.ANY):
-            print 'Found', p.identity.name
+            self.assertIn(p.identity.name, names)
 
-        
+
         
 
 if __name__ == "__main__":

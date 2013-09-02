@@ -7,7 +7,6 @@ from . import PartitionBase, PartitionIdentity
 from ..database.hdf import HdfDb
    
 class HdfPartitionIdentity(PartitionIdentity):
-    
     PATH_EXTENSION = '.hdf'
     
 

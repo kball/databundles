@@ -12,7 +12,6 @@ class Bundle(BuildBundle):
 
     def prepare(self):
         from databundles.partition import PartitionIdentity 
-
         super(self.__class__, self).prepare()
      
         for table in self.schema.tables:   
@@ -44,6 +43,24 @@ class Bundle(BuildBundle):
         f.tosqlite3(sink, 'ttwo', create=False) 
         f.tosqlite3(sink, 'tthree', create=False)
       
+
+        # CSV
+        self.build_csv()
+        
+        return True
+        
+        self.build_db()
+        
+        self.build_geo()
+        
+        self.build_hdf()
+        
+
+        return True
+
+
+    def build_db(self):
+   
         # Now write random data to each of the pable partitions. 
         
         for partition in self.partitions.all:
@@ -53,7 +70,8 @@ class Bundle(BuildBundle):
                 table_name = partition.table.name
                 petl.dummytable(30000,fields).tosqlite3(db, table_name, create=False) #@UndefinedVariable
 
-
+    def build_geo(self):
+   
         # Create other types of partitions. 
         geot1 = self.partitions.find_or_new_geo(table='geot1')
         with geot1.database.inserter() as ins:
@@ -68,6 +86,8 @@ class Bundle(BuildBundle):
                 for lon in range(10):
                     ins.insert({'name': str(lon)+';'+str(lat), 'wkt':"POINT({} {})".format(lon,lat)})
         
+    def build_hdf(self):
+        import numpy as np
         hdf = self.partitions.find_or_new_hdf(table='hdf5')
 
         a = np.zeros((10,10))
@@ -76,22 +96,21 @@ class Bundle(BuildBundle):
                 a[x,y] = x*y
  
         ds = hdf.database.create_dataset('hdf', data=a, compression=9)
-        hdf.database.close()
-
+        hdf.database.close()       
 
     def build_csv(self):
-        pass
+        from databundles.identity import Identity
+        
 
-    def install(self):
-        self.log("Install bundle")  
-        dest = self.library.put(self)
-        self.log("Installed to {} ".format(dest))
-        
-        for partition in self.partitions:
-            dest = self.library.put(partition)
-            self.log("Installed to {} ".format(dest))
-        
-    
+        for j in range(1,5):
+            csvt = self.partitions.find_or_new_csv(table='csv', segment=j)
+            lr = self.init_log_rate(2500, "Segment "+str(j))
+            with csvt.database.inserter(skip_header=True) as ins:
+                for i in range(5000):
+                    r = [i,'foo',i, float(i)* 37.452]
+                    ins.insert(r)
+                    lr()
+
     def fetch(self):
         pass
 
