@@ -215,9 +215,10 @@ class LibraryDb(object):
             self._engine = create_engine(self.dsn, echo=False) 
             
             from sqlalchemy import event
-            event.listen(self._engine, 'connect', _pragma_on_connect)
             
-            event.listen(self._engine, 'connect', _on_connect_update_schema)
+            if self.driver == 'sqlite':
+                event.listen(self._engine, 'connect', _pragma_on_connect)
+                event.listen(self._engine, 'connect', _on_connect_update_schema)
              
             
         return self._engine

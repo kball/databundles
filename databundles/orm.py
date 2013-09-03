@@ -802,7 +802,7 @@ class File(Base, SavableMixin):
     content_hash = SAColumn('f_hash',Text)
     modified = SAColumn('f_modified',Integer)
     size = SAColumn('f_size',Integer)
-    group = SAColumn('f_group',Integer)
+    group = SAColumn('f_group',Text)
     ref = SAColumn('f_ref',Text)
  
     def __init__(self,**kwargs):
