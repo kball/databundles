@@ -202,7 +202,6 @@ class RunConfig(object):
                                      'account': lambda k,v: self.account(v),
                                      'upstream': lambda k,v: self.filesystem(v)
                                      }  )
-     
         e['_name'] = name
      
         return e
@@ -212,7 +211,8 @@ class RunConfig(object):
         e =  self.group_item('warehouse', name) 
 
         return self._sub_strings(e, {
-                                     'database': lambda k,v: self.database(v) 
+                                     'database': lambda k,v: self.database(v),
+                                     'account': lambda k,v: self.account(v),
                                      }  )
     def database(self,name):
         

@@ -24,3 +24,7 @@ class FilesystemError(BundleError):
 
 class NotFoundError(BundleError):
     '''Failed to find resource'''
+    
+class DependencyError(Exception):
+    """Required bundle dependencies not satisfied"""
+

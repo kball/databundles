@@ -31,12 +31,9 @@ class Test(TestBase):
 
         self.bundle = Bundle()    
 
-        
         print "Deleting: {}".format(self.rc.filesystem.root_dir)
         Test.rm_rf(self.rc.filesystem.root_dir)
-       
 
-          
     @staticmethod
     def rm_rf(d):
         
@@ -54,17 +51,15 @@ class Test(TestBase):
         """Clear out the database before the test run"""
 
         raise NotImplementedError()
-        
-        
+
     def tearDown(self):
         pass
 
-        
     def test_install(self):
-        from databundles.library import get_warehouse
+        from databundles.warehouse import new_warehouse
         from functools import partial
         print "Getting warehouse"
-        w = get_warehouse(self.rc, 'sqlite')
+        w = new_warehouse(self.rc.warehouse('sqlite'))
 
         print "Re-create database"
         w.drop()
