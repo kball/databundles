@@ -544,7 +544,7 @@ def bq_command(args, rc, src):
 
 def bq_cred(args, config):
 
-    from databundles.client.bigquery import BigQuery
+    from databundles.warehouse.bigquery import BigQuery
 
     bq = BigQuery(config.account('bq-server'))
     
@@ -552,7 +552,7 @@ def bq_cred(args, config):
 
 def bq_list(args, config):
 
-    from databundles.client.bigquery import BigQuery
+    from databundles.warehouse.bigquery import BigQuery
          
     bq = BigQuery(config.account('bq-server'))
 
