@@ -806,12 +806,14 @@ class LibraryDb(object):
                      state = state,
                      size=size)
     
+        # Sqlalchemy doesn't automatically rollback on exceptsions, and you
+        # can't re-try the commit until you roll back. 
         try:
             s.add(file_)
             s.commit()
         except:
             s.rollback()
-            raise()
+            raise
         
         self._mark_update()
         

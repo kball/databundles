@@ -7,7 +7,7 @@ from ..dbexceptions import DependencyError
 from . import WarehouseInterface
 from ..database import new_database
 
-class Warehouse(WarehouseInterface):
+class RelationalWarehouse(WarehouseInterface):
     
     def __init__(self, config,  resolver_cb = None):
         self.config = config

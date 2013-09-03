@@ -10,4 +10,7 @@ def new_warehouse(config):
     return Warehouse(database, config)
 
 class WarehouseInterface:
-    pass
+    
+    
+    def __init__(self, config,  resolver_cb = None):
+        pass
