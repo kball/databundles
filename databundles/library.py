@@ -525,18 +525,22 @@ class LibraryDb(object):
         for config in bdbs.query(Config).all():
             s.merge(config)
             
-        s.query(Table).filter(Table.d_vid == dataset.vid).delete()
+        s.query(Partition).filter(Partition.d_vid == dataset.vid).delete()
             
         for table in dataset.tables:
-            s.merge(table)
-         
-            # Column delete should be cascaded from the tables, but not always in sqlite. 
+
             s.query(Column).filter(Column.t_vid == table.vid).delete()
+            
+            s.query(Table).filter(Table.d_vid == dataset.vid).delete()
+            
+        for table in dataset.tables:
+            
+            s.merge(table)
          
             for column in table.columns:
                 s.merge(column)
 
-        s.query(Partition).filter(Partition.d_vid == dataset.vid).delete()
+        
 
         for partition in dataset.partitions:
             s.merge(partition)
