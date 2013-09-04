@@ -184,8 +184,7 @@ class LibraryDb(object):
    
         self.dsn_template = self.DBCI[self.driver].dsn_template
         self.dsn = None
-        self.sql = self.DBCI[self.driver].sql
-        
+  
         self._session = None
         self._engine = None
         self._connection  = None
@@ -359,8 +358,6 @@ class LibraryDb(object):
         
         try: 
             try: rows = self.engine.execute("SELECT * FROM datasets WHERE d_vid = '{}' ".format(ROOT_CONFIG_NAME_V)).fetchone()
-            except ProgrammingError:
-                raise 
             except: 
                 rows = False
 
@@ -407,8 +404,8 @@ class LibraryDb(object):
         """Create the database from the base SQL"""
 
         
-        if not self.exists():    
-           
+        if not self.exists():  
+            self.enable_delete = True  
             self.create_tables()
             self._add_config_root()
 
@@ -877,10 +874,14 @@ class LibraryDb(object):
         """Return all files in the database with the given state"""
         from databundles.orm import  File
         s = self.session
+        
+        # The orderby clause should put bundles before partitions, which is 
+        # required to install correctly. 
+        
         if state == 'all':
-            return s.query(File).all()
+            return s.query(File).order_by(File.ref).all()
         else:
-            return s.query(File).filter(File.state == state).all()
+            return s.query(File).filter(File.state == state).order_by(File.ref).all()
 
     def get_file_by_ref(self, ref):
         """Return all files in the database with the given state"""

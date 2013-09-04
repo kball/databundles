@@ -5,32 +5,33 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 from ..dbexceptions import DependencyError
 from . import WarehouseInterface
-from ..database import new_database
+from ..library import LibraryDb
+
 
 class RelationalWarehouse(WarehouseInterface):
     
     def __init__(self, config,  resolver_cb = None):
         self.config = config
     
-        self.resolver_cb = resolver_cb # For fetching dependencies. 
+        self.resolver = resolver_cb # For fetching dependencies. 
+        
+        self.database = LibraryDb(**config['database'])
         
     def __del__(self):
         pass # print self.id, 'closing Warehouse'
         
-    @property 
-    def resolver(self):
-        '''A Callback for resolving bundle dependencies. Usually attached to a library. '''
-        return self.resolver_cb
-    
-    @resolver.setter
-    def resolver(self, resolver_cb): #@DuplicatedSignature
-        self.resolver_cb = resolver_cb
+
         
     
     def get(self, name_or_id):
         """Return true if the warehouse already has the referenced bundle or partition"""
         
-        return  self.database.get(name_or_id)
+        r = self.database.get_id(name_or_id)
+        
+        if not r:
+            r = self.database.get_name(name_or_id)
+        
+        return r
         
     def has(self, name_or_id):
         dataset, partition = self.get(name_or_id)
@@ -39,10 +40,10 @@ class RelationalWarehouse(WarehouseInterface):
         
     def install_dependency(self, name, progress_cb=None):
         
-        if not self.resolver_cb:
-            raise Exception("Can't resolve a dependency without a resolver_cb defined")
+        if not self.resolver:
+            raise Exception("Can't resolve a dependency without a resolver defined")
 
-        b = self.resolver_cb(name)
+        b = self.resolver(name)
         
         if not b:
             raise DependencyError("Resolver failed to get {}".format(name))
@@ -106,7 +107,7 @@ class RelationalWarehouse(WarehouseInterface):
             cache = []
             cache_size = 100
             progress_cb('populate_table',table_name,None)
-            with self.database.inserter(dest_table.name) as ins:
+            with self.database.inserter(dest_table.name, replace=True) as ins:
                 for i,row in enumerate(pdb.session.execute(src_table.select()).fetchall()):
                     progress_cb('add_row',table_name,i)
                     ins.insert(row)

@@ -3,7 +3,8 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from sqlite import Database
+from sqlite import Database #@UnresolvedImport
+
 
 class InstalledBundleDb(Database): # Previously BundleDB
     
@@ -23,11 +24,9 @@ class InstalledBundleDb(Database): # Previously BundleDB
     
 class BuildBundleDb(Database):
 
-
     @property 
     def path(self):
         return self.bundle.path + self.EXTENSION
     
     def sub_dir(self, *args):
         return  self.bundle.sub_dir(*args)
-    

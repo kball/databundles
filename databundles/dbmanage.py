@@ -76,9 +76,9 @@ def install_command(args, rc, src):
                 f.write(s)
 
 def warehouse_command(args, rc, src):
-    from databundles.library import get_warehouse
+    from databundles.warehouse import new_warehouse
 
-    w = get_warehouse(rc, args.name)
+    w = new_warehouse(rc, args.name)
 
 
     if args.subcommand == 'install':

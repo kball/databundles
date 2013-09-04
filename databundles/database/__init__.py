@@ -4,6 +4,8 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 
+def new_database(config):
+    pass
 
 class DatabaseInterface(object):
     

@@ -31,8 +31,8 @@ class Test(TestBase):
 
         self.bundle = Bundle()    
 
-        print "Deleting: {}".format(self.rc.filesystem.root_dir)
-        Test.rm_rf(self.rc.filesystem.root_dir)
+        print "Deleting: {}".format(self.rc.group('filesystem').root_dir)
+        Test.rm_rf(self.rc.group('filesystem').root_dir)
 
     @staticmethod
     def rm_rf(d):
@@ -62,7 +62,11 @@ class Test(TestBase):
         w = new_warehouse(self.rc.warehouse('sqlite'))
 
         print "Re-create database"
-        w.drop()
+        w.database.enable_delete = True
+        
+        try: w.drop()
+        except: pass
+        
         w.create()
         
         

@@ -58,7 +58,8 @@ class ValueWriter(InserterInterface):
                 self.rollback_end()
                 raise
             except Exception as e:
-                self.bundle.error("Exception during ValueWriter.insert: "+str(e))
+                if self.bundle:
+                    self.bundle.error("Exception during ValueWriter.insert: "+str(e))
                 self.rollback_end()
                 raise
         else:
