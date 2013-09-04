@@ -195,6 +195,8 @@ class LibraryDb(object):
         import logging
         self.logger.setLevel(logging.INFO) 
         
+        self.enable_delete = False
+        
     def __del__(self):
         pass # print  'closing LibraryDb'
         
@@ -336,7 +338,7 @@ class LibraryDb(object):
         
     def exists(self):
         from databundles.orm import Dataset
-          
+        from sqlalchemy.exc import  ProgrammingError
         self.engine
         
         if self.driver == 'sqlite' and not os.path.exists(self.dbname):
@@ -344,9 +346,12 @@ class LibraryDb(object):
 
         
         try: 
-            try: rows = self.engine.execute("SELECT * FROM datasets WHERE d_vid = ?",ROOT_CONFIG_NAME_V).fetchone()
-            except: rows = False
-            
+            try: rows = self.engine.execute("SELECT * FROM datasets WHERE d_vid = '{}' ".format(ROOT_CONFIG_NAME_V)).fetchone()
+            except ProgrammingError:
+                raise 
+            except: 
+                rows = False
+
             if not rows:
                 return False
             else:
@@ -391,6 +396,7 @@ class LibraryDb(object):
 
         
         if not self.exists():    
+           
             self.create_tables()
             self._add_config_root()
 
@@ -436,6 +442,9 @@ class LibraryDb(object):
              
     
     def _drop(self, s):
+        
+        if not self.enable_delete:
+            raise Exception("Deleting not enabled")
         
         for table in reversed(self.metadata.sorted_tables): # sorted by foreign key dependency
             table.drop(self.engine, checkfirst=True)
