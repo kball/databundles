@@ -811,7 +811,7 @@ class LibraryDb(object):
 
         if os.path.exists(path):
             stat = os.stat(path)
-            modified = stat.st_mtime
+            modified = int(stat.st_mtime)
             size = stat.st_size
         else:
             modified = None
@@ -859,7 +859,7 @@ class LibraryDb(object):
         file_ = File(path=path, 
                      group=group, 
                      ref=ref,
-                     modified=time.time(),
+                     modified=int(time.time()),
                      state = state,
                      size=0)
     
