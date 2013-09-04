@@ -233,6 +233,7 @@ def library_purge(args, l, config):
 def library_rebuild(args, l, config):  
 
     print "Rebuild library"
+    l.database.enable_delete = True
     if args.remote:
         l.remote_rebuild()
     else:
