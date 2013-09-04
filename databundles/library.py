@@ -286,6 +286,7 @@ class LibraryDb(object):
             s.add(o)
             s.commit()  
         except IntegrityError:
+            s.rollback()
             o = s.query(SAConfig).filter(SAConfig.group == group,
                                  SAConfig.key == key,
                                  SAConfig.d_vid == ROOT_CONFIG_NAME_V).one()
