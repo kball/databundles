@@ -7,7 +7,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 import sqlalchemy
 from sqlalchemy import orm
 from sqlalchemy import event
-from sqlalchemy import Column as SAColumn, Integer, Boolean, UniqueConstraint
+from sqlalchemy import Column as SAColumn, Integer, BigInteger, Boolean, UniqueConstraint
 from sqlalchemy import Float as Real,  Text, String, ForeignKey
 from sqlalchemy.orm import relationship, deferred
 from sqlalchemy.types import TypeDecorator, TEXT, PickleType
@@ -801,7 +801,7 @@ class File(Base, SavableMixin):
     state = SAColumn('f_state',Text)
     content_hash = SAColumn('f_hash',Text)
     modified = SAColumn('f_modified',Integer)
-    size = SAColumn('f_size',Integer)
+    size = SAColumn('f_size',BigInteger)
     group = SAColumn('f_group',Text)
     ref = SAColumn('f_ref',Text)
  
