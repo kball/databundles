@@ -15,6 +15,10 @@ from databundles import __version__
 def prt(template, *args, **kwargs):
     print template.format(*args, **kwargs)
 
+def err(template, *args, **kwargs):
+    import sys
+    print "ERROR: "+template.format(*args, **kwargs)
+    sys.exit(1)
 
 def bundle_command(args, rc, src):
   
@@ -78,28 +82,58 @@ def install_command(args, rc, src):
 def warehouse_command(args, rc, src):
     from databundles.warehouse import new_warehouse
 
-    w = new_warehouse(rc, args.name)
-
-
-    if args.subcommand == 'install':
-        pass
-    elif args.subcommand == 'remove':
-        pass
-    elif args.subcommand == 'sync':
-        pass
-    elif args.subcommand == 'info':
-        
-        config = w.info()
-        
-        for k,v in config.item():
-            prt("{:10s}: {:s}",k,v)
-        
-    elif args.subcommand == 'connect':
-        pass
-
+    if args.is_server:
+        config  = src
     else:
-        pass
+        config = rc
+
+    w = new_warehouse(config.warehouse(args.name))
+
+    globals()['warehouse_'+args.subcommand](args, w,config)
+
+   
+def warehouse_info(args, w,config):
     
+    config = w.info()
+    
+    for k,v in config.items():
+        prt("{:10s}: {:s}",k,v)    
+ 
+def warehouse_drop(args, w,config):
+    
+    w.database.enable_delete = True
+    w.drop()
+    
+def warehouse_install(args, w,config):
+    import library
+    from functools import partial
+    from databundles.util import init_log_rate
+    
+    if not w.exists():
+        w.create()
+
+    l = library.new_library(config.library(args.library))
+
+    def resolver(name):
+        bundle = l.get(name)
+        
+        if bundle.partition:
+            return bundle.partition
+        else:
+            return bundle
+    
+    w.resolver = resolver
+    
+    def progress_cb(lr, type,name,n):
+        if n:
+            lr("Warehouse Install: {} {}: {}".format(type, name, n))
+        else:
+            prt("Warehouse Install: {} {}",type, name)
+
+    lr = init_log_rate(2000)
+
+    w.install_by_name(args.term, progress_cb = partial(progress_cb, lr)  )
+
 def library_command(args, rc, src):
     import library
 
@@ -812,16 +846,21 @@ def main():
     whr_p = cmd.add_parser('warehouse', help='Manage a warehouse')
     whr_p.set_defaults(command='warehouse')
     whp = whr_p.add_subparsers(title='warehouse commands', help='command help')
-    
+ 
+    group = whr_p.add_mutually_exclusive_group()
+    group.add_argument('-s', '--server',  default=False, dest='is_server',  action='store_true', help = 'Select the server configuration')
+    group.add_argument('-c', '--client',  default=False, dest='is_server',  action='store_false', help = 'Select the client configuration')
+        
+    whr_p.add_argument('-l','--library',  default='default',  help='Select a different name for the library')
     whr_p.add_argument('-n','--name',  default='default',  help='Select a different name for the warehouse')
 
     whsp = whp.add_parser('install', help='Install a bundle or partition to a warehouse')
     whsp.set_defaults(subcommand='install')
-    whsp.add_argument('name', type=str,help='Name of bundle or partition')
+    whsp.add_argument('term', type=str,help='Name of bundle or partition')
 
     whsp = whp.add_parser('remove', help='Remove a bundle or partition from a warehouse')
     whsp.set_defaults(subcommand='remove')
-    whsp.add_argument('name', type=str,help='Name of bundle or partition')
+    whsp.add_argument('term', type=str,help='Name of bundle or partition')
     
     
     whsp = whp.add_parser('sync', help='Syncronize database to a list of names')
@@ -831,7 +870,11 @@ def main():
     whsp = whp.add_parser('connect', help='Test connection to a warehouse')
     whsp.set_defaults(subcommand='connect')
 
-   
+    whsp = whp.add_parser('info', help='Configuration information')
+    whsp.set_defaults(subcommand='info')   
+ 
+    whsp = whp.add_parser('drop', help='Drop the warehouse database')
+    whsp.set_defaults(subcommand='drop')   
  
     #
     # ckan Command

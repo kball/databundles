@@ -77,6 +77,7 @@ class Partitions(object):
             s = self.bundle.database.session      
             return [self.partition(op) for op in s.query(OrmPartition).all()]
         except sqlalchemy.exc.OperationalError:
+            raise
             return []
             
         
@@ -240,8 +241,6 @@ class Partitions(object):
             if pid.segment is not Identity.ANY:
                 q = q.filter(OrmPartition.segment==pid.segment)
        
-            #if format is not None:
-            #    q = q.filter(OrmPartition.format==pid.format)
         
             if pid.table is not Identity.ANY:
             
@@ -394,6 +393,11 @@ class Partitions(object):
             pid A partition Identity
             tables String or array of tables to copy form the main partition
         '''
+        
+        if pid:
+            pid.format = 'csv'
+        else: 
+            kwargs['format'] = 'csv'
         
         try: partition =  self.find(pid, **kwargs)
         except: partition = None

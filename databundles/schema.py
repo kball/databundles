@@ -164,7 +164,7 @@ class Schema(object):
         from databundles.orm import Column
         return (self.bundle.database.session.query(Column).all())
         
-    def get_table_meta(self, name_or_id, use_id=False):
+    def get_table_meta(self, name_or_id, use_id=False, driver=None):
         s = self.bundle.database.session
         from databundles.orm import Table, Column
         
@@ -172,19 +172,6 @@ class Schema(object):
         from sqlalchemy import MetaData, UniqueConstraint, ForeignKeyConstraint,  Index, text
         from sqlalchemy import Column as SAColumn
         from sqlalchemy import Table as SATable
-        
-        def translate_type(column):
-            # Creates a lot of unnecessary objects, but speed is not important here.  
-            if column.datatype == Column.DATATYPE_NUMERIC:
-                return sqlalchemy.types.Numeric(column.precision, column._scale)
-            else:
-                type =  Column.types[column.datatype][0]
-                
-                if column.size:
-                    return type(column.size)
-                else:
-                    return type
-                
         
         metadata = MetaData()
         
@@ -203,6 +190,52 @@ class Schema(object):
             except sqlalchemy.orm.exc.NoResultFound: #@UndefinedVariable
                 raise ValueError("No table found for name {}".format(name_or_id))
         
+        def translate_type(column):
+            # Creates a lot of unnecessary objects, but speed is not important here.  
+
+            
+
+            if driver == 'mysql':
+                
+                if (column.datatype in (Column.DATATYPE_TEXT, column.datatype == Column.DATATYPE_VARCHAR) and
+                    bool(column.default) and not bool(column.size) and not bool(column.width) ):
+                    raise ConfigurationError("Bad column {}.{}: For MySql, text columns with default must also have size or width"
+                                             .format(table.name, column.name))
+
+                if (column.datatype in (Column.DATATYPE_TEXT, column.datatype == Column.DATATYPE_VARCHAR) and bool(column.default) 
+                    and not bool(column.size) and bool(column.width)):
+                        column.size = column.width
+               
+                    
+                # Mysql, when running on Windows, does not allow default
+                # values for TEXT columns
+                if (column.datatype == Column.DATATYPE_TEXT  and bool(column.default)):
+                    column.datatype = Column.DATATYPE_VARCHAR
+                  
+                # VARCHAR requires a size
+                if (column.datatype == Column.DATATYPE_VARCHAR and not bool(column.size)):
+                    column.datatype = Column.DATATYPE_TEXT                 
+                    
+            # Postgres doesn't allows size specifiers in TEXT columns. 
+            if driver == 'postgres':
+                if (column.datatype == Column.DATATYPE_TEXT  and bool(column.size)):
+                    column.datatype = Column.DATATYPE_VARCHAR            
+                  
+            #print driver, column.name, column.size, column.default
+                    
+            type_ =  Column.types[column.datatype][0]
+        
+        
+            if column.datatype == Column.DATATYPE_NUMERIC:
+                return type_(column.precision, column._scale)
+            elif column.size:
+                return type_(column.size)
+            else:
+                return type_
+
+        
+
+        
         at = SATable(table.dataset.id_+'_'+table.name if  use_id else table.name, metadata)
  
         indexes = {}
@@ -214,7 +247,15 @@ class Schema(object):
             
             kwargs = {}
         
+            width = column.size if column.size else (column.width if column.width else None)
+        
             if column.default is not None:
+                
+                # Stop-gap for old databundles. This should be  ( and now is ) checkd in the
+                # schema generation
+                if width and width < len(column.default):
+                    column.width = column.size = len(column.default)
+                
                 try:
                     int(column.default)
                     kwargs['server_default'] = text(str(column.default))
@@ -709,6 +750,10 @@ class {name}(Base):
             lines = lines + extra_columns
             
         return  "SELECT " + ',\n'.join(lines) + " FROM {} ".format(st.name)
+     
+
+
+     
      
   
         

@@ -170,17 +170,22 @@ class LibraryDb(object):
     Dbci = namedtuple('Dbc', 'dsn_template sql') #Database connection information 
    
     DBCI = {
-            'postgres':Dbci(dsn_template='postgresql+psycopg2://{user}:{password}@{server}/{name}',sql='support/configuration-pg.sql'), # Stored in the databundles module. 
+            'postgres':Dbci(dsn_template='postgresql+psycopg2://{user}:{password}@{server}{colon_port}/{name}',sql='support/configuration-pg.sql'), # Stored in the databundles module. 
             'sqlite':Dbci(dsn_template='sqlite:///{name}',sql='support/configuration-sqlite.sql'),
-            'mysql':Dbci(dsn_template='mysql://{user}:{password}@{server}/{name}',sql='support/configuration-sqlite.sql')
+            'mysql':Dbci(dsn_template='mysql://{user}:{password}@{server}{colon_port}/{name}',sql='support/configuration-sqlite.sql')
             }
     
-    def __init__(self,  driver=None, server=None, dbname = None, username=None, password=None, **kwargs):
+    def __init__(self,  driver=None, server=None, dbname = None, username=None, password=None, port=None, **kwargs):
         self.driver = driver
         self.server = server
         self.dbname = dbname
         self.username = username
         self.password = password
+   
+        if port:
+            self.colon_port = ':'+str(port)
+        else:
+            self.colon_port = ''
    
         self.dsn_template = self.DBCI[self.driver].dsn_template
         self.dsn = None
@@ -209,9 +214,8 @@ class LibraryDb(object):
         from database.sqlite import _on_connect_update_schema
         
         if not self._engine:
-          
             self.dsn = self.dsn_template.format(user=self.username, password=self.password, 
-                            server=self.server, name=self.dbname)
+                            server=self.server, name=self.dbname, colon_port=self.colon_port)
 
             self._engine = create_engine(self.dsn, echo=False) 
             
@@ -219,9 +223,9 @@ class LibraryDb(object):
             
             if self.driver == 'sqlite':
                 event.listen(self._engine, 'connect', _pragma_on_connect)
-                event.listen(self._engine, 'connect', _on_connect_update_schema)
-             
-            
+                #event.listen(self._engine, 'connect', _on_connect_update_schema)
+                _on_connect_update_schema(self.connection)
+
         return self._engine
 
     @property
@@ -229,7 +233,7 @@ class LibraryDb(object):
         '''Return an SqlAlchemy connection'''
         if not self._connection:
             self._connection = self.engine.connect()
-            
+
         return self._connection
 
     @property
@@ -262,11 +266,10 @@ class LibraryDb(object):
         '''Return a SqlAlchemy session'''
         from sqlalchemy.orm import sessionmaker
         
-        if not self._session:    
+        if not self._session:  
             self.Session = sessionmaker(bind=self.engine)
             self._session = self.Session()
-           
-            
+
         return self._session
    
     def set_config_value(self, group, key, value):
@@ -520,9 +523,7 @@ class LibraryDb(object):
             # not for the partition
             
         self._mark_update()
-                
-        #self.remove_bundle(bundle)
-                
+                    
         # There should be only one dataset record in the 
         # bundle
         bdbs = bundle.database.session 
@@ -530,17 +531,15 @@ class LibraryDb(object):
         dataset = bdbs.query(Dataset).one()
         s.merge(dataset)
  
-
         for config in bdbs.query(Config).all():
             s.merge(config)
             
         s.query(Partition).filter(Partition.d_vid == dataset.vid).delete()
             
         for table in dataset.tables:
-
             s.query(Column).filter(Column.t_vid == table.vid).delete()
-            
-            s.query(Table).filter(Table.d_vid == dataset.vid).delete()
+
+        s.query(Table).filter(Table.d_vid == dataset.vid).delete()
             
         for table in dataset.tables:
             
@@ -548,8 +547,6 @@ class LibraryDb(object):
          
             for column in table.columns:
                 s.merge(column)
-
-        
 
         for partition in dataset.partitions:
             s.merge(partition)
@@ -653,6 +650,7 @@ class LibraryDb(object):
             
         
         s = self.session
+
         has_partition = False
         has_where = False
         
@@ -726,25 +724,30 @@ class LibraryDb(object):
         query = query.distinct().order_by(Dataset.revision.desc())
 
         out = []
-        for r in query.all():
-           
-            o = {}
-
-            try: 
-                o['identity'] = r.Dataset.identity.to_dict()
-                o['partition'] = r.Partition.identity.to_dict()
+        
+        try:
+            for r in query.all():
                
-            except: 
-                o['identity'] =  r.Dataset.identity.to_dict()
+                o = {}
+    
+                try: 
+                    o['identity'] = r.Dataset.identity.to_dict()
+                    o['partition'] = r.Partition.identity.to_dict()
+                   
+                except: 
+                    o['identity'] =  r.Dataset.identity.to_dict()
+    
+    
+                try: o['table'] = r.Table.to_dict()
+                except: pass
+                
+                try:o['column'] = r.Column.to_dict()
+                except: pass
+                
+                out.append(o)
+        except:
 
-
-            try: o['table'] = r.Table.to_dict()
-            except: pass
-            
-            try:o['column'] = r.Column.to_dict()
-            except: pass
-            
-            out.append(o)
+            raise
 
         return out
         

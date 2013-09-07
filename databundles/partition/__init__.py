@@ -248,6 +248,8 @@ class PartitionInterface(object):
 
     def updater(self, table_or_name=None,**kwargs):  raise NotImplementedError()
 
+    def write_stats(self):  raise NotImplementedError()
+
 
 class PartitionBase(PartitionInterface):
 

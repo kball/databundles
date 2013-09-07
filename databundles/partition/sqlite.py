@@ -87,6 +87,23 @@ class SqlitePartition(PartitionBase):
         else:
             self.database.create(copy_tables = False)
 
+    def write_stats(self):
+        
+        t = self.table
+        
+        if not t:
+            return
+        
+        s = self.database.session
+        self.record.count = s.execute("SELECT COUNT(*) FROM {}".format(t.name)).scalar()
+     
+        self.record.min_key = s.execute("SELECT MIN({}) FROM {}".format(t.primary_key.name,t.name)).scalar()
+        self.record.max_key = s.execute("SELECT MAX({}) FROM {}".format(t.primary_key.name,t.name)).scalar()
+     
+        s.merge(self.record)
+        s.commit()
+        
+
 
     def __repr__(self):
         return "<partition: {}>".format(self.name)

@@ -561,6 +561,7 @@ class Table(Base):
     def add_column(self, name, **kwargs):
 
         import sqlalchemy.orm.session
+        from dbexceptions import ConfigurationError
         
         s = sqlalchemy.orm.session.Session.object_session(self)
         
@@ -575,6 +576,18 @@ class Table(Base):
                      name=name, 
                      **kwargs              
                      )
+         
+        width = kwargs.get('width', None)
+        size = kwargs.get('size', None)
+        default = kwargs.get('default', None)
+        datatype =  kwargs.get('datatype', None)
+        # MySql requires that text columns that have a default also have a size. 
+        if datatype in ('text','varchar') and bool(default):
+            if not size and not width:
+                raise ConfigurationError("Error for {}.{}: Text or Varchar field with a default must have a size".format(self.name, name))
+            elif len(default) > max(width, size):
+                raise ConfigurationError("Error for {}.{}: Default value is longer than the size or width".format(self.name, name))
+
          
         for key, value in kwargs.items():
             
@@ -764,6 +777,18 @@ class Table(Base):
             
         return self._row_hasher(values)
          
+    def cast_transform(self, dict=False):
+        '''Returns a function that takes a row that can be indexed by positions which returns a new
+        row with all of the values cast to schema types. '''
+        from databundles.transform import RowTypeTransformBuilder
+        
+        bdr = RowTypeTransformBuilder()
+        
+        for c in self.columns:
+            bdr.append(c.name, c.python_type)
+        
+        return bdr.makeListTransform()
+        
      
 event.listen(Table, 'before_insert', Table.before_insert)
 event.listen(Table, 'before_update', Table.before_update)
@@ -844,6 +869,9 @@ class Partition(Base):
     grain = SAColumn('p_grain',String(50))
     format = SAColumn('p_format',String(50))
     segment = SAColumn('p_segment',Integer)
+    min_key = SAColumn('p_min_key',Integer)
+    max_key = SAColumn('p_max_key',Integer)
+    count = SAColumn('p_count',Integer)
     state = SAColumn('p_state',String(50))
     data = SAColumn('p_data',MutationDict.as_mutable(JSONEncodedObj))
 

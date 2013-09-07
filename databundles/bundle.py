@@ -147,12 +147,15 @@ class Bundle(object):
         """Convience function for self.database.connection.execute()"""
         return self.database.query(*args, **kwargs)
     
-    
-    @property
-    def web(self):
-        """Return a web object for creating web pages about this bundle"""
-        from databundles.web import Web
-        return Web(self)
+    def log(self, message, **kwargs):
+        '''Log the messsage'''
+        self.logger.info(message)
+
+
+    def error(self, message, **kwargs):
+        '''Log an error messsage'''
+        self.logger.error(message)
+
     
 class DbBundle(Bundle):
 
@@ -349,14 +352,6 @@ class BuildBundle(Bundle):
         #    self.rm_rf(self.filesystem.downloads_path())
 
     
-    def log(self, message, **kwargs):
-        '''Log the messsage'''
-        self.logger.info(message)
-
-
-    def error(self, message, **kwargs):
-        '''Log an error messsage'''
-        self.logger.error(message)
 
     def progress(self,message):
         '''print message to terminal, in place'''

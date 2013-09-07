@@ -11,7 +11,7 @@ import os
 
 class ValueWriter(InserterInterface):
     '''Inserts arrays of values into  database table'''
-    def __init__(self, bundle,  db, cache_size=50000, text_factory = None, replace=False):
+    def __init__(self, bundle,  db, cache_size=50000, text_factory = None, replace=False, caster = None):
         import string 
         self.cache = []
         
@@ -23,12 +23,12 @@ class ValueWriter(InserterInterface):
         self.transaction = None
         self.cache_size = cache_size
         self.statement = None
+        self.caster = caster
         
         if text_factory:
             self.db.engine.raw_connection().connection.text_factory = text_factory
 
     def __enter__(self): 
-       
         self.transaction = self.connection.begin()
         return self
         
@@ -44,7 +44,8 @@ class ValueWriter(InserterInterface):
         
     def commit_continue(self):
         if self.transaction:
-            self.transaction = None
+            self.transaction.commit()
+            self.transaction = self.connection.begin()
                 
         
     def close(self):
@@ -63,24 +64,26 @@ class ValueWriter(InserterInterface):
                 self.rollback_end()
                 raise
         else:
-                self.commit_continue()
+            self.commit_end()
                     
     def __exit__(self, type_, value, traceback):
-
-        self.close()
-               
+    
         if type_ is not None:
             try: self.bundle.error("Got Exception: "+str(value))
             except:  print "ERROR: Got Exception {}: {}".format(type_, str(value))
             return False
+
+        self.close()
+           
                 
         return self
         
  
 class ValueInserter(ValueWriter):
     '''Inserts arrays of values into  database table'''
-    def __init__(self, bundle, table, db, cache_size=50000, text_factory = None, replace=False): 
-        super(ValueInserter, self).__init__(bundle, db, cache_size=cache_size, text_factory = text_factory)  
+    def __init__(self, bundle, table, db, cache_size=50000, text_factory = None, replace=False, caster = None): 
+        
+        super(ValueInserter, self).__init__(bundle, db, cache_size=cache_size, text_factory = text_factory, caster = caster)  
    
         self.table = table
         
@@ -96,23 +99,35 @@ class ValueInserter(ValueWriter):
             if isinstance(values, dict):
                 d = values
             else:
+                
+                if self.caster:
+
+                    values = self.caster(values)
+                
                 d  = dict(zip(self.header, values))
          
             self.cache.append(d)
          
-            if len(self.cache) >= self.cache_size:
-                
+            if len(self.cache) >= self.cache_size: 
                 self.connection.execute(self.statement, self.cache)
                 self.cache = []
+                
+                self.commit_continue()
             
                 
         except (KeyboardInterrupt, SystemExit):
-            self.bundle.log("Processing keyboard interrupt or system exist")
+            if self.bundle:
+                self.bundle.log("Processing keyboard interrupt or system exist")
+            else:
+                print "Processing keyboard interrupt or system exist" 
             self.rollback_end()
             self.cache = []
             raise
         except Exception as e:
-            self.bundle.error("Exception during ValueInserter.insert: {}".format(e))
+            if self.bundle:
+                self.bundle.error("Exception during ValueInserter.insert: {}".format(e))
+            else:
+                print "ERROR: Exception during ValueInserter.insert: {}".format(e)
             self.rollback_end()
             self.cache = []
             raise
@@ -268,15 +283,24 @@ class Database(DatabaseInterface):
             #self._engine = create_engine('sqlite://') 
             from sqlalchemy import event
             event.listen(self._engine, 'connect', _on_connect)
-            event.listen(self._engine, 'connect', _on_connect_update_schema)
+            #event.listen(self._engine, 'connect', _on_connect_update_schema)
+            _on_connect_update_schema(self.connection)
              
         return self._engine
 
     @property
     def connection(self):
         '''Return an SqlAlchemy connection'''
+        from pysqlite2.dbapi2 import DatabaseError
         if not self._connection:
-            self._connection = self.engine.connect()
+            try:
+                self._connection = self.engine.connect()
+            except DatabaseError as e:
+                self.bundle.error("Failed to open: '{}' ".format(self.path))
+                raise
+                
+                
+            self._connection.info['path'] = self.path
             
         return self._connection
     
@@ -747,21 +771,34 @@ def _on_connect(dbapi_con, con_record):
     #dbapi_con.enable_load_extension(True)
     #dbapi_con.execute('PRAGMA synchronous = OFF')
 
-def _on_connect_update_schema(dbapi_con, con_record):
+def _on_connect_update_schema(conn):
     '''Perform on-the-fly schema updates based on the user version'''
-    
-    version = dbapi_con.execute('PRAGMA user_version').fetchone()[0]
+
+    version = conn.execute('PRAGMA user_version').fetchone()[0]
 
     if version < 10:
-        try: dbapi_con.execute('ALTER TABLE partitions ADD COLUMN p_format VARCHAR(50);')
+        try: conn.execute('ALTER TABLE partitions ADD COLUMN p_format VARCHAR(50);')
         except: pass
         
-        try: dbapi_con.execute('ALTER TABLE partitions ADD COLUMN p_segment INTEGER;')
+        try: conn.execute('ALTER TABLE partitions ADD COLUMN p_segment INTEGER;')
         except: pass
                 
-        dbapi_con.execute('PRAGMA user_version = 10;')
+        conn.execute('PRAGMA user_version = 10;')
 
+    if version < 11:
+        
+        try: conn.execute('ALTER TABLE partitions ADD COLUMN p_min_key INTEGER;')
+        except: pass
+        
+        try: conn.execute('ALTER TABLE partitions ADD COLUMN p_max_key INTEGER;')
+        except: pass
+        
+        try: conn.execute('ALTER TABLE partitions ADD COLUMN p_count INTEGER;')
+        except: pass
+                
+        conn.execute('PRAGMA user_version = 11;')
 
+ 
 def insert_or_ignore(table, columns):
     return  ("""INSERT OR IGNORE INTO {table} ({columns}) VALUES ({values})"""
                             .format(

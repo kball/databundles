@@ -13,62 +13,43 @@ class Bundle(BuildBundle):
     def prepare(self):
         from databundles.partition import PartitionIdentity 
         super(self.__class__, self).prepare()
-     
-        for table in self.schema.tables:   
-            pid = PartitionIdentity(self.identity, table=table.name)
-            if table.data.get('make_partition', False):
-                partition = self.partitions.new_db_partition(pid)  
-                partition.create_with_tables(table.name)
-  
-        self.schema.create_tables()
+    
   
         return True
   
-    def build(self):
-        import random
+    @property
+    def fields(self):
         from functools import partial
-        import numpy as np
-        
-        sink = self.database.path
-     
-        #self.log("Writing random data to: "+ self.database.path)
-        fields = [
+        import random
+        return   [
                   ('tone_id', lambda: None),
                   ('text',partial(random.choice, ['chocolate', 'strawberry', 'vanilla'])),
                   ('integer', partial(random.randint, 0, 500)),
                   ('float', random.random)
                   ]
-        f = petl.dummytable(10000,fields) #@UndefinedVariable
-        f.tosqlite3(sink, 'tone', create=False) 
-        f.tosqlite3(sink, 'ttwo', create=False) 
-        f.tosqlite3(sink, 'tthree', create=False)
-      
+  
+    def build(self):
 
-        # CSV
         self.build_csv()
-        
-        return True
-        
         self.build_db()
-        
         self.build_geo()
-        
         self.build_hdf()
-        
-
+    
         return True
 
 
     def build_db(self):
-   
+
         # Now write random data to each of the pable partitions. 
         
-        for partition in self.partitions.all:
-            if partition.table.name in ('tone','ttwo','tthree'):  
-                #self.log("Loading "+partition.name)
-                db = partition.database.path
-                table_name = partition.table.name
-                petl.dummytable(30000,fields).tosqlite3(db, table_name, create=False) #@UndefinedVariable
+        for table_name in  ('tone','ttwo'):
+            p = self.partitions.find_or_new_db(table=table_name)
+            petl.dummytable(30000,self.fields).tosqlite3(p.database.path, table_name, create=False) #@UndefinedVariable
+
+        for seg in range(1,5):
+            p = self.partitions.find_or_new_db(table='tthree', segment=seg)
+            petl.dummytable(30000,self.fields).tosqlite3(p.database.path, 'tthree', create=False) #@UndefinedVariable
+            p.write_stats()
 
     def build_geo(self):
    
@@ -101,7 +82,6 @@ class Bundle(BuildBundle):
     def build_csv(self):
         from databundles.identity import Identity
         
-
         for j in range(1,5):
             csvt = self.partitions.find_or_new_csv(table='csv', segment=j)
             lr = self.init_log_rate(2500, "Segment "+str(j))

@@ -40,7 +40,7 @@ database:
         password: samizdat 
 
     sqlite_warehouse:
-        dbname: '/tmp/server/warehouse.db'
+        dbname: '/tmp/warehouse.db'
         driver: sqlite  
 
 

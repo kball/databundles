@@ -5,7 +5,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 # Stolen from: http://code.activestate.com/recipes/498245-lru-and-lfu-cache-decorators/
-
+from __future__ import print_function
 import collections
 import functools
 from itertools import ifilterfalse
@@ -15,6 +15,7 @@ import logging
 import yaml
 from collections import Mapping, OrderedDict, defaultdict
 import os 
+
 
 logger_init = set()
 
@@ -258,12 +259,12 @@ def patch_file_open():
     class newfile(oldfile):
         def __init__(self, *args,**kwargs):
             self.x = args[0]
-            print "### {} OPENING {} ###".format(len(openfiles), str(self.x))         
+            print ("### {} OPENING {} ###".format(len(openfiles), str(self.x)))        
             oldfile.__init__(self, *args,**kwargs)
             openfiles.add(self)
     
         def close(self):
-            print "### {} CLOSING {} ###".format(len(openfiles), str(self.x))
+            print ("### {} CLOSING {} ###".format(len(openfiles), str(self.x)))
             oldfile.close(self)
             openfiles.remove(self)
             
@@ -528,7 +529,6 @@ def zip_dir(dir, file_):
     import zipfile, glob
     with zipfile.ZipFile(file_, 'w') as zf:
         g = os.path.join(dir,'*')
-        print g
         for f in glob.glob(g):
             zf.write(f)
     return dir
@@ -633,8 +633,6 @@ def make_acro(past, prefix, s):
         except IndexError:
             pass
         
-
-    print past
     raise Exception("Could not get acronym")
 
 def temp_file_name():
@@ -751,4 +749,45 @@ def copy_file_or_flo(input_, output):
             
         if output_opened:
             output.close()
+
+
+def _log_rate(d, message=None, prt=None):
+    """Log a message for the Nth time the method is called.
+    
+    d is the object returned from init_log_rate
+    """
+    
+    import time 
+
+    if not prt:
+        
+        prt = print 
+
+    if not d[1]:
+        d[1] = time.time()
+
+    if not message:
+        message = d[3]
+
+    d[0] += 1
+    if d[0] % d[2] == 0:
+        # Prints the processing rate in 1,000 records per sec.
+        prt(message+': '+str(int( d[0]/(time.time()-d[1])))+'/s '+str(d[0]/1000)+"K ") 
+    
+
+        
+def init_log_rate(N, message=''):
+    """Initialze the log_rate function. Returnas a partial function to call for
+    each event"""
+  
+    import functools 
+    
+    d =  [0,  # number of items processed
+            None, # start time
+            N,  #frequency to log a message
+            message]
+
+    return functools.partial(_log_rate, d)
+
+
         

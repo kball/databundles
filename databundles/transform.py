@@ -221,8 +221,60 @@ class CensusTransform(BasicTransform):
         
         self.f = f
     
+class RowTypeTransformBuilder(object):
     
+    def __init__(self):
+        self.types = []
     
+    def append(self, name, type_):
+        self.types.append((name,type_))
+        
+    def makeListTransform(self):
+        import uuid
+        
+        f_name = "f"+str(uuid.uuid4()).replace('-','')
+        
+        o = "def {}(row):\n    return [".format(f_name)
     
+        for i,(name,type_) in enumerate(self.types):
+            if i != 0:
+                o += ',\n'
+                
+            if type_ == float or type_ == int:
+                o += "{type}(row[{i}]) if row[{i}] != '' and  row[{i}] is not None else None".format(type=type_.__name__,i=i)
+            else:
+                o += "{type}(row[{i}])".format(type=type_.__name__,i=i)
+            
+        o+= ']\n'
+ 
+        #print o
+          
+        exec(o)
+            
+        return locals()[f_name]
+         
+    def makeDictTransform(self):
+        import uuid
+        
+        f_name = "f"+str(uuid.uuid4()).replace('-','')
+        
+        o = "def {}(row):\n    return {".format(f_name)
     
+        for i,(name,type_) in enumerate(self.types):
+            if i != 0:
+                o += ',\n'
+                
+            if type_ == float or type_ == int:
+                o += "'{}':{type}(row[{i}]) if row[{i}] != '' and  row[{i}] is not None else None".format(type=type_.__name__,i=i)
+            else:
+                o += "'{}':{type}(row[{i}])".format(type=type_.__name__,i=i)
+            
+        o+= '}\n'
+ 
+        #print o
+          
+        exec(o)
+            
+        return locals()[f_name]
+            
     

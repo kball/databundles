@@ -55,6 +55,20 @@ class Test(TestBase):
             values=[ f(row) for f in processors['all'] ]
             print values
         
+        
+    def test_builder(self):
+        
+        table = self.bundle.schema.table('tone')
+        
+        caster =  table.cast_transform()
+        
+        for p in self.bundle.partitions:
+            print p.name
+        
+        p = self.bundle.partitions.find(table='tone')
+        
+        for row in p.query("SELECT * FROM tone LIMIT 10"):
+            print caster(row)
            
         
 def suite():
