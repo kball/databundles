@@ -81,8 +81,8 @@ class Test(TestBase):
         r = l.get('gibberish')
         self.assertFalse(r)
 
-
         for partition in self.bundle.partitions:
+            print "Install and check: ", partition.identity.vname
             r = l.put(partition)
 
             # Get the partition with a name
@@ -200,7 +200,7 @@ class Test(TestBase):
         self.assertEquals('source-dataset-subset-variation-ca0d.tone',r[0]['partition']['name'])
         
         r = l.find(QueryCommand().table(name='tthree').partition(any=True))
-        self.assertEquals('source-dataset-subset-variation-ca0d.tthree',r[0]['partition']['name'])
+        self.assertEquals('source-dataset-subset-variation-ca0d.tthree.1',r[0]['partition']['name'])
         
         #
         #  Try getting the files 

@@ -11,7 +11,7 @@ import os
 
 class HdfDb(Hdf5File, DatabaseInterface):
     
-    EXTENSION = '.hdf5'
+    EXTENSION = '.hdf'
     
     def __init__(self,  partition):
         self.partition = partition

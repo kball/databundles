@@ -165,6 +165,21 @@ class CsvDb(DatabaseInterface):
         import os
         return os.path.exists(self.path)
         
+    def is_empty(self):
+        
+        if not self.exists():
+            return True
+        
+        import os
+        statinfo = os.stat(self.path)
+        
+        if statinfo.st_size == 0:
+            return True
+        else:
+            return False
+       
+        
+        
     def create(self):
         pass # Created in the inserter
         

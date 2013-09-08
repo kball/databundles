@@ -488,7 +488,7 @@ class LibraryDb(object):
         self.drop()
 
         for table in tables:
-            table.metadata.create(bind=self.engine)
+            table.__table__.create(bind=self.engine)
 
         self.session.commit()
 
@@ -1440,6 +1440,9 @@ class Library(object):
     
     def _get_partition(self,  dataset, partition, force = False, cb=None):
         from databundles.dbexceptions import NotFoundError
+
+        if partition.vid == 'b1DxuZ00d/001':
+            pass
 
         r = self._get_dataset(dataset, cb=cb)
 
