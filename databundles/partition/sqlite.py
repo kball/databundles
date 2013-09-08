@@ -19,23 +19,13 @@ class SqlitePartition(PartitionBase):
     def __init__(self, bundle, record):
         
         super(SqlitePartition, self).__init__(bundle, record)
-        self._db_class = PartitionDb
         self.format = self.FORMAT
 
 
     @property
     def database(self):
         if self._database is None:
-
-            self._database = self._db_class(self.bundle, self, base_path=self.path)
-            
-            def add_type(database):
-                from databundles.bundle import BundleDbConfig
-                config = BundleDbConfig(self.database)
-                config.set_value('info','type','partition')
-                
-            self._database.add_post_create(add_type) 
-          
+            self._database = PartitionDb(self.bundle, self, base_path=self.path)          
         return self._database
 
 
@@ -66,7 +56,7 @@ class SqlitePartition(PartitionBase):
         if clean:
             self.database.delete()
 
-        self.database.create(copy_tables = False)
+        self.database.create()
 
         self.add_tables(tables)
         
@@ -76,7 +66,7 @@ class SqlitePartition(PartitionBase):
         for t in tables:
             if not t in self.database.inspector.get_table_names():
                 t_meta, table = self.bundle.schema.get_table_meta(t) #@UnusedVariable
-                t_meta.create_all(bind=self.database.engine)       
+                table.create(bind=self.database.engine)       
 
     def create(self):
 
@@ -85,7 +75,7 @@ class SqlitePartition(PartitionBase):
         if tables:
             self.create_with_tables(tables=tables)
         else:
-            self.database.create(copy_tables = False)
+            self.database.create()
 
     def write_stats(self):
         
@@ -100,8 +90,9 @@ class SqlitePartition(PartitionBase):
         self.record.min_key = s.execute("SELECT MIN({}) FROM {}".format(t.primary_key.name,t.name)).scalar()
         self.record.max_key = s.execute("SELECT MAX({}) FROM {}".format(t.primary_key.name,t.name)).scalar()
      
-        s.merge(self.record)
-        s.commit()
+        bs = self.bundle.database.session
+        bs.merge(self.record)
+        bs.commit()
         
 
 

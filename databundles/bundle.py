@@ -14,15 +14,12 @@ from .partitions import Partitions
 import os.path
 from .dbexceptions import  ConfigurationError, ProcessError
 from .run import get_runconfig
-import util
-import yaml
-
 
 def get_identity(path):
     '''Get an identity from a database, either a bundle or partition'''
-    from .database.bundle import InstalledBundleDb
+    from .database.sqlite import SqliteBundleDatabase #@UnresolvedImport
     
-    db = InstalledBundleDb(path)
+    db = SqliteBundleDatabase(path)
     
 
     bdc = BundleDbConfig(db)
@@ -170,7 +167,7 @@ class DbBundle(Bundle):
         Order of operations is:
             Create bundle.db if it does not exist
         '''
-        from .database.bundle import InstalledBundleDb
+        from .database.sqlite import SqliteBundleDatabase #@UnresolvedImport
         import os
         
         super(DbBundle, self).__init__(logger=logger)
@@ -178,7 +175,7 @@ class DbBundle(Bundle):
         self.database_file = database_file
 
 
-        self.database = InstalledBundleDb(self, database_file)
+        self.database = SqliteBundleDatabase(self, database_file)
         self.db_config = self.config = BundleDbConfig(self.database)
         
         self.partition = None # Set in Library.get() and Library.find() when the user requests a partition. 
@@ -265,16 +262,10 @@ class BuildBundle(Bundle):
 
     @property
     def database(self):
-        from .database.bundle import BuildBundleDb
+        from .database.sqlite import BuildBundleDb #@UnresolvedImport
         if self._database is None:
             self._database  = BuildBundleDb(self, self.path)
-            
-            def add_type(database):
-                self.db_config.set_value('info','type','bundle')
-                
-            self._database.add_post_create(add_type)
-            
-         
+
         return self._database
 
     @property

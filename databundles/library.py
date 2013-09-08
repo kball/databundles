@@ -254,7 +254,7 @@ class LibraryDb(object):
         return Inspector.from_engine(self.engine)
 
     def inserter(self,table_name, **kwargs):
-        from database.sqlite import ValueInserter
+        from database.inserter import ValueInserter
         from sqlalchemy.schema import Table
         
         table = Table(table_name, self.metadata, autoload=True, autoload_with=self.engine)
@@ -488,7 +488,7 @@ class LibraryDb(object):
         self.drop()
 
         for table in tables:
-            table.metadata.create_all(bind=self.engine)
+            table.metadata.create(bind=self.engine)
 
         self.session.commit()
 

@@ -21,6 +21,8 @@ from databundles.identity import TableNumber, PartitionNumber, ObjectNumber
 
 import json
 
+SCHEMA_VERSION = 11
+
 Base = declarative_base()
 
 class JSONEncodedObj(TypeDecorator):
@@ -794,6 +796,10 @@ event.listen(Table, 'before_insert', Table.before_insert)
 event.listen(Table, 'before_update', Table.before_update)
 
 class Config(Base):
+    
+    ROOT_CONFIG_NAME = 'a0'
+    ROOT_CONFIG_NAME_V = 'a0/001'
+    
     __tablename__ = 'config'
 
     d_vid = SAColumn('co_d_vid',String(16), primary_key=True)

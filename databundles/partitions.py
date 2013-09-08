@@ -417,6 +417,8 @@ class Partitions(object):
         
         if tables:   
             partition.create_with_tables(tables, clean)  
+        else:
+            partition.create()
 
         return partition;
     
@@ -434,7 +436,20 @@ class Partitions(object):
         if partition:
             return partition
 
+        tables = kwargs.get('tables',kwargs.get('table',pid.table if pid else None))
+    
+        if tables and not isinstance(tables, (list,tuple)):
+            tables = [tables]
+    
+        if tables and pid and pid.table and pid.table not in tables:
+            tables.append(partition.identity.table)
+
         partition = self.new_geo_partition(pid, **kwargs)
+
+        if tables:   
+            partition.create_with_tables(tables)  
+        else:
+            partition.create()
 
         return partition;
     

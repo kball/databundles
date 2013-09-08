@@ -13,7 +13,6 @@ from databundles.library import QueryCommand, new_library
 import logging
 import databundles.util
 
-
 from test_base import  TestBase
 
 logger = databundles.util.get_logger(__name__)
@@ -34,16 +33,17 @@ class Test(TestBase):
         print "Deleting: {}".format(self.rc.group('filesystem').root_dir)
         databundles.util.rm_rf(self.rc.group('filesystem').root_dir)
 
-        
-    def get_library(self):
-        """Clear out the database before the test run"""
-
-        raise NotImplementedError()
 
     def tearDown(self):
         pass
 
-    def test_install(self):
+    def test_create(self):
+        from databundles.warehouse import new_warehouse
+        
+        w = new_warehouse(self.rc.warehouse('sqlite'))
+        
+
+    def x_test_install(self):
         
         def resolver(name):
             if name == self.bundle.identity.name or name == self.bundle.identity.vname:
@@ -65,6 +65,7 @@ class Test(TestBase):
         print "Re-create database"
         w.database.enable_delete = True
         w.resolver = resolver
+        w.progress_cb = progress_cb
         
         try: w.drop()
         except: pass

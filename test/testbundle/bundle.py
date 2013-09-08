@@ -55,6 +55,7 @@ class Bundle(BuildBundle):
    
         # Create other types of partitions. 
         geot1 = self.partitions.find_or_new_geo(table='geot1')
+        
         with geot1.database.inserter() as ins:
             for lat in range(10):
                 for lon in range(10):

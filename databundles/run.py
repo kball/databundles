@@ -213,6 +213,7 @@ class RunConfig(object):
         return self._sub_strings(e, {
                                      'database': lambda k,v: self.database(v),
                                      'account': lambda k,v: self.account(v),
+                                     'library': lambda k,v: self.database(v),
                                      }  )
     def database(self,name):
         
@@ -221,7 +222,20 @@ class RunConfig(object):
         
         e = self.group_item('database', name) 
 
-        return self._sub_strings(e, {'dbname' : lambda k,v: v.format(root=root_dir)}  )
+        e =  self._sub_strings(e, {'dbname' : lambda k,v: v.format(root=root_dir),
+                                   'account': lambda k,v: self.account(v),}  )
+
+        # Copy account credentials into the database record, so there is consistent access
+        # pattern
+        if 'account' in e:
+            account = e['account']
+            if 'password' in account:
+                e['user'] = account['user']
+                e['password'] = account['password']
+                
+        e = e.to_dict()
+
+        return e
 
 
 def run(argv, bundle_class):

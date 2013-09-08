@@ -354,7 +354,7 @@ class Schema(object):
         for t in self.tables:
             if not t.name in self.bundle.database.inspector.get_table_names():
                 t_meta, table = self.bundle.schema.get_table_meta(t.name) #@UnusedVariable
-                t_meta.create_all(bind=self.bundle.database.engine)
+                t_meta.create(bind=self.bundle.database.engine)
         
     def schema_from_file(self, file_, progress_cb=None):
         '''Read a CSV file, in a particular format, to generate the schema'''

@@ -1,3 +1,8 @@
+'''
+Created on Sep 7, 2013
+
+@author: eric
+'''
 """
 Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
@@ -22,4 +27,197 @@ class UpdaterInterface(object):
     def update(self, row): raise NotImplemented()
     
     def close(self): raise NotImplemented()
+
+
+
+class ValueWriter(InserterInterface):
+    '''Inserts arrays of values into  database table'''
+    def __init__(self, bundle,  db, cache_size=50000, text_factory = None, replace=False, caster = None):
+        import string 
+        self.cache = []
+        
+        self.bundle = bundle
+        self.db = db
+        self.session = self.db.session
+        self.connection = self.db.connection
+
+        self.transaction = None
+        self.cache_size = cache_size
+        self.statement = None
+        self.caster = caster
+        
+        if text_factory:
+            self.db.engine.raw_connection().connection.text_factory = text_factory
+
+    def __enter__(self): 
+        self.transaction = self.connection.begin()
+        return self
+        
+    def rollback_end(self):
+        if self.transaction:
+            self.transaction.rollback()
+            self.transaction = None
+    
+    def commit_end(self):
+        if self.transaction:
+            self.transaction.commit()
+            self.transaction = None
+        
+    def commit_continue(self):
+        if self.transaction:
+            self.transaction.commit()
+            self.transaction = self.connection.begin()
+                
+        
+    def close(self):
+
+        if len(self.cache) > 0 :       
+            try:
+                self.connection.execute(self.statement, self.cache)
+                self.commit_end()
+                self.cache = []
+            except (KeyboardInterrupt, SystemExit):
+                self.rollback_end()
+                raise
+            except Exception as e:
+                if self.bundle:
+                    self.bundle.error("Exception during ValueWriter.insert: "+str(e))
+                self.rollback_end()
+                raise
+        else:
+            self.commit_end()
+                    
+    def __exit__(self, type_, value, traceback):
+    
+        if type_ is not None:
+            try: self.bundle.error("Got Exception: "+str(value))
+            except:  print "ERROR: Got Exception {}: {}".format(type_, str(value))
+            return False
+
+        self.close()
+           
+                
+        return self
+        
+ 
+class ValueInserter(ValueWriter):
+    '''Inserts arrays of values into  database table'''
+    def __init__(self, bundle, table, db, cache_size=50000, text_factory = None, replace=False, caster = None): 
+        
+        super(ValueInserter, self).__init__(bundle, db, cache_size=cache_size, text_factory = text_factory, caster = caster)  
+   
+        self.table = table
+        
+        self.header = [c.name for c in self.table.columns]
+   
+        self.statement = self.table.insert()
+        
+        if replace:
+            self.statement = self.statement.prefix_with('OR REPLACE')
+
+    def insert(self, values):
+      
+        try:
+            if isinstance(values, dict):
+                d = values
+            else:
+                
+                if self.caster:
+
+                    values = self.caster(values)
+                
+                d  = dict(zip(self.header, values))
+         
+            self.cache.append(d)
+         
+            if len(self.cache) >= self.cache_size: 
+                self.connection.execute(self.statement, self.cache)
+                self.cache = []
+                
+                self.commit_continue()
+            
+                
+        except (KeyboardInterrupt, SystemExit):
+            if self.bundle:
+                self.bundle.log("Processing keyboard interrupt or system exist")
+            else:
+                print "Processing keyboard interrupt or system exist" 
+            self.rollback_end()
+            self.cache = []
+            raise
+        except Exception as e:
+            if self.bundle:
+                self.bundle.error("Exception during ValueInserter.insert: {}".format(e))
+            else:
+                print "ERROR: Exception during ValueInserter.insert: {}".format(e)
+            self.rollback_end()
+            self.cache = []
+            raise
+
+        return True
+   
+class ValueUpdater(ValueWriter, UpdaterInterface):
+    '''Updates arrays of values into  database table'''
+    def __init__(self, bundle, table, db,  cache_size=50000, text_factory = None): 
+        
+        from sqlalchemy.sql.expression import bindparam, and_
+        super(ValueUpdater, self).__init__(bundle, db, cache_size=50000, text_factory = text_factory)  
+    
+        self.table = table
+        self.statement = self.table.update()
+     
+        wheres = []
+        for primary_key in table.primary_key:
+            wheres.append(primary_key == bindparam('_'+primary_key.name))
+            
+        if len(wheres) == 1:
+            self.statement = self.statement.where(wheres[0])
+        else:
+            self.statement = self.statement.where(and_(wheres))
+       
+        self.values = None
+       
+
+    def update(self, values):
+        from sqlalchemy.sql.expression import bindparam
+        
+        if not self.values:
+            names = values.keys()
+            
+            binds = {}
+            for col_name in names:
+                if not col_name.startswith("_"):
+                    raise ValueError("Columns names must start with _ for use in updater")
+                
+                column = self.table.c[col_name[1:]]
+                binds[column.name] = bindparam(col_name)
+                
+                self.statement = self.statement.values(**binds)
+       
+        try:
+            if isinstance(values, dict):
+                d = values
+            else:
+                d  = dict(zip(self.header, values))
+         
+            self.cache.append(d)
+         
+            if len(self.cache) >= self.cache_size:
+                
+                self.connection.execute(self.statement, self.cache)
+                self.cache = []
+                
+        except (KeyboardInterrupt, SystemExit):
+            self.transaction.rollback()
+            self.transaction = None
+            self.cache = []
+            raise
+        except Exception as e:
+            self.bundle.error("Exception during ValueUpdater.insert: "+str(e))
+            self.transaction.rollback()
+            self.transaction = None
+            self.cache = []
+            raise e
+
+        return True    
 

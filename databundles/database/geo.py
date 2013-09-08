@@ -57,13 +57,6 @@ class GeoDb(PartitionDb):
         ''''''    
         super(GeoDb, self).__init__(bundle, partition, base_path, **kwargs)  
 
-        #self.connection.execute("SELECT load_extension('libspatialite.dylib');")
-
-        def load_spatialite(this):
-            
-            pass # SHould load the spatialite library into sqlite here. 
-
-        self.add_post_create(load_spatialite)
    
     def inserter(self,  table = None, dest_srs=4326, source_srs=None, layer_name=None):
         

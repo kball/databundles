@@ -9,14 +9,24 @@ warehouse:
     default:
       database: postgres_warehouse
 
+    redshift:
+      service: redshift
+      database: redshift
+      library: redshift_library
+
     postgres:
+      service: relational
       database: postgres_warehouse
 
     mysql:
+      service: relational
       database: mysql_warehouse
+      library: mysql_library
  
     sqlite:
+      service: relational
       database: sqlite_warehouse
+      library: sqlite_library
 
 
 database:
@@ -32,6 +42,25 @@ database:
         username: test
         password: test 
         
+    redshift:
+        driver: postgres
+        server: lorne
+        dbname: test-library
+        account: redshift-test
+        
+    redshift_library:
+        dbname: '/tmp/redshift-library.db'
+        driver: sqlite        
+  
+    sqlite_warehouse:
+        dbname: '/tmp/warehouse.db'
+        driver: sqlite  
+  
+    sqlite_library:
+        dbname: '/tmp/sqlite-library.db'
+        driver: sqlite  
+        
+        
     mysql_warehouse:
         driver: mysql
         server: testdb.cnhz40f0cmdb.us-east-1.rds.amazonaws.com
@@ -39,9 +68,9 @@ database:
         username: test
         password: samizdat 
 
-    sqlite_warehouse:
-        dbname: '/tmp/warehouse.db'
-        driver: sqlite  
+
+
+
 
 
 filesystem:  

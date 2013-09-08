@@ -188,9 +188,9 @@ class Test(TestBase):
       
         self.bundle.database.session.commit()
         
-        self.assertIn('d1DxuZ0a001', [c.id_ for c in t.columns])
-        self.assertIn('d1DxuZ0a002', [c.id_ for c in t.columns])
-        self.assertIn('d1DxuZ0a003', [c.id_ for c in t.columns])
+        self.assertIn('d1DxuZ0b001', [c.id_ for c in t.columns])
+        self.assertIn('d1DxuZ0b002', [c.id_ for c in t.columns])
+        self.assertIn('d1DxuZ0b003', [c.id_ for c in t.columns])
         
     def test_generate_schema(self):
         '''Uses the generateSchema method in the bundle'''
@@ -360,7 +360,8 @@ class Test(TestBase):
         # 4 partitions from the build ( defined in meta/geoschema.csv),
         # three we just created. 
 
-        self.assertEqual(10, len(self.bundle.partitions.all))
+
+        self.assertEqual(16, len(self.bundle.partitions.all))
         
         p = self.bundle.partitions.new_db_partition(pid1)
         p.database.create() # Find will go to the library if the database doesn't exist. 

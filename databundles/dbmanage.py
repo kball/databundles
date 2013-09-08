@@ -27,7 +27,9 @@ def bundle_command(args, rc, src):
     
     if args.subcommand == 'new':
         # Remove the creator code and version. 
-        name = '-'.join(Identity.name_parts(args)[:-2])
+        #name = '-'.join(Identity.name_parts(args)[:-2])
+        raise NotImplemented()
+        name = None
     
         if not os.path.exists(name):
             os.makedirs(name)
