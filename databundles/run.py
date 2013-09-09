@@ -200,7 +200,8 @@ class RunConfig(object):
                                      'remote': lambda k,v: self.filesystem(v),
                                      'database': lambda k,v: self.database(v),
                                      'account': lambda k,v: self.account(v),
-                                     'upstream': lambda k,v: self.filesystem(v)
+                                     'upstream': lambda k,v: self.filesystem(v),
+                                     'cdn': lambda k,v: self.account(v),
                                      }  )
         e['_name'] = name
      

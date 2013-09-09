@@ -5,7 +5,7 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-
+from __future__ import print_function
 import os.path
 import yaml
 import shutil
@@ -13,12 +13,62 @@ from databundles.run import  get_runconfig
 from databundles import __version__
 
 def prt(template, *args, **kwargs):
-    print template.format(*args, **kwargs)
+    print(template.format(*args, **kwargs))
+
+def prtl(template, *args, **kwargs):
+    # would like to use print( ..., end='\r') here, but it doesn't seem to work. 
+    import sys
+    sys.stdout.write('%s\r' % template.format(*args, **kwargs) )
+    sys.stdout.flush()
+
 
 def err(template, *args, **kwargs):
     import sys
-    print "ERROR: "+template.format(*args, **kwargs)
+    print("ERROR: "+template.format(*args, **kwargs))
     sys.exit(1)
+
+class Progressor(object):
+
+    start = None
+    last = None
+    freq = 1
+
+    def __init__(self, message='Download'):
+        import time
+        from collections import deque
+        self.start = time.clock()
+        self.message = message
+        self.rates = deque(maxlen=10)
+        
+
+    def progress(self, i, n):
+        import curses
+        import time
+        
+        import time
+        now = time.clock()
+
+        if not self.last:
+            self.last = now
+        
+        if now - self.last > self.freq:
+            diff = now - self.start 
+            i_rate = float(i)/diff
+            self.rates.append(i_rate)
+            
+            if len(self.rates) > self.rates.maxlen/2:
+                rate = sum(self.rates) / len(self.rates)
+                rate_type = 'a'
+            else:
+                rate = i_rate
+                rate_type = 'i'
+
+            prtl("{}: Compressed: {} Mb. Downloaded, Uncompressed: {:6.2f}  Mb, {:5.2f} Mb / s ({})",
+                 self.message,int(int(n)/(1024*1024)),round(float(i)/(1024.*1024.),2), round(float(rate)/(1024*1024),2), rate_type)
+            
+            self.last = now
+            
+
 
 def bundle_command(args, rc, src):
   
@@ -76,7 +126,7 @@ def install_command(args, rc, src):
         s =  yaml.dump(d, indent=4, default_flow_style=False)
         
         if args.prt:
-            print s
+            prt(s)
         else:
             with open(rc.ROOT_CONFIG,'w') as f:
                 f.write(s)
@@ -151,7 +201,6 @@ def library_command(args, rc, src):
 
 def library_init(args, l, config):
 
-    print "Initialize Library"
     l.database.create()
 
 def library_backup(args, l, config):
@@ -241,34 +290,36 @@ def library_restore(args, l, config, *kwargs):
    
 def library_server(args, l, config):
 
-    from databundles.server.main import production_run
+    from databundles.server.main import production_run, local_run
 
     def run_server(args, config):
         production_run(config.library(args.name))
     
     if args.daemonize:
         daemonize(run_server, args,  config)
+    elif args.test:
+        local_run(config.library(args.name))
     else:
         production_run(config.library(args.name))
         
 def library_drop(args, l, config):   
 
-    print "Drop tables"
+    prt("Drop tables")
     l.database.drop()
 
 def library_clean(args, l, config):
 
-    print "Clean tables"
+    prt("Clean tables")
     l.database.clean()
         
 def library_purge(args, l, config):
 
-    print "Purge library"
+    prt("Purge library")
     l.purge()
       
 def library_rebuild(args, l, config):  
 
-    print "Rebuild library"
+    prt("Rebuild library")
     l.database.enable_delete = True
     if args.remote:
         l.remote_rebuild()
@@ -291,16 +342,37 @@ def library_list(args, l, config):
         for p in d.partitions:
             prt("{:15s} {}", p.identity.vid, p.identity.vname)
             
-        
-        
+ 
+def library_delete(args, l, config):   
+    
+    name = args.term
+    
+    d,p = l.get_ref(name)
+    
+    if p:
+        prt("Deleting partition {}", p.cache_key)
+        key =  p.cache_key
+    else:
+        prt("Deleting bundle {}", d.cache_key)
+        key = d.cache_key
+    
+
+    l.cache.remove(key, propagate = True)
 
 def library_info(args, l, config):    
 
-    print "Library Info"
-    print "Name:     {}".format(args.name)
-    print "Database: {}".format(l.database.dsn)
-    print "Cache:    {}".format(l.cache)
-    print "Remote:   {}".format(l.remote if l.remote else 'None')
+    if args.term:
+        d,p = l.get_ref(args.term)
+        
+        _print_info(l,d,p)
+        
+    else:
+
+        prt("Library Info")
+        prt("Name:     {}",args.name)
+        prt("Database: {}",l.database.dsn)
+        prt("Cache:    {}",l.cache)
+        prt("Remote:   {}",l.remote if l.remote else 'None')
 
     
 def library_push(args, l, config):
@@ -312,22 +384,22 @@ def library_push(args, l, config):
     
     files_ = l.database.get_file_by_state(state)
     if len(files_):
-        print "-- Pushing to {}".format(l.remote)
+        prt("-- Pushing to {}",l.remote)
         for i, f in enumerate(files_):
-            print "Pushing: {}".format(f.path)
+            prt("Pushing: {}",f.path)
             try:
                 l.push(f)
             except Exception as e:
-                print "Failed: {}".format(e)
+                prt("Failed: {}",e)
                 raise
                 
 def library_files(args, l, config):
 
     files_ = l.database.get_file_by_state(args.file_state)
     if len(files_):
-        print "-- Display {} files".format(args.file_state)
+        prt("-- Display {} files",args.file_state)
         for f in files_:
-            print "{0:11s} {1:4s} {2}".format(f.ref,f.state,f.path)
+            prt("{0:11s} {1:4s} {2}",f.ref,f.state,f.path)
       
 
             
@@ -431,12 +503,10 @@ def _find(args, l, config, remote):
 
 def library_schema(args, l, config):
     from databundles.bundle import DbBundle    
-    
-    def progress(i, n):
-        print i,n
+
 
     # This will fetch the data, but the return values aren't quite right
-    r = l.get(args.term, cb=progress)
+    r = l.get(args.term, cb=Progressor().progress)
 
 
     abs_path = os.path.join(l.cache.cache_dir, r.identity.cache_key)
@@ -448,44 +518,45 @@ def library_schema(args, l, config):
         import json
         s = b.schema.as_struct()
         if args.pretty:
-            print json.dumps(s, sort_keys=True,indent=4, separators=(',', ': '))
+            print(json.dumps(s, sort_keys=True,indent=4, separators=(',', ': ')))
         else:
-            print json.dumps(s)
+            print(json.dumps(s))
     elif args.format == 'yaml': 
         import yaml 
         s = b.schema.as_struct()
         if args.pretty:
-            print yaml.dump(s,indent=4, default_flow_style=False)
+            print(yaml.dump(s,indent=4, default_flow_style=False))
         else:
-            print yaml.dump(s)
+            print(yaml.dump(s))
     else:
         raise Exception("Unknown format" )    
         
+def _print_info(l,d,p):
+    
+    prt("--- Dataset ---")
+    prt("Dataset   : {}; {}",d.vid, d.vname)
+    prt("Is Local  : {}",l.cache.has(d.cache_key) is not False)
+    prt("Rel Path  : {}",d.cache_key)
+    prt("Abs Path  : {}",l.cache.path(d.cache_key) if l.cache.has(d.cache_key) else '')
+    
+    if p:
+        prt("--- Partition ---")
+        prt("Partition : {}; {}",p.vid, p.vname)
+        prt("Is Local  : {}",(l.cache.has(p.cache_key) is not False) if p else '')
+        prt("Rel Path  : {}",p.cache_key)
+        prt("Abs Path  : {}",l.cache.path(p.cache_key) if l.cache.has(p.cache_key) else '' )   
   
 def library_get(args, l, config):
 
-    def progress(i, n):
-        print i,n
-
     # This will fetch the data, but the return values aren't quite right
-    r = l.get(args.term, force=args.force, cb=progress)
+    r = l.get(args.term, force=args.force, cb=Progressor('Download {}'.format(args.term)).progress)
   
     if not r:
-        print "{}: Not found".format(args.term)
+        prt("{}: Not found",args.term)
         return  
 
-    print "--- Dataset ---"
-    print "Dataset   : ",r.identity.id_, r.identity.name
-    print "Is Local: ",l.cache.has(r.identity.cache_key) is not False
-    print "Rel Path  : ",r.identity.cache_key
-    print "Abs Path  : ",l.cache.has(r.identity.cache_key)
-    
-    if r.partition:
-        print "--- Partition ---"
-        print "Partition : ",r.partition.identity.id_, r.partition.name
-        print "Is Local: ",(l.cache.has(r.partition.identity.cache_key) is not False) if r.partition else ''
-        print "Rel Path  : ",r.partition.identity.cache_key
-        print "Abs Path  : ",l.cache.has(r.partition.identity.cache_key)
+
+    _print_info(l,r.identity, r.partition.identity)
 
     if r and args.open:
         
@@ -494,7 +565,7 @@ def library_get(args, l, config):
         else:
             abs_path = os.path.join(l.cache.cache_dir, r.identity.cache_key)
             
-        print "\nOpening: {}\n".format(abs_path)
+        prt("\nOpening: {}\n",abs_path)
 
         os.execlp('sqlite3','sqlite3',abs_path )
         
@@ -505,7 +576,7 @@ def library_load(args, l, config):
     from identity import Identity
     
     
-    print Identity.parse_name(args.relpath).to_dict()
+    print(Identity.parse_name(args.relpath).to_dict())
     
     return 
     
@@ -516,12 +587,12 @@ def library_load(args, l, config):
     prt("{}: Stored in local cache", path)
         
     if path:
-        print get_identity(path).name
+        print(get_identity(path).name)
 
     
 def library_unknown(args, l, config):
-    print "Unknown subcommand"
-    print args 
+    err("Unknown subcommand")
+    err(args)
 
 def remote_command(args, rc, src):
     import library
@@ -540,9 +611,9 @@ def remote_command(args, rc, src):
 def remote_info(args, l, rc):
     
     if not l.remote:
-        print "No remote"
+        prt("No remote")
     else:
-        print l.remote.connection_info
+        prt(l.remote.connection_info)
 
 def remote_list(args, l, rc):
         
@@ -550,7 +621,7 @@ def remote_list(args, l, rc):
         for ds in args.datasets:
             dsi = l.remote.dataset(ds)
 
-            print "dataset {0:11s} {1}".format(dsi['dataset']['id'],dsi['dataset']['name'])
+            prt("dataset {0:11s} {1}",dsi['dataset']['id'],dsi['dataset']['name'])
 
             for id_, p in dsi['partitions'].items():
                 vs = ''
@@ -558,14 +629,14 @@ def remote_list(args, l, rc):
                     val = p.get(v,False)
                     if val:
                         vs += "{}={} ".format(v, val)
-                print ("        {0:11s} {1:50s} {2} ".format(id_,  p['name'], vs))
+                prt("        {0:11s} {1:50s} {2} ",id_,  p['name'], vs)
             
     else:
 
         datasets = l.remote.list(with_metadata=args.meta)
 
         for id_, data in datasets.items():
-            print "{:10s} {:50s} {:s}".format(data['identity']['vid'],data['identity']['vname'],id_)  
+            prt("{:10s} {:50s} {:s}",data['identity']['vid'],data['identity']['vname'],id_)  
 
 
 def remote_find(args, l, config):
@@ -621,14 +692,13 @@ def ckan_command(args,rc, src):
         
         if args.use_json:
             import json
-            print  json.dumps(pkg, sort_keys=True, indent=4, separators=(',', ': '))
+            prt(json.dumps(pkg, sort_keys=True, indent=4, separators=(',', ': ')))
         else:
             import yaml
             yaml.dump(args, indent=4, default_flow_style=False)
 
     else:
-        print 'Testing'
-        print args
+        pass
  
 
 def source_command(args,rc, src):
@@ -645,7 +715,7 @@ def source_command(args,rc, src):
         l = library.new_library(rc.library(args.name))
         
         if not os.path.exists(args.term) and os.path.isdir(args.term):
-            print "ERROR: '{}' is not a valid directory ".format(args.term)
+            err("ERROR: '{}' is not a valid directory ",args.term)
             sys.exit(1)
             
         
@@ -668,7 +738,7 @@ def source_command(args,rc, src):
 
         
         for group  in  toposort(topo):
-            print group
+            prt(group)
             
             
         return 
@@ -698,21 +768,17 @@ def source_command(args,rc, src):
                 
 
             if error:
-                print
-                print x
-                    
-               
+                err(x)
 
-    
 def test_command(args,rc, src):
     
     if args.subcommand == 'config':
-        print rc.dump()
+        prt(rc.dump())
     elif args.subcommand == 'foobar':
         pass
     else:
-        print 'Testing'
-        print args
+        prt('Testing')
+        prt(args)
 
 def main():
     import argparse
@@ -770,7 +836,8 @@ def main():
     sp.add_argument('-d','--daemonize', default=False, action="store_true",   help="Run as a daemon") 
     sp.add_argument('-k','--kill', default=False, action="store_true",   help="With --daemonize, kill the running daemon process") 
     sp.add_argument('-g','--group', default=None,   help="Set group for daemon operation") 
-    sp.add_argument('-u','--user', default=None,  help="Set user for daemon operation")   
+    sp.add_argument('-u','--user', default=None,  help="Set user for daemon operation")  
+    sp.add_argument('-t','--test', default=False, action="store_true",   help="Run the test version of the server")   
       
     sp = asp.add_parser('files', help='Print out files in the library')
     sp.set_defaults(subcommand='files')
@@ -782,7 +849,7 @@ def main():
     sp = asp.add_parser('new', help='Create a new library')
     sp.set_defaults(subcommand='new')
     
-    sp = asp.add_parser('drop', help='Print out files in the library')
+    sp = asp.add_parser('drop', help='Delete all of the tables in the library')
     sp.set_defaults(subcommand='drop')    
     
     sp = asp.add_parser('clean', help='Remove all entries from the library database')
@@ -813,14 +880,19 @@ def main():
     sp.add_argument('-r','--remote',  default=False, action="store_true",   help='Also load file from configured remote')
     sp.add_argument('-c','--cache',  default=False, action="store_true",   help='Also load file from configured cache')
  
-    sp = asp.add_parser('info', help='Display information about the library')
+    sp = asp.add_parser('info', help='Display information about the library or a bundle or partition')
     sp.set_defaults(subcommand='info')   
+    sp.add_argument('term', type=str,help='Name or ID of the bundle or partition to print information for')
     
     sp = asp.add_parser('get', help='Search for the argument as a bundle or partition name or id. Possible download the file from the remote library')
     sp.set_defaults(subcommand='get')   
     sp.add_argument('term', type=str,help='Query term')
     sp.add_argument('-o','--open',  default=False, action="store_true",  help='Open the database with sqlite')
     sp.add_argument('-f','--force',  default=False, action="store_true",  help='Force retrieving from the remote')
+
+    sp = asp.add_parser('delete', help='Delete a file from all local caches and the local library')
+    sp.set_defaults(subcommand='delete')
+    sp.add_argument('term', type=str,help='Name or ID of the bundle or partition to remove')
 
     sp = asp.add_parser('load', help='Search for the argument as a bundle or partition name or id. Possible download the file from the remote library')
     sp.set_defaults(subcommand='load')   
@@ -1009,9 +1081,13 @@ def main():
         src = None
         
     if not f:
-        print "Error: No command: "+args.command
+        err("Error: No command: "+args.command)
     else:
-        f(args, rc, src)
+        try:
+            f(args, rc, src)
+        except KeyboardInterrupt:
+            prt('\nExiting...')
+            pass
         
 
        
@@ -1028,7 +1104,7 @@ def daemonize(f, args,  rc):
         if args.kill:
             # Not portable, but works in most of our environments. 
             import os
-            print "Killing ... "
+            print("Killing ... ")
             os.system("pkill -f '{}'".format(proc_name))
             return
         

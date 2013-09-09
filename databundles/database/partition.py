@@ -3,8 +3,8 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from database.sqlite import SqliteDatabase
-from database.relational import RelationalPartitionDatabaseMixin, RelationalDatabase
+from .sqlite import SqliteDatabase #@UnresolvedImport
+from .relational import RelationalPartitionDatabaseMixin, RelationalDatabase #@UnresolvedImport
 from inserter import ValueInserter, ValueUpdater
 
 class PartitionDb(SqliteDatabase, RelationalPartitionDatabaseMixin):

@@ -36,11 +36,8 @@ class RestRemote(RemoteInterface):
         
         return url
         
-    def get_stream(self, rel_path, cb=None): 
-        
-        return self.api.get_stream_by_key(rel_path)
-
-        
+    def get_stream(self, rel_path, cb=None, return_meta=False): 
+        return self.api.get_stream_by_key(rel_path, cb=cb, return_meta=return_meta)
 
     def has(self, rel_path, md5=None, use_upstream=True):
         if self.upstream:
@@ -161,7 +158,7 @@ class RestRemote(RemoteInterface):
         return l
         
         
-    def get_upsream(self, type_):
+    def get_upstream(self, type_):
         ''''''
          
         return self._upstream  

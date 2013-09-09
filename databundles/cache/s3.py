@@ -13,7 +13,7 @@ class S3Cache(Cache, RemoteMarker):
     
      '''
 
-    def __init__(self, bucket=None, prefix=None, account=None, upstream=None,**kwargs):
+    def __init__(self, bucket=None, prefix=None, account=None, upstream=None, cdn=None, **kwargs):
         '''Init a new S3Cache Cache
 
         '''
@@ -29,6 +29,39 @@ class S3Cache(Cache, RemoteMarker):
 
         self.conn = S3Connection(self.access_key, self.secret, is_secure = False )
         self.bucket = self.conn.get_bucket(self.bucket_name)
+  
+        self.cdn = None
+        if cdn:
+            self._init_cdn(cdn)
+            
+    def _init_cdn(self, config):
+        import boto
+        import time
+        from boto.cloudfront import CloudFrontConnection
+        from boto.cloudfront.distribution import Distribution
+        
+        self.cdn_config = config
+
+        class _cdn(object):
+            conn = CloudFrontConnection(config['access'], config['secret'])
+            dist = Distribution(connection=conn,  id=config['id'])
+            domain_name=config['domain']
+            key_pair_id = config['key_pair_id'] #from the AWS accounts page
+            priv_key_file = config['key_file'] #your private keypair file
+            expires =  config['expire'] 
+              
+            def sign_url(self, rel_key):
+                
+                resource = 'http://{}/{}'.format(self.domain_name, rel_key)
+                
+                return self.dist.create_signed_url(
+                                              resource, 
+                                              self.key_pair_id, 
+                                              int(time.time()) + self.expires , 
+                                              private_key_file= self.priv_key_file)
+                    
+        self.cdn = _cdn()
+        
   
     def _rename(self, rel_path):
         '''Remove the .gz suffix that may have been added by a compression cache.
@@ -46,14 +79,21 @@ class S3Cache(Cache, RemoteMarker):
 
     def path(self, rel_path, **kwargs):
 
-        if 'method' in kwargs:
-            method = kwargs['method'].upper()
+        if self.cdn:
+            rel_path = self._rename(rel_path)
+            path = self._prefix(rel_path)
+   
+            return self.cdn.sign_url(path)
         else:
-            method = 'GET'
-        
-        k = self._get_boto_key(rel_path)
-        
-        return k.generate_url(300, method=method) # expires in 5 minutes
+
+            if 'method' in kwargs:
+                method = kwargs['method'].upper()
+            else:
+                method = 'GET'
+            
+            k = self._get_boto_key(rel_path)
+            
+            return k.generate_url(300, method=method) # expires in 5 minutes
         
   
     @property
@@ -87,6 +127,11 @@ class S3Cache(Cache, RemoteMarker):
      
         import StringIO
 
+        #raise Exception()
+        #def log(i,n):
+        #    print i,n
+        #cb = log
+        
         b = StringIO.StringIO()
         try:
             k = self._get_boto_key(rel_path)

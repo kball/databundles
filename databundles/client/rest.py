@@ -141,11 +141,10 @@ class RestApi(object):
 
         return response # self._process_get_response(id_or_name, response, file_path, uncompress, cb=cb)
     
-    def get_stream_by_key(self, key):
+    def get_stream_by_key(self, key, cb=None, return_meta=False):
         import requests, urllib
         
         r1  = self.remote.key(key).get()
-
 
         location = r1.get_header('location')
 
@@ -154,12 +153,16 @@ class RestApi(object):
 
         r = requests.get(location, verify=False, stream=True)
               
+        stream = r.raw
+              
         if r.headers['content-encoding'] == 'gzip':
-            from ..util import FileLikeFromIter   
-           
-            response = FileLikeFromIter(r.iter_content()) # In  the requests library, iter_content will auto-decompress
+            from ..util import StreamingGZip
+            stream = StreamingGZip(fileobj=stream)
+
+        if return_meta:
+            response = stream, r.headers
         else:
-            response = r.raw
+            response = stream
             
         return response     
               

@@ -7,8 +7,6 @@ import os
 from .  import Cache
 from ..util import copy_file_or_flo, get_logger
 
-import os
-
 from ..identity import Identity
 
 logger = get_logger(__name__)
@@ -135,7 +133,7 @@ class FsCache(Cache):
         
     def has(self, rel_path, md5=None, use_upstream=True):
         from ..util import md5_for_file
-        
+
         abs_path = os.path.join(self.cache_dir, rel_path)
      
         
@@ -532,12 +530,14 @@ class FsLimitedCache(FsCache):
         if not os.path.isdir(os.path.dirname(repo_path)):
             os.makedirs(os.path.dirname(repo_path))
         
+
         sink = open(repo_path,'w+')
-        upstream = self.upstream
+        upstream = self.upstream.put_stream(rel_path) if self.upstream else None
+        
         this = self
         class flo:
             def __init__(self):
-                pass 
+                pass
             
             @property
             def repo_path(self):
@@ -545,9 +545,13 @@ class FsLimitedCache(FsCache):
             
             def write(self, d):
                 sink.write(d)
+                
+                if upstream:
+                    upstream.write(d)
+                
 
             def writelines(self, lines):
-                sink.writelines(lines)
+                raise NotImplemented()
             
             def close(self):
                 sink.close()
@@ -556,6 +560,10 @@ class FsLimitedCache(FsCache):
                 this.add_record(rel_path, size)
 
                 this._free_up_space(size, this_rel_path=rel_path)
+                
+                if upstream:
+                    upstream.close()
+                
              
         self.put_metadata(rel_path, metadata) 
               
@@ -705,6 +713,7 @@ class FsCompressionCache(Cache):
         
         sink = self.upstream.put_stream(self._rename(rel_path),  metadata=metadata)
         
+        
         self.put_metadata(rel_path, metadata)
         
         return gzip.GzipFile(fileobj=sink,  mode='wb')
@@ -719,6 +728,7 @@ class FsCompressionCache(Cache):
     
     def remove(self,rel_path, propagate = False):
         '''Delete the file from the cache, and from the upstream'''
+
         if not self.upstream:
             raise Exception("CompressionCache must have an upstream")
 
@@ -740,7 +750,7 @@ class FsCompressionCache(Cache):
         # This odd structure is because the MD5 check won't work if it is computed on a uncompressed
         # file and checked on a compressed file. But it will work if the check is done on an s#
         # file, which stored the md5 as metadada
-        
+
         r =  self.upstream.has(self._rename(rel_path), md5=md5, use_upstream=use_upstream)
 
         if r:

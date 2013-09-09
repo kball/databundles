@@ -159,7 +159,7 @@ def _host_port(library):
 def get_datasets(library):
     '''Return all of the dataset identities, as a dict, 
     indexed by id'''
-    from databundles.filesystem import RemoteMarker
+    from databundles.cache import RemoteMarker
     
     remote = library.remote.get_upstream(RemoteMarker)
     l = library
@@ -355,7 +355,7 @@ def post_partition(did, pid, library):
 @get('/datasets/<did>/db') 
 @CaptureException   
 def get_dataset_file(did, library):
-    from databundles.filesystem import RemoteMarker
+    from databundles.cache import RemoteMarker
     
     did = did.replace('|','/')
 
@@ -392,7 +392,7 @@ def _get_ct(typ):
 @get('/key/<key:path>') 
 @CaptureException   
 def get_key(key, library):
-    from databundles.filesystem import RemoteMarker
+    from databundles.cache import RemoteMarker
     
     remote = library.remote.get_upstream(RemoteMarker)
     
@@ -400,7 +400,9 @@ def get_key(key, library):
         raise exc.InternalError("No remote configured")
    
     try:
+        
         url =  remote.path(key)   
+        logger.info("Redirect download: {}->{}".format(key, url))
     except AttributeError:
         raise exc.NotFound("No object for key: {}".format(key))
     return redirect(url)    
@@ -409,7 +411,7 @@ def get_key(key, library):
 @get('/datasets/<did>/<typ:re:schema\\.?.*>') 
 @CaptureException   
 def get_dataset_schema(did, typ, library):
-    from databundles.filesystem import RemoteMarker
+    from databundles.cache import RemoteMarker
     
     ct = _get_ct(typ)
 
@@ -443,7 +445,7 @@ def get_dataset_schema(did, typ, library):
 @get('/datasets/<did>/partitions/<pid>/db') 
 @CaptureException   
 def get_partition_file(did, pid, library):
-    from databundles.filesystem import RemoteMarker
+    from databundles.cache import RemoteMarker
     from databundles.identity import new_identity, Identity
     
     did = did.replace('|','/')
@@ -455,7 +457,6 @@ def get_partition_file(did, pid, library):
         raise exc.NotFound("No bundle found for id {}".format(did))
 
     payload = request.json
-    identity = new_identity(payload['identity'])
 
     p = b.partitions.get(pid)
 
@@ -612,7 +613,7 @@ def test_run(config):
     
     return run(host=host, port=port, reloader=False, server='stoppable')
 
-def local_run(config, reloader=True):
+def local_run(config, reloader=False):
  
     global stoppable_wsgi_server_run
     stoppable_wsgi_server_run = None
@@ -632,14 +633,20 @@ def local_run(config, reloader=True):
 def local_debug_run(config):
 
     debug()
-    lf = lambda: new_library(config, True)  
 
-    install(LibraryPlugin(lf))
+    port = config['port'] if config['port'] else 7979
+    host = config['host'] if config['host'] else 'localhost'
+    
+    logger.info("starting debug server on http://{}:{}".format(host, port))
+    
+    lf = lambda: new_library(config, True)  
     
     l = lf()
     l.database.create()
     
-    return run(host=l.host, port=l.port, reloader=True)
+    install(LibraryPlugin(lf))
+    
+    return run(host=host, port=port, reloader=True, server='stoppable')
 
 def production_run(config, reloader=False):
 

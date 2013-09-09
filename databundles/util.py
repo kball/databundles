@@ -665,14 +665,58 @@ def zipdir(basedir, archivename):
   
 # from https://github.com/kennethreitz/requests/issues/465  
 class FileLikeFromIter(object):
-    def __init__(self, content_iter):
+    def __init__(self, content_iter, cb=None, buffer_size = 128*1024):
+
         self._iter = content_iter
         self.data = ''
         self.time = 0
-        self.n = 0
+        self.prt = 0
+        self.cum = 0
+        self.cb = cb
+        self.buffer_size = buffer_size
+        self.buffer = memoryview(bytearray('\0'*buffer_size))
+        self.buffer_alt = memoryview(bytearray('\0'*buffer_size))
 
     def __iter__(self):
         return self._iter
+
+    def x_read(self,n=None):
+        
+        if n is None:
+            raise Exception("Can't read from this object without a length")
+        
+        while self.prt < n:
+            try:
+                d = self._iter.next()
+                l = len(d)
+                self.buffer[self.prt:(self.prt+l)] = d
+                self.prt += l
+            except StopIteration:
+                break
+        
+        if self.prt < n:
+            # Done!
+            d = self.buffer[:self.prt].tobytes()
+            self.buffer_alt = memoryview(bytearray('\0'*self.buffer_size))
+            self.buffer = memoryview(bytearray('\0'*self.buffer_size))
+            self.prt = 0
+            return d
+        else:  
+            # Save the excess in the alternate buffer, miving it to the
+            # start so we can append to it next call. 
+            self.buffer_alt[0:self.prt - n] = self.buffer[n:self.prt]
+           
+            #Swap the buffers, so we start by appending to the excess on the next read       
+            self.buffer, self.buffer_alt = self.buffer_alt, self.buffer
+    
+            self.prt = self.prt - n
+    
+            if self.cb:
+                self.cum += n
+                self.cb(self.cum)
+    
+            return self.buffer_alt[0:n].tobytes()
+    
 
     def read(self, n=None):
 
@@ -687,8 +731,50 @@ class FileLikeFromIter(object):
             
             result, self.data = self.data[:n], self.data[n:]
 
+            self.cum += n
+            
+            if self.cb:
+                self.cb(self.cum)
+
             return result
 
+
+from gzip import GzipFile
+import zlib
+class StreamingGZip(GzipFile):
+    '''This version of the standard GzipFile doe snot use seek() and tell(), which aren't implemented
+    in most streams from http libraries. As a result, this can only read on file member. '''
+    def _read(self, size=1024):
+        if self.fileobj is None:
+            raise EOFError, "Reached EOF"
+
+        if self._new_member:
+            self._init_read()
+            self._read_gzip_header()
+            self.decompress = zlib.decompressobj(-zlib.MAX_WBITS)
+            self._new_member = False
+
+        # Read a chunk of data from the file
+        buf = self.fileobj.read(size)
+
+        # If the EOF has been reached, flush the decompression object
+        # and mark this object as finished.
+
+        if buf == "":
+            uncompress = self.decompress.flush()
+            self._read_eof()
+            self._add_read_data( uncompress )
+            raise EOFError, 'Reached EOF B'
+
+        uncompress = self.decompress.decompress(buf)
+        self._add_read_data( uncompress )
+
+        if self.decompress.unused_data != "":
+            raise EOFError, 'Reached EOF C'
+          
+    def _read_eof(self):
+        pass
+        
 
 def walk_dict(d):
     '''
@@ -718,7 +804,7 @@ def walk_dict(d):
             yield res
 
 
-def copy_file_or_flo(input_, output):
+def copy_file_or_flo(input_, output, buffer_size=64*1024, cb=None):
     """ Copy a file name or file-like-object to another
     file name or file-like object"""
     import shutil 
@@ -742,7 +828,21 @@ def copy_file_or_flo(input_, output):
             output = open(output,'wb')   
             output_opened = True 
             
-        shutil.copyfileobj(input_,  output)
+        #shutil.copyfileobj(input_,  output, buffer_size)
+        
+        def copyfileobj(fsrc, fdst, length=16*1024):
+            cumulative = 0
+            while 1:
+                buf = fsrc.read(length)
+                if not buf:
+                    break
+                fdst.write(buf)
+                if cb:
+                    cumulative += len(buf)
+                    cb(cumulative)
+        
+        copyfileobj(input_, output)
+        
     finally:
         if input_opened:
             input_.close()

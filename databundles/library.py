@@ -1069,7 +1069,8 @@ class QueryCommand(object):
         n1 = None
         n2 = None
         value = None
-
+        is_like = False
+        
         qc = QueryCommand()
 
         for tt in tokenize.generate_tokens(StringIO(unicode(s)).readline):
@@ -1080,7 +1081,7 @@ class QueryCommand(object):
             line = tt[4]
             
             #print "{:5d} {:5d} {:15s} || {}".format(t_type, pos, "'"+t_string+"'", line)
-            
+        
 
             def err(expected):
                 raise cls.ParseError("Expected {} in {} at char {}, got {}, '{}' ".format(expected, line, pos, token.tok_name[t_type], t_string))
@@ -1114,14 +1115,22 @@ class QueryCommand(object):
                     raise err("NAME")  
             elif state == 'value_sep':
                 # The '=' that seperates name from values
-                if t_type == token.OP and t_string == '=':
+                if (t_type == token.OP and t_string == '=') or (t_type == token.NAME and t_string == 'like'):
                     state = 'value'
+                    
+                    if t_string == 'like':
+                        is_like = True
+                    
                 else:
                     raise err("'='")                            
             elif state == 'value':
                 # The Value
                 if t_type == token.NAME or t_type == token.STRING or t_type == token.NUMBER:
                     value = t_string
+                    if is_like:
+                        value = '%'+value+'%'
+                        is_like = False
+                    
                     state = 'name_start'
                    
                     qc.getsubdict(n1).__setattr__(n2,value.strip("'").strip('"'))
@@ -1279,8 +1288,12 @@ class Library(object):
         
         source = self.remote.get_stream(rel_path)
         sink = self.cache.put_stream(rel_path)
-        
-        copy_file_or_flo(source,sink)
+   
+        try:
+            copy_file_or_flo(source, sink)
+        except:
+            self.cache.remove(rel_path, propagate=True)
+            raise
         
         source.close()
         sink.close()
@@ -1316,7 +1329,7 @@ class Library(object):
         except:# Tuples
             identity = Identity(**(dataset._asdict()))        
 
-        source = self.remote.get_stream(identity.cache_key, cb=cb)
+        source = self.remote.get_stream(identity.cache_key)
         
         if not source:
             return False
@@ -1326,15 +1339,11 @@ class Library(object):
         sink = self.cache.put_stream(identity.cache_key)
         
         try:
-            copy_file_or_flo(source, sink)
-        except (KeyboardInterrupt, SystemExit):
-            path_ = self.cache.path(identity.cache_key)
-            if os.path.exists(path_):
-                os.remove(path_)
+            copy_file_or_flo(source, sink, cb=cb)
+        except:
+            self.cache.remove(identity.cache_key, propagate=True)
             raise
-        
-        copy_file_or_flo(source, sink)
-        
+
         abs_path = self.cache.path(identity.cache_key)
         
         #if not self.cache.has(identity.cache_key):
@@ -1348,7 +1357,7 @@ class Library(object):
         return abs_path
       
     def _get_remote_partition(self, bundle, partition, cb = None):
-        
+
         from identity import  new_identity 
         from util import copy_file_or_flo
 
@@ -1366,17 +1375,22 @@ class Library(object):
 
         # Now actually get it from the remote. 
 
-        source = self.remote.get_stream(p.identity.cache_key,cb=cb)
-        
+        source, meta = self.remote.get_stream(p.identity.cache_key, return_meta=True)
+
         # Store it in the local cache. 
         sink = self.cache.put_stream(p.identity.cache_key)
-        
+
         try:
-            copy_file_or_flo(source, sink)
-        except (KeyboardInterrupt, SystemExit):
-            path_ = self.cache.path(p.identity.cache_key)
-            if os.path.exists(path_):
-                os.remove(path_)
+            if cb:
+                def progress_cb(i):
+                    cb(i,meta['content-length'])
+            else:
+                progress_cb = None
+                
+            copy_file_or_flo(source, sink,cb=progress_cb)
+            
+        except:
+            self.cache.remove(p.identity.cache_key, propagate = True)
             raise
             
         p_abs_path = self.cache.path(p.identity.cache_key)
@@ -1390,8 +1404,6 @@ class Library(object):
             self.logger.error(m)
             raise Exception(m)
 
-              
-    
         return p_abs_path, p
             
 
@@ -1472,6 +1484,7 @@ class Library(object):
         
             # Ensure the file is in the local library. 
             
+        print 'HERE'
         ds, pt= self.database.get_id(p.identity.vid)
         if not pt:
             self.database.add_file(p.database.path, self.cache.repo_id, p.identity.vid, 'pulled')   

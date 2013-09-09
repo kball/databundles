@@ -49,7 +49,7 @@ class CacheInterface(object):
 
     def get(self, rel_path, cb=None): raise NotImplementedError()
     
-    def get_stream(self, rel_path, cb=None):  raise NotImplementedError(type(self))
+    def get_stream(self, rel_path, cb=None, return_encoding=False):  raise NotImplementedError(type(self))
     
     def last_upstream(self):  raise NotImplementedError()
     
@@ -170,6 +170,10 @@ class Cache(CacheInterface):
 
     def put_metadata(self,rel_path, metadata):
         import json
+        
+        if rel_path.startswith('meta'):
+            return
+        
         if metadata:
             strm = self.put_stream(os.path.join('meta',rel_path))
             json.dump(metadata, strm)
