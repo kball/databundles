@@ -258,22 +258,26 @@ class RowTypeTransformBuilder(object):
         
         f_name = "f"+str(uuid.uuid4()).replace('-','')
         
-        o = "def {}(row):\n    return {".format(f_name)
+        o = "def {}(row):\n    return {{".format(f_name)
     
         for i,(name,type_) in enumerate(self.types):
             if i != 0:
                 o += ',\n'
                 
+            if type_ == str:
+                type_ = unicode
+                
             if type_ == float or type_ == int:
-                o += "'{}':{type}(row[{i}]) if row[{i}] != '' and  row[{i}] is not None else None".format(type=type_.__name__,i=i)
+                o += "'{name}':{type}(row['{name}']) if row['{name}'] != '' and  row['{name}'] is not None else None".format(type=type_.__name__,name=name)
             else:
-                o += "'{}':{type}(row[{i}])".format(type=type_.__name__,i=i)
+                o += "'{name}':{type}(row['{name}'])".format(type=type_.__name__,name=name)
             
         o+= '}\n'
  
         #print o
           
         exec(o)
+            
             
         return locals()[f_name]
             

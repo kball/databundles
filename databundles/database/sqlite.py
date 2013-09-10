@@ -192,6 +192,10 @@ def _on_connect_update_schema(conn):
     version = conn.execute('PRAGMA user_version').fetchone()[0]
 
     if version < 10:
+        
+        try: conn.execute('ALTER TABLE columns ADD COLUMN c_foreign_key VARCHAR(50);')
+        except: pass
+        
         try: conn.execute('ALTER TABLE partitions ADD COLUMN p_format VARCHAR(50);')
         except: pass
         

@@ -10,7 +10,10 @@ class RelationalWarehouse(WarehouseInterface):
     
     def __init__(self, database,  library=None, storage=None, resolver = None, progress_cb=None):
 
-        super(RelationalWarehouse, self).__init__(database,  library=library, storage=storage, resolver = resolver, progress_cb=progress_cb)
+        super(RelationalWarehouse, self).__init__(database,  library=library, storage=storage, 
+                                                  resolver = resolver, progress_cb=progress_cb)
+        
+        library.create()
         
     def __del__(self):
         pass # print self.id, 'closing Warehouse'
@@ -102,11 +105,12 @@ class RelationalWarehouse(WarehouseInterface):
         tables = partition.data.get('tables',[])
 
 
+        s = self.database.session
         # Create the tables
         for table_name in tables:
-            if not table_name in self.s.inspector.get_table_names():    
+            if not table_name in self.database.inspector.get_table_names():    
                 t_meta, table = partition.bundle.schema.get_table_meta(table_name, use_id=True, driver = self.database.driver) #@UnusedVariable
-                t_meta.create(bind=self.database.engine)   
+                table.create(bind=self.database.engine)   
                 self.progress_cb('create_table',table_name,None)
         
         self.database.session.commit()
@@ -117,6 +121,7 @@ class RelationalWarehouse(WarehouseInterface):
             cache_size = 20000
         else:
             cache_size = 50000
+    
        
         for table_name in tables:
 
@@ -128,7 +133,8 @@ class RelationalWarehouse(WarehouseInterface):
             self.progress_cb('populate_table',table_name,None)
             with self.database.inserter(dest_table.name, cache_size = cache_size, caster = caster) as ins:
    
-                self.database.execute("DELETE FROM {}".format(dest_table.name))
+                try: self.database.session.execute("DELETE FROM {}".format(dest_table.name))
+                except: pass
    
                 for i,row in enumerate(pdb.session.execute(src_table.select())):
                     self.progress_cb('add_row',table_name,i)

@@ -26,7 +26,8 @@ def new_database(config, bundle=None, class_=None):
         raise NotImplemented() 
         
     elif k == ('postgres',None):   
-        raise NotImplemented()
+        from .relational import RelationalDatabase #@UnresolvedImport
+        return RelationalDatabase(**config)
     
     elif k == ('sqlite','bundle'):
         from .sqlite import SqliteBundleDatabase #@UnresolvedImport

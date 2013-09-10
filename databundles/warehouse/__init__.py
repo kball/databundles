@@ -7,7 +7,8 @@ from ..database import new_database
 
 def new_warehouse(config):
 
-    service = config['service']
+    service = config['service'] if 'service' in config else 'relational'
+    
     database = new_database(config['database'],'warehouse')
     storage = new_cache(config['storage']) if 'storage' in config else None
     library = LibraryDb(**config['library']) if 'library' in config else None

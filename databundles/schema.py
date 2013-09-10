@@ -251,15 +251,17 @@ class Schema(object):
         
             if column.default is not None:
                 
-                # Stop-gap for old databundles. This should be  ( and now is ) checkd in the
-                # schema generation
-                if width and width < len(column.default):
-                    column.width = column.size = len(column.default)
-                
                 try:
                     int(column.default)
                     kwargs['server_default'] = text(str(column.default))
                 except:
+                    
+                    # Stop-gap for old databundles. This should be  ( and now is ) checkd in the
+                    # schema generation
+                    if  width and width < len(column.default):
+                        raise Exception("Width smaller than size of default for column: {}".format(column.name))
+                        
+                        
                     kwargs['server_default'] = column.default
           
           

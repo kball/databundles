@@ -434,15 +434,29 @@ class BuildBundle(Bundle):
         if not self.database.exists():
             self.database.create()
 
-        sf  = self.filesystem.path(self.config.build.get('schema_file', 'meta/schema.csv'))
-
-        if os.path.exists(sf):
-            with open(sf, 'rbU') as f:
-                self.schema.clean()
-                self.schema.schema_from_file(f)      
-                #self.schema.create_tables()
+        if vars(self.run_args).get('rebuild',False):
+            self.rebuild_schema()
+        else:
+            sf  = self.filesystem.path(self.config.build.get('schema_file', 'meta/schema.csv'))
+            if os.path.exists(sf):
+                with open(sf, 'rbU') as f:
+                    self.schema.clean()
+                    self.schema.schema_from_file(f)      
 
         return True
+    
+    def rebuild_schema(self):
+        sf  = self.filesystem.path(self.config.build.get('schema_file', 'meta/schema.csv'))
+        with open(sf, 'rbU') as f:
+            from databundles.orm import Partition
+            partitions = [p.identity for p in self.partitions.all]
+            self.schema.clean()
+            self.schema.schema_from_file(f)  
+            
+            s = self.database.session
+            for p in partitions:
+                self.partitions.new_db_partition(p)
+            s.commit()
     
     def post_prepare(self):
         '''Set a marker in the database that it is already prepared. '''

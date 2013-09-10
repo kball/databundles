@@ -340,7 +340,7 @@ class Column(Base):
         DATATYPE_VARCHAR:(sqlalchemy.types.String,str,'VARCHAR'),
         DATATYPE_CHAR:(sqlalchemy.types.String,str,'VARCHAR'),
         DATATYPE_INTEGER:(sqlalchemy.types.Integer,int,'INTEGER'),
-        DATATYPE_INTEGER64:(sqlalchemy.types.Integer,int,'INTEGER'),
+        DATATYPE_INTEGER64:(sqlalchemy.types.BigInteger,int,'INTEGER'),
         DATATYPE_REAL:(sqlalchemy.types.Float,float,'REAL'),
         DATATYPE_FLOAT:(sqlalchemy.types.Float,float,'REAL'),
         DATATYPE_NUMERIC:(sqlalchemy.types.Float,float,'REAL'),
@@ -587,7 +587,7 @@ class Table(Base):
         if datatype in ('text','varchar') and bool(default):
             if not size and not width:
                 raise ConfigurationError("Error for {}.{}: Text or Varchar field with a default must have a size".format(self.name, name))
-            elif len(default) > max(width, size):
+            elif isinstance(default, basestring) and len(default) > max(width, size):
                 raise ConfigurationError("Error for {}.{}: Default value is longer than the size or width".format(self.name, name))
 
          
@@ -789,7 +789,10 @@ class Table(Base):
         for c in self.columns:
             bdr.append(c.name, c.python_type)
         
-        return bdr.makeListTransform()
+        if dict:
+            return bdr.makeDictTransform()
+        else:
+            return bdr.makeListTransform()
         
      
 event.listen(Table, 'before_insert', Table.before_insert)
@@ -942,6 +945,7 @@ class Partition(Base):
                  't_vid': self. t_vid,
                  'space':self.space, 
                  'time':self.time, 
+                 'format':self.time,
                  'table': self.table.name if self.t_vid is not None else None,
                  'grain':self.grain, 
                  'segment':self.segment, 

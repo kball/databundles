@@ -123,8 +123,10 @@ class ValueInserter(ValueWriter):
             else:
                 
                 if self.caster:
-
-                    values = self.caster(values)
+                    try:
+                        values = self.caster(values)
+                    except Exception as e:
+                        raise ValueError("Failed to cast row: {}: {}".format(values, str(e)))
                 
                 d  = dict(zip(self.header, values))
          

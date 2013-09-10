@@ -1483,8 +1483,7 @@ class Library(object):
         
         
             # Ensure the file is in the local library. 
-            
-        print 'HERE'
+
         ds, pt= self.database.get_id(p.identity.vid)
         if not pt:
             self.database.add_file(p.database.path, self.cache.repo_id, p.identity.vid, 'pulled')   

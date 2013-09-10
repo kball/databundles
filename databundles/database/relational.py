@@ -61,11 +61,20 @@ class RelationalDatabase(DatabaseInterface):
         self.logger.setLevel(logging.INFO) 
 
     def log(self,message):
-        pass
+        self.logger.info(message)
     
     def error(self, message):
-        pass
+        self.logger.error(message)
 
+    def create(self):
+        self.connection
+        
+        return True
+    
+    def exists(self):
+        self.connection
+        
+        return True
 
     def _create(self):
         """Create the database from the base SQL"""
@@ -89,7 +98,7 @@ class RelationalDatabase(DatabaseInterface):
 
     def _post_create(self):
         # call the post create function
-        from orm import Config
+        from ..orm import Config
         from datetime import datetime
         
         self.set_config_value(Config.ROOT_CONFIG_NAME_V, 'process','dbcreated', datetime.now().isoformat() )
@@ -103,6 +112,20 @@ class RelationalDatabase(DatabaseInterface):
                 if n == '_post_create':
                     f(self)
 
+    def _drop(self, s):
+        
+        if not self.enable_delete:
+            raise Exception("Deleting not enabled")
+        
+        for table in reversed(self.metadata.sorted_tables): # sorted by foreign key dependency
+            table.drop(self.engine, checkfirst=True)
+
+    def drop(self):
+        s = self.session
+
+        self._drop(s)
+        s.commit()
+
     @property
     def connection(self):
         '''Return an SqlAlchemy connection'''
@@ -113,12 +136,21 @@ class RelationalDatabase(DatabaseInterface):
             except DatabaseError as e:
                 self.error("Failed to open: '{}' ".format(self.path))
                 raise
-                
-                
-            self._connection.info['path'] = self.path
             
         return self._connection
     
+    @property
+    def engine(self):
+        '''return the SqlAlchemy engine for this database'''
+        from sqlalchemy import create_engine  
+
+        if not self._engine:
+            self.dsn = self.dsn_template.format(user=self.username, password=self.password, 
+                            server=self.server, name=self.dbname, colon_port=self.colon_port)
+
+            self._engine = create_engine(self.dsn, echo=False) 
+
+        return self._engine
 
 
     @property
@@ -211,6 +243,14 @@ class RelationalDatabase(DatabaseInterface):
             self._table_meta_cache[table_name] = table
             return table
 
+    def inserter(self,table_name, **kwargs):
+        from sqlalchemy.schema import Table
+        
+        table = Table(table_name, self.metadata, autoload=True, autoload_with=self.engine)
+        
+        return ValueInserter(None, table , self,**kwargs)
+
+
     def set_config_value(self, d_vid, group, key, value):
         from databundles.orm import Config as SAConfig
         
@@ -276,7 +316,7 @@ class RelationalBundleDatabaseMixin(object):
         s.commit()
 
     def _post_create(self):
-        from orm import Config
+        from ..orm import Config
         self.set_config_value(self.bundle.identity.vid, 'info','type', 'bundle' )
         self.set_config_value(Config.ROOT_CONFIG_NAME_V, 'bundle','vname', self.bundle.identity.vname )
         self.set_config_value(Config.ROOT_CONFIG_NAME_V, 'bundle','vid', self.bundle.identity.vid )
@@ -292,7 +332,7 @@ class RelationalPartitionDatabaseMixin(object):
         self.bundle = bundle 
 
     def _post_create(self):
-        from orm import Config
+        from ..orm import Config
 
         self.set_config_value(self.bundle.identity.vid, 'info','type', 'partition' )
         self.set_config_value(Config.ROOT_CONFIG_NAME_V, 'bundle','vname', self.bundle.identity.vname )

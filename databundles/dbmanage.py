@@ -176,15 +176,17 @@ def warehouse_install(args, w,config):
     
     w.resolver = resolver
     
-    def progress_cb(lr, type,name,n):
+    def progress_cb(lr, type_,name,n):
         if n:
             lr("Warehouse Install: {} {}: {}".format(type, name, n))
         else:
-            prt("Warehouse Install: {} {}",type, name)
+            prt("Warehouse Install: {} {}",type_, name)
 
     lr = init_log_rate(2000)
+    
+    w.progress_cb = partial(progress_cb, lr) 
 
-    w.install_by_name(args.term, progress_cb = partial(progress_cb, lr)  )
+    w.install_by_name(args.term )
 
 def library_command(args, rc, src):
     import library
@@ -363,7 +365,11 @@ def library_info(args, l, config):
 
     if args.term:
         d,p = l.get_ref(args.term)
-        
+
+        if not d:
+            err("Failed to find record for: {}", args.term)
+            return 
+                
         _print_info(l,d,p)
         
     else:
