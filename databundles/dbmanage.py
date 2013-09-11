@@ -562,7 +562,7 @@ def library_get(args, l, config):
         return  
 
 
-    _print_info(l,r.identity, r.partition.identity)
+    _print_info(l,r.identity, r.partition.identity if r.partition else None)
 
     if r and args.open:
         
@@ -888,7 +888,7 @@ def main():
  
     sp = asp.add_parser('info', help='Display information about the library or a bundle or partition')
     sp.set_defaults(subcommand='info')   
-    sp.add_argument('term', type=str,help='Name or ID of the bundle or partition to print information for')
+    sp.add_argument('term',  nargs='?', type=str,help='Name or ID of the bundle or partition to print information for')
     
     sp = asp.add_parser('get', help='Search for the argument as a bundle or partition name or id. Possible download the file from the remote library')
     sp.set_defaults(subcommand='get')   

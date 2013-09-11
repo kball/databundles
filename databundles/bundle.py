@@ -749,8 +749,9 @@ class BuildBundle(Bundle):
         command_p = cmd.add_parser('run', help='Run a method on the bundle')
         command_p.set_defaults(command='run')               
         command_p.add_argument('method', metavar='Method', type=str, 
-                       help='Name of the mathod to run')    
-        
+                       help='Name of the method to run')    
+        command_p.add_argument('args',  nargs='*', type=str,help='additional arguments')
+    
         #
         # info command
         #
@@ -834,7 +835,7 @@ class BuildBundle(Bundle):
             if not callable(f):
                 raise TypeError("Got object for name '{}', but it isn't a function".format(args.method))
           
-            return f()
+            return f(*args.args)
            
         
     
@@ -1163,9 +1164,8 @@ class BundleDbConfig(BundleConfig):
 
         try:
             return  (s.query(Dataset).one())
-        except:
-            print "ERROR: BundleDbConfig.get_dataset() got bad database: '{}'".format(self.database.path)
-            raise
+        except Exception as e:
+            raise Exception("ERROR: BundleDbConfig.get_dataset() got bad database: '{}'; {}".format(self.database.path, e))
 
     @property
     def partition(self):

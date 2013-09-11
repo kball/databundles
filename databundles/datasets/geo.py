@@ -89,6 +89,9 @@ class US:
         row = self._places().query("""SELECT AsText(geometry) as wkt, SRID(geometry) as srid, * 
         FROM places WHERE code = ? LIMIT 1""", code).first()    
         
+        if not row:
+            return None
+        
         return Place(self.library, row)
     
     @property
@@ -168,6 +171,9 @@ class Place(object):
         self.library = library
         self.row = row
        
+        if not self.row:
+            raise Exception('row cannot be None')
+        
 
     @property
     def spsrs(self):

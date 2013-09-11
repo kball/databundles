@@ -10,7 +10,6 @@ class HdfPartitionIdentity(PartitionIdentity):
     PATH_EXTENSION = '.hdf'
     
 
-        
 class HdfPartition(PartitionBase):
     '''A Partition that hosts a Spatialite for geographic data'''
     
@@ -31,3 +30,5 @@ class HdfPartition(PartitionBase):
         return self._database
 
 
+    def __repr__(self):
+        return "<hdf partition: {}>".format(self.name)

@@ -32,3 +32,6 @@ class CsvPartition(PartitionBase):
     
     def create(self):
         self.database.create()
+
+    def __repr__(self):
+        return "<csv partition: {}>".format(self.name)

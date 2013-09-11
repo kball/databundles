@@ -97,4 +97,4 @@ class SqlitePartition(PartitionBase):
 
 
     def __repr__(self):
-        return "<partition: {}>".format(self.name)
+        return "<db partition: {}>".format(self.vname)

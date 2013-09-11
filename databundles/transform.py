@@ -234,23 +234,41 @@ class RowTypeTransformBuilder(object):
         
         f_name = "f"+str(uuid.uuid4()).replace('-','')
         
-        o = "def {}(row):\n    return [".format(f_name)
+        o = """
+def {}(row):
+
+    stripped_num = lambda x: x.strip() if isinstance(x, basestring) else x
+    is_not_nothing = lambda x: True if x!='' and x != None else False
+    
+    try:
+        return [
+""".format(f_name)
     
         for i,(name,type_) in enumerate(self.types):
             if i != 0:
                 o += ',\n'
                 
             if type_ == float or type_ == int:
-                o += "{type}(row[{i}]) if row[{i}] != '' and  row[{i}] is not None else None".format(type=type_.__name__,i=i)
+                o += "{type}(row[{i}]) if is_not_nothing(stripped_num(row[{i}])) else None".format(type=type_.__name__,i=i)
             else:
-                o += "{type}(row[{i}])".format(type=type_.__name__,i=i)
+                o += "{type}(row[{i}].strip()) if is_not_nothing(row[{i}]) else None".format(type=type_.__name__,i=i)
             
-        o+= ']\n'
+            
+        names = ','.join([ "('{}',{})".format(name, type_.__name__) for name,type_ in self.types])
+            
+        o+="""
+        ]
+    except ValueError as e:
+        for i,(name,type_) in  enumerate( [{names}] ):
+            try:
+                type_(row[i].strip()) if row[i] else None
+            except ValueError:
+                raise ValueError("Failed to convert value '{{}}' in field '{{}}' to '{{}}'".format(row[i], name,type_.__name__))
+        raise
+""".format(names=names)
  
-        #print o
-          
         exec(o)
-            
+    
         return locals()[f_name]
          
     def makeDictTransform(self):

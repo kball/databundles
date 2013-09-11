@@ -1320,14 +1320,14 @@ class Library(object):
         return d, p
 
     def _get_remote_dataset(self, dataset, cb=None):
-        from identity import Identity
+        from identity import new_identity
         from util import copy_file_or_flo
 
                 
         try:# ORM Objects
-            identity = Identity(**(dataset.to_dict()))
+            identity = new_identity(dataset.to_dict())
         except:# Tuples
-            identity = Identity(**(dataset._asdict()))        
+            identity = new_identity(dataset._asdict())       
 
         source = self.remote.get_stream(identity.cache_key)
         

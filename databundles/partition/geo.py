@@ -21,8 +21,11 @@ class GeoPartition(SqlitePartition):
     def __init__(self, bundle, record):
         super(GeoPartition, self).__init__(bundle, record)
 
-        self._db_class = GeoDb
-
+    @property
+    def database(self):
+        if self._database is None:
+            self._database = GeoDb(self.bundle, self, base_path=self.path)          
+        return self._database
 
         
     def get_srs_wkt(self):
@@ -247,4 +250,5 @@ class GeoPartition(SqlitePartition):
 
         return partition
 
-
+    def __repr__(self):
+        return "<geo partition: {}>".format(self.name)

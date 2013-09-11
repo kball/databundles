@@ -527,7 +527,7 @@ def segment_points(areas,table_name=None,  query_template=None, places_query=Non
     transform = osr.CoordinateTransformation(source_srs, dest_srs)
     
     if query_template is None:
-        query_template =  "SELECT * FROM {table_name} WHERE {bb_clause} AND ({target_col} IS NULL OR {target_col} = 'NONE') "
+        query_template =  "SELECT * FROM {table_name} WHERE {bb_clause} AND ({target_col} IS NULL OR {target_col} = 'NONE' OR {target_col} = '-') "
     
     if places_query is None:
         places_query = "SELECT *, AsText(geometry) AS wkt FROM {} ORDER BY area ASC".format(areas.identity.table)

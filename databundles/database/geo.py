@@ -36,9 +36,11 @@ class FeatureInserter(InserterInterface):
             row  = dict(row)
         
         return self.sf.add_feature( row, source_srs)
-    
+
     def close(self):
         self.sf.close()
+    
+
     
     @property
     def extents(self, where=None):

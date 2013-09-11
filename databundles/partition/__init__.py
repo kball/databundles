@@ -9,13 +9,13 @@ from ..identity import ObjectNumber, PartitionNumber
 def new_partition(bundle, orm_partition):
     
     db_type = orm_partition.format
-    
 
     if db_type == 'geo':
         from geo import GeoPartition
         return GeoPartition(bundle, orm_partition)
     elif db_type == 'hdf':
         from hdf import HdfPartition
+
         return HdfPartition(bundle, orm_partition)
     elif db_type == 'csv':
         from csv import CsvPartition
@@ -33,7 +33,8 @@ def new_identity(d, bundle=None):
 
     if not 'format' in d:
         d['format'] = 'db'
-
+      
+      
     if d['format'] == 'geo':
         from geo import GeoPartitionIdentity
         return GeoPartitionIdentity(**d)
@@ -43,10 +44,11 @@ def new_identity(d, bundle=None):
     elif d['format'] == 'csv':
         from csv import CsvPartitionIdentity
         return CsvPartitionIdentity(**d)
-    
     elif d['format'] == 'db':
         from sqlite import SqlitePartitionIdentity
         return SqlitePartitionIdentity(**d)
+    elif d['format'] == Identity.ANY:
+        return PartitionIdentity(**d)
     else:
         raise ValueError("Unknown format in : '{}' ".format(d))
 
@@ -222,6 +224,7 @@ class PartitionInterface(object):
     @property
     def database(self):  
         raise NotImplementedError()
+
 
     def unset_database(self):
         '''Removes the database record from the object'''

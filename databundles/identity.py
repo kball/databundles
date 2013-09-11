@@ -19,7 +19,7 @@ def new_identity(d, bundle=None):
             return Identity(**d)
         elif isinstance(on, PartitionNumber):
 
-            return PartitionIdentity(**d)
+            return p_new_identity(d)
         else:
             raise ValueError("parameter was not  dataset nor partition id: {} ".format(d))
 

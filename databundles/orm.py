@@ -955,7 +955,7 @@ class Partition(Base):
         return self.identity.to_dict()
 
     def __repr__(self):
-        return "<partitions: {}>".format(self.id_)
+        return "<{} partition: {}>".format(self.format, self.vname)
 
     @staticmethod
     def before_insert(mapper, conn, target):

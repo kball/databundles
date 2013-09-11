@@ -162,19 +162,27 @@ class Partitions(object):
         '''Return a Partition object from the database based on a PartitionId.
         The object returned is immutable; changes are not persisted'''
         import sqlalchemy.orm.exc
+        from identity import Identity
+        
         try:
             
+            if pid and not pid.format:
+                    pid.format = Identity.ANY
+            elif not 'format' in kwargs:
+                    kwargs['format'] = Identity.ANY
+                
             partitions = [ self.partition(op) for op in self.find_orm(pid, **kwargs).all()];
-            
+
             if len(partitions) == 1:
                 p =  partitions.pop()
                 if p.database.exists():
                     return p
                 else:
+                    # Try to get it from the library, if it exists. 
                     b = self.bundle.library.get(p.identity.vname)
                     
                     if not b or not b.partition:
-                        return None
+                        return p
                     else:
                         return b.partition
                     
@@ -430,6 +438,11 @@ class Partitions(object):
             tables String or array of tables to copy form the main partition
         '''
         
+        if pid:
+            pid.format = 'geo'
+        else: 
+            kwargs['format'] = 'geo'
+        
         try: partition =  self.find(pid, **kwargs)
         except: partition = None
     
@@ -461,6 +474,11 @@ class Partitions(object):
             tables String or array of tables to copy form the main partition
         '''
 
+        if pid:
+            pid.format = 'hdf'
+        else: 
+            kwargs['format'] = 'hdf'
+
         try: partition =  self.find(pid, **kwargs)
         except: partition = None
     
@@ -478,6 +496,11 @@ class Partitions(object):
             pid A partition Identity
             tables String or array of tables to copy form the main partition
         '''
+
+        if pid:
+            pid.format = 'csv'
+        else: 
+            kwargs['format'] = 'csv'
 
         try: partition =  self.find(pid, **kwargs)
         except: partition = None
