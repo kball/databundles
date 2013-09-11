@@ -129,7 +129,6 @@ class RelationalDatabase(DatabaseInterface):
     @property
     def connection(self):
         '''Return an SqlAlchemy connection'''
-        from pysqlite2.dbapi2 import DatabaseError
         if not self._connection:
             try:
                 self._connection = self.engine.connect()
