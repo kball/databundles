@@ -779,7 +779,7 @@ class Table(Base):
             
         return self._row_hasher(values)
          
-    def cast_transform(self, dict=False):
+    def caster(self):
         '''Returns a function that takes a row that can be indexed by positions which returns a new
         row with all of the values cast to schema types. '''
         from databundles.transform import RowTypeTransformBuilder
@@ -789,12 +789,8 @@ class Table(Base):
         for c in self.columns:
             bdr.append(c.name, c.python_type)
         
-        if dict:
-            return bdr.makeDictTransform()
-        else:
-            return bdr.makeListTransform()
-        
-     
+        return bdr
+
 event.listen(Table, 'before_insert', Table.before_insert)
 event.listen(Table, 'before_update', Table.before_update)
 
@@ -878,8 +874,8 @@ class Partition(Base):
     grain = SAColumn('p_grain',String(50))
     format = SAColumn('p_format',String(50))
     segment = SAColumn('p_segment',Integer)
-    min_key = SAColumn('p_min_key',Integer)
-    max_key = SAColumn('p_max_key',Integer)
+    min_key = SAColumn('p_min_key',BigInteger)
+    max_key = SAColumn('p_max_key',BigInteger)
     count = SAColumn('p_count',Integer)
     state = SAColumn('p_state',String(50))
     data = SAColumn('p_data',MutationDict.as_mutable(JSONEncodedObj))

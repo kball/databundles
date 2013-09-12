@@ -102,7 +102,7 @@ class ValueWriter(InserterInterface):
  
 class ValueInserter(ValueWriter):
     '''Inserts arrays of values into  database table'''
-    def __init__(self, bundle, table, db, cache_size=50000, text_factory = None, replace=False, caster = None): 
+    def __init__(self, bundle, table, db, cache_size=50000, text_factory = None, replace=False, caster = None, skip_none=True): 
         
         super(ValueInserter, self).__init__(bundle, db, cache_size=cache_size, text_factory = text_factory, caster = caster)  
    
@@ -112,6 +112,8 @@ class ValueInserter(ValueWriter):
    
         self.statement = self.table.insert()
         
+        self.skip_none = skip_none
+        
         if replace:
             self.statement = self.statement.prefix_with('OR REPLACE')
 
@@ -119,7 +121,11 @@ class ValueInserter(ValueWriter):
       
         try:
             if isinstance(values, dict):
-                d = values
+                if self.caster:
+                    d = self.caster(values)
+                else:
+                    d = dict(values)
+
             else:
                 
                 if self.caster:
@@ -127,9 +133,10 @@ class ValueInserter(ValueWriter):
                         values = self.caster(values)
                     except Exception as e:
                         raise ValueError("Failed to cast row: {}: {}".format(values, str(e)))
-                
-                d  = dict(zip(self.header, values))
-         
+          
+            if self.skip_none:
+                d = {k:v for k,v in d.items() if v is not None}
+  
             self.cache.append(d)
          
             if len(self.cache) >= self.cache_size: 

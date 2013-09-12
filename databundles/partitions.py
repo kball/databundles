@@ -202,6 +202,13 @@ class Partitions(object):
     def find_all(self, pid=None, **kwargs):
         '''Return a Partition object from the database based on a PartitionId.
         The object returned is immutable; changes are not persisted'''
+        from identity import Identity
+        
+        if pid and not pid.format:
+                pid.format = Identity.ANY
+        elif not 'format' in kwargs:
+                kwargs['format'] = Identity.ANY
+
         ops = self.find_orm(pid, **kwargs).all()
         
         return [ self.partition(op) for op in ops]
@@ -227,7 +234,7 @@ class Partitions(object):
         from databundles.identity import Identity
 
         pid, name = self._pid_or_args_to_pid(self.bundle, pid, kwargs)
-        
+
         from databundles.orm import Partition as OrmPartition
         q = self.query
         

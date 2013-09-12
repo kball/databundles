@@ -33,5 +33,33 @@ class CsvPartition(PartitionBase):
     def create(self):
         self.database.create()
 
+    def write_stats(self):
+        
+        t = self.table
+        
+        if not t:
+            return
+
+        pk = t.primary_key.name
+        
+        count = 0
+        min_ = 2**63
+        max_ = -2**63
+        
+        for row in self.database.dict_reader():
+            count += 1
+            v = int(row[pk])
+            min_ = min(min_, v)
+            max_ = max(max_, v)
+
+
+        self.record.count = count
+        self.record.min_key = min_
+        self.record.max_key = max_
+     
+        bs = self.bundle.database.session
+        bs.merge(self.record)
+        bs.commit()
+
     def __repr__(self):
         return "<csv partition: {}>".format(self.name)

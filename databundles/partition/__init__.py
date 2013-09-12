@@ -13,16 +13,19 @@ def new_partition(bundle, orm_partition):
     if db_type == 'geo':
         from geo import GeoPartition
         return GeoPartition(bundle, orm_partition)
+    
     elif db_type == 'hdf':
         from hdf import HdfPartition
-
         return HdfPartition(bundle, orm_partition)
+    
     elif db_type == 'csv':
         from csv import CsvPartition
         return CsvPartition(bundle, orm_partition)
+    
     elif db_type == 'db':
         from sqlite import SqlitePartition 
         return SqlitePartition(bundle, orm_partition)
+    
     else:
         raise ValueError("Unknown format: '{}' ".format(db_type))
 
@@ -38,17 +41,22 @@ def new_identity(d, bundle=None):
     if d['format'] == 'geo':
         from geo import GeoPartitionIdentity
         return GeoPartitionIdentity(**d)
+    
     elif d['format'] == 'hdf':
         from hdf import HdfPartitionIdentity
         return HdfPartitionIdentity(**d)
+    
     elif d['format'] == 'csv':
         from csv import CsvPartitionIdentity
         return CsvPartitionIdentity(**d)
+    
     elif d['format'] == 'db':
         from sqlite import SqlitePartitionIdentity
         return SqlitePartitionIdentity(**d)
+    
     elif d['format'] == Identity.ANY:
         return PartitionIdentity(**d)
+    
     else:
         raise ValueError("Unknown format in : '{}' ".format(d))
 
@@ -78,7 +86,7 @@ class PartitionIdentity(Identity):
 
         self.from_dict(d)
         
-        self.name # Trigger some errors immediately. 
+        #self.name # Trigger some errors immediately. 
             
     def from_dict(self,d):
         

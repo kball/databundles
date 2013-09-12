@@ -225,6 +225,7 @@ class RowTypeTransformBuilder(object):
     
     def __init__(self):
         self.types = []
+        self._compiled = None
     
     def append(self, name, type_):
         self.types.append((name,type_))
@@ -267,9 +268,7 @@ def {}(row):
         raise
 """.format(names=names)
  
-        exec(o)
-    
-        return locals()[f_name]
+        return f_name, o
          
     def makeDictTransform(self):
         import uuid
@@ -292,11 +291,40 @@ def {}(row):
             
         o+= '}\n'
  
-        #print o
+        return f_name, o
           
-        exec(o)
+    def compile(self):
+        import uuid
+
+        if not self._compiled:
+                    
+            lfn, lf = self.makeListTransform()
+            dfn, df = self.makeDictTransform()
+
+            exec(lf)
+            lf = locals()[lfn]
+            
+            exec(df)
+            df = locals()[dfn]
+            
+            self._compiled  = (lf,df)
+        
+        return self._compiled
             
             
-        return locals()[f_name]
+    def __call__(self, row):
+
+        f = self.compile()
+
+        if isinstance(row, dict):
+            return f[1](row)
+        
+        elif isinstance(row, (list,tuple)):
+            return f[0](row)   
+                  
+        else:
+            raise Exception("Unknown row type: {} ".format(type(row)))
+        
+            
             
     

@@ -132,7 +132,7 @@ class RelationalDatabase(DatabaseInterface):
         if not self._connection:
             try:
                 self._connection = self.engine.connect()
-            except DatabaseError as e:
+            except Exception as e:
                 self.error("Failed to open: '{}' ".format(self.path))
                 raise
             
@@ -244,8 +244,9 @@ class RelationalDatabase(DatabaseInterface):
 
     def inserter(self,table_name, **kwargs):
         from sqlalchemy.schema import Table
-        
+
         table = Table(table_name, self.metadata, autoload=True, autoload_with=self.engine)
+
         
         return ValueInserter(None, table , self,**kwargs)
 

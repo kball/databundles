@@ -5,7 +5,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 from __future__ import absolute_import
-import csv
+import unicodecsv
 
 from . import DatabaseInterface
 import anydbm
@@ -16,12 +16,15 @@ from .inserter import InserterInterface
 
 class ValueInserter(InserterInterface):
     '''Inserts arrays of values into  database table'''
-    def __init__(self, bundle, path, table=None, header=None, buffer=2*1024*1024): 
+    def __init__(self, bundle, path, table=None, header=None, delimiter = '|', encoding='utf-8', write_header = True,  buffer=2*1024*1024): 
      
         self.table = table
         self.header = header
         self.path = path
         self.buffer = buffer
+        self.delimiter = delimiter
+        self.encoding = encoding
+        self.write_header = write_header
 
         if self.header:
             pass
@@ -60,15 +63,11 @@ class ValueInserter(InserterInterface):
         # Four cases:
         #    Write header, or don't
         #    Write list, or dict
-        #
-        #
-        #
 
         row_is_dict = isinstance(row, dict)
         row_is_list = isinstance(row, (list, tuple))
 
         has_header = self.header is not None
-
 
         if not os.path.exists(self.path):
             if not os.path.exists(os.path.dirname(self.path)):
@@ -78,24 +77,29 @@ class ValueInserter(InserterInterface):
         
         self._f = f
         
+        delimiter = self.delimiter
+        
         if row_is_dict and has_header:
-            self._writer = csv.DictWriter(f, self.header)
-            self._writer.writeheader()
+            self._writer = unicodecsv.DictWriter(f, self.header, delimiter=delimiter, encoding=self.encoding)
+            if self.write_header:
+                self._writer.writeheader()
             self._inserter = self._write_dict
             
         elif row_is_dict and not has_header:
             self.header = row.keys()
-            self._writer = csv.DictWriter(f, self.header)
-            self._writer.writeheader()            
+            self._writer = unicodecsv.DictWriter(f, self.header, delimiter=delimiter, encoding=self.encoding)
+            if self.write_header:
+                self._writer.writeheader()            
             self._inserter = self._write_dict
             
         elif row_is_list and has_header:
-            self._writer = csv.writer(f)
-            self._writer.writerow(self.header)
+            self._writer = unicodecsv.writer(f, delimiter=delimiter, encoding=self.encoding)
+            if self.write_header:
+                self._writer.writerow(self.header)
             self._inserter = self._write_list
             
         elif row_is_list and not has_header:
-            self._writer = csv.writer(f)
+            self._writer = unicodecsv.writer(f, delimiter=delimiter, encoding=self.encoding)
             self._inserter = self._write_list
             
         else:
@@ -157,6 +161,9 @@ class CsvDb(DatabaseInterface):
         self.partition = partition
 
       
+        self.delimiter = '|'
+    
+      
     @property 
     def path(self):
         return self.partition.path+self.EXTENSION
@@ -177,8 +184,6 @@ class CsvDb(DatabaseInterface):
             return True
         else:
             return False
-       
-        
         
     def create(self):
         pass # Created in the inserter
@@ -195,5 +200,17 @@ class CsvDb(DatabaseInterface):
         
 
         return ValueInserter(self.bundle, self.path, header=header, **kwargs)
+        
+    def reader(self,  encoding='utf-8', *args, **kwargs):
+
+        f = open(self.path,'rb')
+
+        return unicodecsv.reader(f, *args, delimiter=self.delimiter, encoding='utf-8', **kwargs)
+        
+    def dict_reader(self, encoding='utf-8', *args, **kwargs):
+
+        f = open(self.path,'rb')
+
+        return unicodecsv.DictReader(f,*args, delimiter=self.delimiter, encoding='utf-8', **kwargs)
         
 
