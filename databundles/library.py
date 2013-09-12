@@ -483,7 +483,7 @@ class LibraryDb(object):
                 if not os.path.exists(dir_):
                     raise Exception("Couldn't create directory "+dir_)
  
-        tables = [ Dataset, Partition, Table, Column, File, Config]
+        tables = [ Dataset, Config, Table, Column, File, Partition]
 
         self.drop()
 

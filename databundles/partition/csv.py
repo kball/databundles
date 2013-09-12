@@ -34,21 +34,22 @@ class CsvPartition(PartitionBase):
         self.database.create()
 
     def write_stats(self):
+        '''Assumes the partition is written without a header and that the 
+        first column is the id. '''
         
         t = self.table
         
         if not t:
             return
 
-        pk = t.primary_key.name
-        
+
         count = 0
         min_ = 2**63
         max_ = -2**63
         
-        for row in self.database.dict_reader():
+        for row in self.database.reader():
             count += 1
-            v = int(row[pk])
+            v = int(row[0])
             min_ = min(min_, v)
             max_ = max(max_, v)
 
