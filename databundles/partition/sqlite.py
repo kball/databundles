@@ -101,15 +101,25 @@ class SqlitePartition(PartitionBase):
         p = None
         seg = 0
         ident = None
-        
+        count = 0
+        min_key = max_key = None
+
+        pk = self.table.primary_key.name
+
         for i,row in enumerate(self.rows):
-            
+
+            if not min_key:
+                min_key = row[pk]
 
             if i % rows_per_seg == 0:
+                print "Next Segment"
                 
-                if ins is not None:
+                if p: # Don't do it on the first record. 
+                    p.write_stats(min_key, max_key, count)
+                    count = 0
+                    min_key = row[pk]
                     ins.close()
-                    
+
                     if store_library:
                         if logger:
                             logger.always("Storing {} to Library".format(p.vname), now=True)
@@ -119,24 +129,29 @@ class SqlitePartition(PartitionBase):
                         
                         if logger:
                             logger.always("Stored at {}".format(dst), now=True)
-           
+
                 seg += 1
                 ident = self.identity
                 ident.segment = seg
-                
+
                 p = self.bundle.partitions.find_or_new_csv(ident)
                 ins = p.inserter()
-
+                
+            count += 1
+            ins.insert(dict(row))
+            max_key = row[pk]
+       
             if logger:
                 logger("CSVing for {}".format(ident.name))
-  
-            ins.insert(dict(row))
 
+        p.write_stats(min_key, max_key, count)
+        ins.close()
 
     @property
     def rows(self):
         
-        return self.database.query("SELECT * FROM {}".format(self.table.name))
+        pk = self.table.primary_key.name
+        return self.database.query("SELECT * FROM {} ORDER BY {} ".format(self.table.name,pk))
         
 
     def write_stats(self):

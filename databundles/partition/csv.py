@@ -33,30 +33,41 @@ class CsvPartition(PartitionBase):
     def create(self):
         self.database.create()
 
-    def write_stats(self):
+    def write_stats(self, min_key=None, max_key=None, count=None):
         '''Assumes the partition is written without a header and that the 
         first column is the id. '''
         
-        t = self.table
-        
-        if not t:
-            return
-
-
-        count = 0
-        min_ = 2**63
-        max_ = -2**63
-        
-        for row in self.database.reader():
-            count += 1
-            v = int(row[0])
-            min_ = min(min_, v)
-            max_ = max(max_, v)
-
-
-        self.record.count = count
-        self.record.min_key = min_
-        self.record.max_key = max_
+        if not min_key and not max_key and not count:
+            t = self.table
+            
+            if not t:
+                return
+    
+    
+            count = 0
+            min_ = 2**63
+            max_ = -2**63
+            
+            for row in self.database.reader():
+                count += 1
+                v = int(row[0])
+                min_ = min(min_, v)
+                max_ = max(max_, v)
+    
+    
+            self.record.count = count
+            self.record.min_key = min_
+            self.record.max_key = max_
+        else:
+            if min_key:
+                self.record.min_key = min_key
+                
+            if max_key:
+                self.record.max_key = max_key 
+                           
+            if count:
+                self.record.count = count           
+            
      
         bs = self.bundle.database.session
         bs.merge(self.record)
