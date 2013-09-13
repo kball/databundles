@@ -255,6 +255,8 @@ class PartitionInterface(object):
 
     def create(self):  raise NotImplementedError()
         
+    def delete(self):  raise NotImplementedError()
+        
     def inserter(self, table_or_name=None,**kwargs):  raise NotImplementedError()
 
     def updater(self, table_or_name=None,**kwargs):  raise NotImplementedError()
@@ -329,5 +331,23 @@ class PartitionBase(PartitionInterface):
             self.create()
 
         return self.database.inserter(table_or_name,**kwargs)
+    
+    def delete(self):
+        
+        try:
+  
+            self.database.delete()
+            self._database = None
+            
+            s = self.bundle.database.session
+            s.delete(self.record)
+            s.commit()
+            
+            self.record = None
+            
+        except:
+            raise
+        
+        
     
         
