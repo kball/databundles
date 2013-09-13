@@ -126,16 +126,20 @@ class ValueInserter(ValueWriter):
                 else:
                     d = dict(values)
 
+          
+                if self.skip_none:
+                    d = {k:v for k,v in d.items() if v is not None}
+
             else:
                 
                 if self.caster:
                     try:
-                        values = self.caster(values)
+                        d = self.caster(values)
                     except Exception as e:
                         raise ValueError("Failed to cast row: {}: {}".format(values, str(e)))
-          
-            if self.skip_none:
-                d = {k:v for k,v in d.items() if v is not None}
+                else:
+                    d = values
+
   
             self.cache.append(d)
          

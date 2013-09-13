@@ -364,13 +364,18 @@ class BuildBundle(Bundle):
         """Initialze the log_rate function. Returnas a partial function to call for
         each event"""
       
-        import functools 
+        import functools, time
         d =  [0,  # number of items processed
-                None, # start time
+                time.clock(), # start time. This one gets replaced after first message
+                N, # ticker to next message
                 N,  #frequency to log a message
-                message]
+                message,
+                False # Real start time?
+                ]
 
-        return functools.partial(self._log_rate, d)
+        f = functools.partial(self._log_rate, d)
+        f.always = self.log
+        return f
 
     
     def _log_rate(self,d, message=None):
@@ -380,18 +385,27 @@ class BuildBundle(Bundle):
         """
         
         import time 
+
+        #if not message:
+        #    message = d[3]
     
-        if not d[1]:
-            d[1] = time.time()
-    
-        if not message:
-            message = d[3]
-    
-        d[0] += 1
-        if d[0] % d[2] == 0:
-            # Prints the processing rate in 1,000 records per sec.
-            self.log(message+': '+str(int( d[0]/(time.time()-d[1])))+'/s '+str(d[0]/1000)+"K ") 
+
         
+        if d[2] < 0:
+            
+            d[2] = d[3]
+            
+            if not d[5]:
+                d[1] = time.clock()
+                d[5] = True
+
+            # Prints the processing rate in 1,000 records per sec.
+            self.log(message+': '+str(int( d[0]/(time.clock()-d[1])))+'/s '+str(d[0]/1000)+"K ") 
+
+        d[0] += 1
+        d[2] -= 1
+
+
 
     ### Prepare is run before building, part of the devel process.  
 

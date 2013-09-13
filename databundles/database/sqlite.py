@@ -132,7 +132,7 @@ class SqliteDatabase(RelationalDatabase):
         start = time.clock()
         count = 0
         with self.inserter(table,  caster=caster) as ins:
-            for row in db.dict_reader(encoding=encoding):
+            for row in db.reader(encoding=encoding):
                 count+=1
              
                 if logger:

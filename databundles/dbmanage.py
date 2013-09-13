@@ -146,10 +146,11 @@ def warehouse_command(args, rc, src):
    
 def warehouse_info(args, w,config):
     
-    config = w.info()
-    
-    for k,v in config.items():
-        prt("{:10s}: {:s}",k,v)    
+    prt("Warehouse Info")
+    prt("Name:     {}",args.name)
+    prt("Database: {}",w.database.dsn)
+    prt("Library : {}",w.library.dsn)
+
  
 def warehouse_drop(args, w,config):
     

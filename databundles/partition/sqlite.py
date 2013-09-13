@@ -77,6 +77,68 @@ class SqlitePartition(PartitionBase):
         else:
             self.database.create()
 
+
+    def csvize(self, logger=None, store_library=False):
+        '''Convert this partition to CSV files that are linked to the partition'''
+        
+        if not self.record.count:
+            raise Exception("Must run stats before cvsize")
+        
+        BYTES_PER_CELL = 3.8 # Bytes per num_row * num_col, experimental
+        
+        # Shoot for about 500M uncompressed, which should compress to about 100M
+
+        rows_per_seg = (512*1024*1024 / (len(self.table.columns) * BYTES_PER_CELL) ) 
+        
+        # Round up to nearest 100K
+        
+        rows_per_seg = round(rows_per_seg/100000+1) * 100000
+        
+        if logger:
+            logger.always("Csvize: {} rows per segment".format(rows_per_seg))
+        
+        ins  =  None
+        p = None
+        seg = 0
+        ident = None
+        
+        for i,row in enumerate(self.rows):
+            
+
+            if i % rows_per_seg == 0:
+                
+                if ins is not None:
+                    ins.close()
+                    
+                    if store_library:
+                        if logger:
+                            logger.always("Storing {} to Library".format(p.vname), now=True)
+                            
+                        dst, cache_key, url = self.library.put(p)
+                        p.database.delete()
+                        
+                        if logger:
+                            logger.always("Stored at {}".format(dst), now=True)
+           
+                seg += 1
+                ident = self.identity
+                ident.segment = seg
+                
+                p = self.bundle.partitions.find_or_new_csv(ident)
+                ins = p.inserter()
+
+            if logger:
+                logger("CSVing for {}".format(ident.name))
+  
+            ins.insert(dict(row))
+
+
+    @property
+    def rows(self):
+        
+        return self.database.query("SELECT * FROM {}".format(self.table.name))
+        
+
     def write_stats(self):
         
         t = self.table

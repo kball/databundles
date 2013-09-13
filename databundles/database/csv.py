@@ -60,12 +60,14 @@ class ValueInserter(InserterInterface):
 
      
     def _init_writer(self, row):
+        from sqlalchemy.engine.result import RowProxy
         # Four cases:
         #    Write header, or don't
         #    Write list, or dict
 
-        row_is_dict = isinstance(row, dict)
+        row_is_dict = isinstance(row, dict) or isinstance(row, RowProxy)
         row_is_list = isinstance(row, (list, tuple))
+
 
         has_header = self.header is not None
 
@@ -101,7 +103,7 @@ class ValueInserter(InserterInterface):
         elif row_is_list and not has_header:
             self._writer = unicodecsv.writer(f, delimiter=delimiter, encoding=self.encoding)
             self._inserter = self._write_list
-            
+
         else:
             raise Exception("Unexpected case for type {}".format(type(row)))
 
