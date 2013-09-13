@@ -396,7 +396,7 @@ class BuildBundle(Bundle):
             d[2] = d[3]
             
             if not d[5]:
-                d[1] = time.clock()
+                d[1] = time.clock()-1
                 d[5] = True
 
             # Prints the processing rate in 1,000 records per sec.
