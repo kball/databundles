@@ -125,8 +125,7 @@ class ValueInserter(ValueWriter):
                     d = self.caster(values)
                 else:
                     d = dict(values)
-
-          
+    
                 if self.skip_none:
                     d = {k:v for k,v in d.items() if v is not None}
 
@@ -140,7 +139,11 @@ class ValueInserter(ValueWriter):
                 else:
                     d = values
 
-  
+                d  = dict(zip(self.header, d))
+                
+                if self.skip_none:
+                    d = {k:v for k,v in d.items() if v is not None}
+                
             self.cache.append(d)
          
             if len(self.cache) >= self.cache_size: 
