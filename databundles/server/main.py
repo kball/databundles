@@ -418,7 +418,25 @@ def get_key(key, library):
     except AttributeError:
         raise exc.NotFound("No object for key: {}".format(key))
     return redirect(url)    
-    
+   
+@get('/ref/<ref:path>') 
+@CaptureException   
+def get_ref(ref, library):
+    '''Convert a name or id for a dataset or partitions into a set of 
+    information. Returns the same information as get_dataset or get_partition'''
+  
+    ref = ref.replace('|','/')
+  
+    d,p = library.get_ref(ref)
+  
+    if not d:
+        raise exc.NotFound("No object for ref: {}".format(ref))
+  
+    if p:
+        return get_partition(d.vid, p.vid, library)
+    else:
+        return get_dataset(d.vid, library)
+
   
 @get('/datasets/<did>/<typ:re:schema\\.?.*>') 
 @CaptureException   

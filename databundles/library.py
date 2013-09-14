@@ -1510,6 +1510,7 @@ class Library(object):
         
     def remote_find(self, query_command):
         from cache import RemoteMarker
+        import socket
 
         try:
             api = self.remote.get_upstream(RemoteMarker).api
@@ -1519,8 +1520,12 @@ class Library(object):
             except AttributeError: # No api 
                 return False
             
-        r = api.find(query_command)
-
+        try:
+            r = api.find(query_command)
+        except socket.error:
+            self.logger.error("Connection to remote failed")
+            return False
+        
         if not r:
             return False
 

@@ -25,22 +25,21 @@ class RestRemote(RemoteInterface):
 
     def path(self, rel_path, **kwargs): 
         if self.upstream:
+            
+            if not self.upstream.has(rel_path):
+                return None
+            
             return self.upstream.path(rel_path, **kwargs)
         else:
             raise Exception
         
-    def get(self, rel_path, cb=None): 
+    def get(self, did, pid=None): 
         
-        if not self.upstream.has(rel_path):
-            return None
-        
-        url = self.upstream.path(rel_path)
-        
-        return url
-    
-    def get_ref(self, did, pid=None):
-
         return self.api.get(did, pid)
+    
+    def get_ref(self, ref):
+
+        return self.api.get_ref(ref)
         
     def get_stream(self, rel_path, cb=None, return_meta=False): 
         return self.api.get_stream_by_key(rel_path, cb=cb, return_meta=return_meta)

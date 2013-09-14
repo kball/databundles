@@ -365,6 +365,7 @@ def library_delete(args, l, config):
 def library_info(args, l, config):    
 
     if args.term:
+
         d,p = l.get_ref(args.term)
 
         if not d:
@@ -540,7 +541,7 @@ def library_schema(args, l, config):
         
 def _print_info(l,d,p):
     from cache import RemoteMarker
-    from identity import new_identity
+    
     api = None
     try:
         api = l.remote.get_upstream(RemoteMarker)
@@ -551,7 +552,7 @@ def _print_info(l,d,p):
     remote_p = None
     
     if api:
-        r = api.get_ref(d.vid, p.vid if p else None)
+        r = api.get(d.vid, p.vid if p else None)
         if r:
             remote_d = r['dataset']
             remote_p = r['partitions'].items()[0][1] if p and 'partitions' in r and len(r['partitions']) != 0 else None
@@ -640,9 +641,21 @@ def remote_command(args, rc, src):
 
 
 def remote_info(args, l, rc):
+    from identity import new_identity
     
-    if not l.remote:
-        prt("No remote")
+    if args.term:
+
+        dsi = l.remote.get_ref(args.term)
+
+        if not dsi:
+            err("Failed to find record for: {}", args.term)
+            return 
+      
+        d = new_identity(dsi['dataset'])
+        p = new_identity(dsi['partitions'].items()[0][1])
+                
+        _print_info(l,d,p)
+
     else:
         prt(l.remote.connection_info)
 
@@ -650,7 +663,7 @@ def remote_list(args, l, rc):
         
     if args.datasets:
         for ds in args.datasets:
-            dsi = l.remote.dataset(ds)
+            dsi = l.remote.get_ref(ds)
 
             prt("dataset {0:11s} {1}",dsi['dataset']['id'],dsi['dataset']['name'])
 
@@ -1042,6 +1055,8 @@ def main():
         
     sp = asp.add_parser('info', help='Display the remote configuration')
     sp.set_defaults(subcommand='info')
+    sp.add_argument('term',  nargs='?', type=str,help='Name or ID of the bundle or partition to print information for')
+    
   
     sp = asp.add_parser('list', help='List remote files')
     sp.set_defaults(subcommand='list')
