@@ -1510,17 +1510,14 @@ class Library(object):
         try:
             api = self.remote.get_upstream(RemoteMarker).api
         except AttributeError: # No api
-            return False, False
-        
+            api = self.remote.api
+            
         r = api.find(query_command)
 
         if not r:
             return False, False
 
-        r = r[0]
-
-        return new_identity(r['identity']),new_identity(r['partition']) if 'partition' in r else None
-
+        return r
 
     def path(self, rel_path):
         """Return the cache path for a cache key"""

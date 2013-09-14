@@ -647,7 +647,7 @@ def remote_list(args, l, rc):
 
 
 def remote_find(args, l, config):
-    return _find(args, l, config, False)
+    return _find(args, l, config, True)
 
 
 def bq_command(args, rc, src):

@@ -178,6 +178,8 @@ def get_datasets_find(term, library):
     '''Find a partition or data bundle with a, id or name term '''
     from databundles.library import QueryCommand
     
+    term = term.replace('|','/')
+    
     dataset, partition  = library.get_ref(term)
      
     if dataset is False:

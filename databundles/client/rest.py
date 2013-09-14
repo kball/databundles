@@ -210,6 +210,7 @@ class RestApi(object):
         from databundles.identity import Identity, new_identity
 
         if isinstance(query, basestring):
+            query = query.replace('/','|')
             response =  self.remote.datasets.find(query).get()
             raise_for_status(response)
             r = response.object
@@ -231,18 +232,9 @@ class RestApi(object):
         
         
         raise_for_status(response)
-       
-    
-        # Convert the result back to the form we get from the Library query 
-        
-        return r
-        
-        from collections import namedtuple
-        Ref1= namedtuple('Ref1','Dataset Partition')
-        Ref2= namedtuple('Ref2','Dataset')
 
-        return [ new_identity(i) for i in r  if i is not False]
-    
+        return r
+      
     
     def list(self):
         '''Return a list of all of the datasets in the library'''
