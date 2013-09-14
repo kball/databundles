@@ -327,6 +327,8 @@ class RelationalBundleDatabaseMixin(object):
         s.merge(ds)
         s.commit()
         
+        print ds.to_dict()
+        
 
     def _post_create(self):
         from ..orm import Config
