@@ -539,19 +539,43 @@ def library_schema(args, l, config):
         raise Exception("Unknown format" )    
         
 def _print_info(l,d,p):
+    from cache import RemoteMarker
+    from identity import new_identity
+    api = None
+    try:
+        api = l.remote.get_upstream(RemoteMarker)
+    except AttributeError: # No api
+        api = l.remote
     
-    prt("--- Dataset ---")
-    prt("Dataset   : {}; {}",d.vid, d.vname)
-    prt("Is Local  : {}",l.cache.has(d.cache_key) is not False)
-    prt("Rel Path  : {}",d.cache_key)
-    prt("Abs Path  : {}",l.cache.path(d.cache_key) if l.cache.has(d.cache_key) else '')
+    remote_d = None
+    remote_p = None
+    
+    if api:
+        r = api.get_ref(d.vid, p.vid if p else None)
+        if r:
+            remote_d = r['dataset']
+            remote_p = r['partitions'].items()[0][1] if p and 'partitions' in r and len(r['partitions']) != 0 else None
+
+
+    prt("D --- Dataset ---")
+    prt("D Dataset   : {}; {}",d.vid, d.vname)
+    prt("D Is Local  : {}",l.cache.has(d.cache_key) is not False)
+    prt("D Rel Path  : {}",d.cache_key)
+    prt("D Abs Path  : {}",l.cache.path(d.cache_key) if l.cache.has(d.cache_key) else '')
+    
+    if remote_d:
+        prt("D Web Path  : {}",remote_d['url'])
+    
     
     if p:
-        prt("--- Partition ---")
-        prt("Partition : {}; {}",p.vid, p.vname)
-        prt("Is Local  : {}",(l.cache.has(p.cache_key) is not False) if p else '')
-        prt("Rel Path  : {}",p.cache_key)
-        prt("Abs Path  : {}",l.cache.path(p.cache_key) if l.cache.has(p.cache_key) else '' )   
+        prt("P --- Partition ---")
+        prt("P Partition : {}; {}",p.vid, p.vname)
+        prt("P Is Local  : {}",(l.cache.has(p.cache_key) is not False) if p else '')
+        prt("P Rel Path  : {}",p.cache_key)
+        prt("P Abs Path  : {}",l.cache.path(p.cache_key) if l.cache.has(p.cache_key) else '' )   
+  
+        if remote_p:
+            prt("P Web Path  : {}",remote_p['url'])
   
 def library_get(args, l, config):
 

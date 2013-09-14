@@ -1314,7 +1314,11 @@ class Library(object):
             d, p = self.database.get_name(bp_id)
       
         if not d:
-            d, p = self.remote_find(bp_id)
+            r = self.remote_find(bp_id)
+            if r:
+                r = r[0]
+                d = new_identity(r['identity'])
+                p = new_identity(r['partition']) if 'partition' in r else None
    
         
         return d, p
@@ -1510,12 +1514,15 @@ class Library(object):
         try:
             api = self.remote.get_upstream(RemoteMarker).api
         except AttributeError: # No api
-            api = self.remote.api
+            try:
+                api = self.remote.api
+            except AttributeError: # No api 
+                return False
             
         r = api.find(query_command)
 
         if not r:
-            return False, False
+            return False
 
         return r
 

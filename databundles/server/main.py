@@ -283,7 +283,7 @@ def post_dataset(did,library):
 
 @get('/datasets/<did>') 
 @CaptureException   
-def get_dataset(did, library):
+def get_dataset(did, library, pid=None):
     '''Return the complete record for a dataset, including
     the schema and all partitions. '''
     
@@ -291,12 +291,14 @@ def get_dataset(did, library):
 
     did = did.replace('|','/')
 
+
+
     gr =  library.get(did)
      
     if not gr:
         raise exc.NotFound("Failed to find dataset for {}".format(did))
     
-    # COnstruct the response
+    # Construct the response
     d = {'dataset' : gr.identity.to_dict(), 'partitions' : {}}
          
     file = library.database.get_file_by_ref(gr.identity.vid)
@@ -310,7 +312,15 @@ def get_dataset(did, library):
     if file:
         d['dataset']['file'] = file.to_dict()
 
-    for partition in  gr.partitions:
+    if pid:
+        pid = pid.replace('|','/')
+        partitions = [gr.partitions.partition(pid)]
+    else:
+        partitions = gr.partitions
+
+    for partition in  partitions:
+
+        
         d['partitions'][partition.identity.id_] = partition.identity.to_dict()
     
         file = library.database.get_file_by_ref(partition.identity.vid)
@@ -443,6 +453,16 @@ def get_dataset_schema(did, typ, library):
     else:
         raise Exception("Unknown format" )   
     
+  
+    
+@get('/datasets/<did>/partitions/<pid>') 
+@CaptureException   
+def get_partition(did, pid, library):
+    from databundles.cache import RemoteMarker
+    from databundles.identity import new_identity, Identity
+    
+    return get_dataset(did, library, pid)
+   
     
 @get('/datasets/<did>/partitions/<pid>/db') 
 @CaptureException   

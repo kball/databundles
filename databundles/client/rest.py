@@ -43,6 +43,8 @@ class RestApi(object):
         '''Return a tuple of (rel_path, dataset_identity, partition_identity)
         for an id or name'''
 
+        id_or_name = id_or_name.replace('/','|')
+
         response  = self.remote.datasets.find(id_or_name).get()
   
         if response.status == 404:
@@ -115,7 +117,7 @@ class RestApi(object):
         else:
             return response
            
-    def get(self, id_or_name, file_path=None, uncompress=False, cb=False):
+    def get(self, did, pid=None):
         '''Get a bundle by name or id and either return a file object, or
         store it in the given file object
         
@@ -132,14 +134,19 @@ class RestApi(object):
         from databundles.util import bundle_file_type
         from urllib import quote_plus
 
-        try: id_or_name = id_or_name.id_ # check if it is actualy an Identity object
+        try: did = did.id_ # check if it is actualy an Identity object
         except: pass
 
-        id_or_name = id_or_name.replace('/','|')
+        did = did.replace('/','|')
+        pid = pid.replace('/','|') if pid else None
 
-        response  = self.remote.datasets(id_or_name).get()
+        if pid:
+            response  = self.remote.datasets(did).partitions(pid).get()
+        else:
+            response  = self.remote.datasets(did).get()
 
-        return response # self._process_get_response(id_or_name, response, file_path, uncompress, cb=cb)
+        return response.object # self._process_get_response(id_or_name, response, file_path, uncompress, cb=cb)
+    
     
     def get_stream_by_key(self, key, cb=None, return_meta=False):
         import requests, urllib

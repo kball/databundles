@@ -30,6 +30,7 @@ class Partitions(object):
         from databundles.orm import Partition as OrmPartition
         from databundles.identity import PartitionNumber
         from partition import PartitionIdentity
+        from sqlalchemy import or_
         
         from partition import new_partition
         
@@ -37,8 +38,8 @@ class Partitions(object):
             orm_partition = arg
         elif isinstance(arg, str):
             s = self.bundle.database.session        
-            orm_partition = s.query(OrmPartition).filter(OrmPartition.id_==arg ).one()
-            
+            orm_partition = s.query(OrmPartition).filter(or_(OrmPartition.id_==arg,OrmPartition.vid==arg)).one()
+
         elif isinstance(arg, PartitionNumber):
             s = self.bundle.database.session        
             orm_partition = s.query(OrmPartition).filter(OrmPartition.id_==str(arg) ).one()
