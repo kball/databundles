@@ -315,6 +315,19 @@ class RelationalBundleDatabaseMixin(object):
         s.add(ds)
         s.commit()
 
+    def rewrite_dataset(self):
+        from ..orm import Dataset
+        # Now patch up the Dataset object
+        
+        ds = Dataset(**self.bundle.identity.to_dict())
+        ds.name = self.bundle.identity.name
+        ds.vname = self.bundle.identity.vname
+        
+        s = self.session
+        s.merge(ds)
+        s.commit()
+        
+
     def _post_create(self):
         from ..orm import Config
         self.set_config_value(self.bundle.identity.vid, 'info','type', 'bundle' )

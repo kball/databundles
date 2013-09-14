@@ -287,6 +287,9 @@ class BuildBundle(Bundle):
             dbc = self.db_config
             for k,v in self.config.build.get('dependencies').items():
                 dbc.set_value('dependencies', k, v)
+                
+        self.database.rewrite_dataset()
+                
         
     @classmethod
     def rm_rf(cls, d):
@@ -471,6 +474,7 @@ class BuildBundle(Bundle):
             for p in partitions:
                 self.partitions.new_db_partition(p)
             s.commit()
+    
     
     def post_prepare(self):
         '''Set a marker in the database that it is already prepared. '''
@@ -1030,6 +1034,7 @@ class BundleFileConfig(BundleConfig):
         of the file. '''
         import yaml
         from databundles.dbexceptions import ConfigurationError
+        from databundles.orm import Dataset
         
         temp = self.local_file+".temp"
         old = self.local_file+".old"
@@ -1048,6 +1053,7 @@ class BundleFileConfig(BundleConfig):
         if os.path.exists(temp):
             os.rename(self.local_file, old)
             os.rename(temp,self.local_file )
+            
             
     def dump(self):
         '''Re-writes the file from its own data. Reformats it, and updates
