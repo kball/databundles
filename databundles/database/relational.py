@@ -205,7 +205,7 @@ class RelationalDatabase(DatabaseInterface):
             
         self.commit()
 
-    def create_table(self, table_name):
+    def create_table(self, table_name=None, table_meta=None):
         '''Create a table that is defined in the table table
         
         This method will issue the DDL to create a table that is defined
@@ -218,8 +218,10 @@ class RelationalDatabase(DatabaseInterface):
         '''
         
         if not table_name in self.inspector.get_table_names():
-            t_meta, table = self.bundle.schema.get_table_meta(table_name) #@UnusedVariable
-            t_meta.create(bind=self.engine)
+            if not table_meta:
+                table_meta, table = self.bundle.schema.get_table_meta(table_name) #@UnusedVariable
+                
+            table_meta.create(bind=self.engine)
             
             if not table_name in self.inspector.get_table_names():
                 raise Exception("Don't have table "+table_name)

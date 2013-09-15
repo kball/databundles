@@ -37,11 +37,49 @@ class Test(TestBase):
     def tearDown(self):
         pass
 
+    def resolver(self,name):
+        if name == self.bundle.identity.name or name == self.bundle.identity.vname:
+            return self.bundle
+        else:
+            return False
+    
+    class Resolver(object):
+        def get(self,name):
+            if name == self.bundle.identity.name or name == self.bundle.identity.vname:
+                return self.bundle
+            else:
+                return False 
+            
+        def get_ref(self,name):
+            pass   
+    
+    
+    def progress_cb(self, lr, type_,name,n):
+        if n:
+            lr("{} {}: {}".format(type, name, n))
+        else:
+            self.bundle.log("{} {}".format(type_, name))
+
     def test_create(self):
         from databundles.warehouse import new_warehouse
         
-        w = new_warehouse(self.rc.warehouse('sqlite'))
+        w = new_warehouse(self.rc.warehouse('postgres'))
         
+        print "Re-create database"
+        w.database.enable_delete = True
+        w.resolver = lambda name: self.resolver(name)
+        lr = self.bundle.init_log_rate(10000)
+        w.progress_cb = lambda type_,name,n: self.progress_cb(lr, type_,name,n)
+        
+        try: w.drop()
+        except: pass
+        
+        w.create()
+        w.library.create()
+        
+        w.install(self.bundle)
+        
+        w.create_table(self.bundle.dataset.vid, "ttwo")
 
     def x_test_install(self):
         

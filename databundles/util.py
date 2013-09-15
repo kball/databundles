@@ -39,19 +39,23 @@ class curry:
 
 
 
-def get_logger(name):
+def get_logger(name, file_name = None):
     
     logger = logging.getLogger(name)
 
     if  name not in logger_init:
 
         formatter = logging.Formatter("%(name)s %(levelname)s %(message)s")
-        ch = logging.StreamHandler()
+        
+        if file_name:
+            ch = logging.FileHandler(file_name)
+        else:
+            ch = logging.StreamHandler()
         ch.setFormatter(formatter)
         #ch.setLevel(logging.DEBUG)
         logger.addHandler(ch)
         #logger.setLevel(logging.DEBUG) 
-        
+        logger._stream = ch.stream
         logger_init.add(name)
      
     return logger
@@ -889,5 +893,78 @@ def init_log_rate(N, message=''):
 
     return functools.partial(_log_rate, d)
 
+
+def daemonize(f, args,  rc, prog_name='databundles'):
+        '''Run a process as a daemon'''
+        import daemon #@UnresolvedImport
+        import lockfile  #@UnresolvedImport
+        import setproctitle #@UnresolvedImport
+        import os, sys
+        import grp, pwd
+        import logging
+            
+        if args.kill:
+            # Not portable, but works in most of our environments. 
+            import os
+            print("Killing ... ")
+            os.system("pkill -f '{}'".format(prog_name))
+            return
+        
+        lib_dir = '/var/lib/'+prog_name
+        run_dir = '/var/run/'+prog_name
+        log_dir = '/var/log/'+prog_name
+        log_file = os.path.join(log_dir,prog_name+'.stdout')
+        
+        logger = get_logger(prog_name, log_file)
+        logger.setLevel(logging.DEBUG) 
+        
+        lock_file_path = os.path.join(run_dir,prog_name+'.pid')
+        pid_file = lockfile.FileLock(lock_file_path)
+        
+        if pid_file.is_locked():
+            if args.unlock:
+                pid_file.break_lock()
+            else:
+                logger.error("Lockfile is locked: {}".format(lock_file_path))
+                sys.stderr.write("ERROR: Lockfile is locked: {}\n".format(lock_file_path))
+                sys.exit(1)
+
+        for dir in [run_dir, lib_dir, log_dir]:
+            if not os.path.exists(dir):
+                os.makedirs(dir)
+
+        gid =  grp.getgrnam(args.group).gr_gid if args.group is not None else os.getgid()
+        uid =  pwd.getpwnam(args.user).pw_uid if args.user  is not None else os.getuid()  
+
+        class DaemonContext(daemon.DaemonContext):
+     
+            def __exit__(self,exc_type, exc_value, exc_traceback):
+                
+                logger.info("Exiting")
+
+                super(DaemonContext, self).__exit__(exc_type, exc_value, exc_traceback)
+
+
+        context = DaemonContext(
+            detach_process = False,
+            working_directory=lib_dir,
+            umask=0o002,
+            pidfile=pid_file,
+            gid  = gid, 
+            uid = uid,
+            files_preserve = [logger._stream]
+            )
+        
+      
+        os.chown(log_file, uid, gid);
+        os.chown(lib_dir, uid, gid);
+        os.chown(run_dir, uid, gid);
+        os.chown(log_dir, uid, gid);
+
+        setproctitle.setproctitle(prog_name)
+                
+        with context:
+            f(prog_name, args, rc, logger)
+            
 
         

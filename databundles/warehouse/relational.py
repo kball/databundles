@@ -13,7 +13,7 @@ class RelationalWarehouse(WarehouseInterface):
         super(RelationalWarehouse, self).__init__(database,  library=library, storage=storage, 
                                                   resolver = resolver, progress_cb=progress_cb)
         
-        library.create()
+        self.library.create()
         
     def __del__(self):
         pass # print self.id, 'closing Warehouse'
@@ -56,6 +56,9 @@ class RelationalWarehouse(WarehouseInterface):
         
         self.progress_cb('fetch',name,None)
 
+
+        return 
+
         b_or_p = self.resolver(name)
         
         return self.install(b_or_p)
@@ -93,8 +96,16 @@ class RelationalWarehouse(WarehouseInterface):
     def has_table(self, table_name):
         pass
     
-    def create_table(self, table_meta):
-        pass
+    def create_table(self, d_vid, table_name, use_id = True):
+        
+        from ..schema import Schema
+
+        meta, table = Schema.get_table_meta_from_db(self.library, table_name, d_vid = d_vid,  use_id=use_id)
+
+        table.create(bind=self.database.engine)
+
+        return table, meta
+        
     
     def _install_partition(self, partition):
 

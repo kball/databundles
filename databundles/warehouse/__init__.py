@@ -11,7 +11,7 @@ def new_warehouse(config):
     
     database = new_database(config['database'],'warehouse')
     storage = new_cache(config['storage']) if 'storage' in config else None
-    library = LibraryDb(**config['library']) if 'library' in config else None
+    library = LibraryDb(**config['library']) if 'library' in config else  LibraryDb(**config['database'])
 
     if service == 'bigquery':
         pass
@@ -19,7 +19,11 @@ def new_warehouse(config):
         from .redshift import RedshiftWarehouse  #@UnresolvedImport
 
         return RedshiftWarehouse(database,storage=storage, library=library)
-        
+    
+    elif service == 'postgres':
+        from .postgres import PostgresWarehouse  #@UnresolvedImport
+
+        return PostgresWarehouse(database=database,storage=storage, library=library)
     else:
         from .relational import RelationalWarehouse #@UnresolvedImport
         return RelationalWarehouse(database,storage=storage, library=library)

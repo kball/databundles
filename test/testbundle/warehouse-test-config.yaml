@@ -15,8 +15,19 @@ warehouse:
       library: redshift_library
 
     postgres:
-      service: relational
-      database: postgres_warehouse
+        service: postgres
+        database:
+            driver: postgres
+            server: lorne
+            dbname: warehouse
+            username: test
+            password: test
+        library: 
+            driver: postgres
+            server: lorne
+            dbname: library
+            username: test
+            password: test
 
     mysql:
       service: relational
@@ -35,12 +46,7 @@ database:
         dbname: '/tmp/server/library.db'
         driver: sqlite  
   
-    postgres_warehouse:
-        driver: postgres
-        server: lorne
-        dbname: test-library
-        username: test
-        password: test 
+
         
     redshift:
         driver: postgres

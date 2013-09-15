@@ -78,23 +78,31 @@ class Schema(object):
         return q.all()
     
     @classmethod
-    def get_table_from_database(cls, db, name_or_id):
+    def get_table_from_database(cls, db, name_or_id, d_vid=None):
         from databundles.orm import Table
         import sqlalchemy.orm.exc
+        from sqlalchemy.sql import or_, and_
         
         if not name_or_id:
             raise ValueError("Got an invalid argument: {}".format(name_or_id))
         
-        try:
-            return (db.session.query(Table)
-                    .filter(Table.id_==name_or_id).one())
-        except sqlalchemy.orm.exc.NoResultFound:
-            try:
-                return (db.session.query(Table)
-                        .filter(Table.name==name_or_id.lower()).one())
-            except sqlalchemy.orm.exc.NoResultFound:
-                return None
-    
+        if d_vid:
+            return (db.session.query(Table).filter(
+                     and_(Table.d_vid ==  d_vid,   
+                     or_(Table.vid==name_or_id,
+                         Table.id_==name_or_id,
+                         Table.name==name_or_id))
+                    ).one())
+            
+        else:
+
+            return (db.session.query(Table).filter(
+                     or_(Table.vid==name_or_id,
+                         Table.id_==name_or_id,
+                         Table.name==name_or_id)
+                    ).one())
+
+
     def table(self, name_or_id):
         '''Return an orm.Table object, from either the id or name'''
         return Schema.get_table_from_database(self.bundle.database, name_or_id)
@@ -165,7 +173,15 @@ class Schema(object):
         return (self.bundle.database.session.query(Column).all())
         
     def get_table_meta(self, name_or_id, use_id=False, driver=None):
-        s = self.bundle.database.session
+        
+        return self.get_table_meta_from_db(self.bundle.db, name_or_id, use_id, driver)
+        
+    @classmethod
+    def get_table_meta_from_db(self,db,  name_or_id, use_id=False, driver=None, d_vid = None):
+        '''
+            use_id: prepend the id to the class name
+        '''
+        s = db.session
         from databundles.orm import Table, Column
         
         import sqlalchemy
@@ -175,25 +191,10 @@ class Schema(object):
         
         metadata = MetaData()
         
-        try :
-            q =  (s.query(Table)
-                       .filter(Table.name==name_or_id)
-                       .filter(Table.d_id==self.d_id))
-          
-            table = q.one()
-        except:
-            # Try it with just the name
-            q =  (s.query(Table).filter(Table.name==name_or_id))
-             
-            try:
-                table = q.one()
-            except sqlalchemy.orm.exc.NoResultFound: #@UndefinedVariable
-                raise ValueError("No table found for name {}".format(name_or_id))
-        
+        table = self.get_table_from_database(db, name_or_id, d_vid = d_vid)
+
         def translate_type(column):
             # Creates a lot of unnecessary objects, but speed is not important here.  
-
-            
 
             if driver == 'mysql':
                 
@@ -232,8 +233,6 @@ class Schema(object):
                 return type_(column.size)
             else:
                 return type_
-
-        
 
         
         at = SATable(table.dataset.id_+'_'+table.name if  use_id else table.name, metadata)

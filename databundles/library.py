@@ -275,13 +275,14 @@ class LibraryDb(object):
     def set_config_value(self, group, key, value):
         '''Set a configuration value in the database'''
         from databundles.orm import Config as SAConfig
-        from sqlalchemy.exc import IntegrityError
+        from sqlalchemy.exc import IntegrityError, ProgrammingError
         
         s = self.session
 
         s.query(SAConfig).filter(SAConfig.group == group,
                                  SAConfig.key == key,
                                  SAConfig.d_vid == ROOT_CONFIG_NAME_V).delete()
+                        
 
         try:
             o = SAConfig(group=group,key=key,d_vid=ROOT_CONFIG_NAME_V,value = value)
