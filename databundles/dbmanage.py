@@ -148,6 +148,7 @@ def warehouse_info(args, w,config):
     
     prt("Warehouse Info")
     prt("Name:     {}",args.name)
+    prt("Class:    {}",w.__class__)
     prt("Database: {}",w.database.dsn)
     prt("Library : {}",w.library.dsn)
 
@@ -156,6 +157,28 @@ def warehouse_drop(args, w,config):
     
     w.database.enable_delete = True
     w.drop()
+   
+class Resolver(object):
+    
+    def __init__(self, library):
+    
+        self.library = library
+    
+    def get(self, name):
+        bundle = self.library.get(name)
+        
+        if bundle.partition:
+            return bundle.partition
+        else:
+            return bundle
+    
+    def get_ref(self, name):
+        bundle = self.library.get_ref(name)
+        
+        if bundle.partition:
+            return bundle.partition
+        else:
+            return bundle
     
 def warehouse_install(args, w,config):
     import library
@@ -292,6 +315,7 @@ def library_restore(args, l, config, *kwargs):
     l.restore(backup_file)
    
 def library_server(args, l, config):
+    from util import daemonize
 
     from databundles.server.main import production_run, local_run
 
@@ -1137,63 +1161,7 @@ def main():
         
 
        
-def daemonize(f, args,  rc):
-        '''Run a process as a daemon'''
-        import daemon #@UnresolvedImport
-        import lockfile  #@UnresolvedImport
-        import setproctitle #@UnresolvedImport
-        import os, sys
-        import grp, pwd
-        
-        proc_name = 'databundle-library'
-        
-        if args.kill:
-            # Not portable, but works in most of our environments. 
-            import os
-            print("Killing ... ")
-            os.system("pkill -f '{}'".format(proc_name))
-            return
-        
-        lib_dir = '/var/lib/databundles'
-        run_dir = '/var/run/databundles'
-        log_dir = '/var/log/databundles'
-        log_file = os.path.join(log_dir,'library-server.stdout')
-        pid_file = lockfile.FileLock(os.path.join(run_dir,'library-server.pid'))
-        
-        for dir in [run_dir, lib_dir, log_dir]:
-            if not os.path.exists(dir):
-                os.makedirs(dir)
 
-        gid =  grp.getgrnam(args.group).gr_gid if args.group is not None else os.getgid()
-        uid =  pwd.getpwnam(args.user).pw_gid if args.user  is not None else os.getuid()  
-
-        context = daemon.DaemonContext(
-            working_directory=lib_dir,
-            umask=0o002,
-            pidfile=pid_file,
-            gid  = gid, 
-            uid = uid,
-
-            )
-        
-        # Ooen the log file, then fdopen it with a zero buffer sized, to 
-        # ensure the ourput is unbuffered. 
-    
-        context.stderr = context.stdout = open(log_file, "a",0)
-        context.stdout.write('Starting\n')
-      
-        os.chown(log_file, uid, gid);
-        os.chown(lib_dir, uid, gid);
-        os.chown(run_dir, uid, gid);
-        os.chown(log_dir, uid, gid);
-                                
-        setproctitle.setproctitle(proc_name)
-                
-        context.open()
-
-        #with context:
-
-        f(args, rc)
 
 
 if __name__ == '__main__':

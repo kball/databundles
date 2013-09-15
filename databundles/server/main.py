@@ -433,9 +433,13 @@ def get_ref(ref, library):
         raise exc.NotFound("No object for ref: {}".format(ref))
   
     if p:
-        return get_partition(d.vid, p.vid, library)
+        r =  get_partition(d.vid, p.vid, library)
+        r['ref_type'] = 'partition'
     else:
-        return get_dataset(d.vid, library)
+        r =  get_dataset(d.vid, library)
+        r['ref_type'] = 'dataset'
+        
+    return r
 
   
 @get('/datasets/<did>/<typ:re:schema\\.?.*>') 
