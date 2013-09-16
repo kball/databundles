@@ -52,11 +52,7 @@ WITH ( DELIMITER '|', NULL '' ) ;"""
     def _install_csv_partition(self, table, p):
             self.progress_cb('install_partition',p.identity.name,None)
             cmd =  self._copy_command(table.name, self.resolver.url(p.identity.vid))
-         
-            print cmd
-            return
-        
-         
+
             self.database.session.execute(cmd)
             self.database.session.commit()
             

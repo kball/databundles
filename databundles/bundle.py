@@ -381,7 +381,7 @@ class BuildBundle(Bundle):
         return f
 
     
-    def _log_rate(self,d, message=None):
+    def _log_rate(self,d, message=''):
         """Log a message for the Nth time the method is called.
         
         d is the object returned from init_log_rate
