@@ -36,7 +36,8 @@ class Partitions(object):
         
         if isinstance(arg,OrmPartition):
             orm_partition = arg
-        elif isinstance(arg, str):
+            
+        elif isinstance(arg, basestring):
             s = self.bundle.database.session        
             orm_partition = s.query(OrmPartition).filter(or_(OrmPartition.id_==arg,OrmPartition.vid==arg)).one()
 
@@ -159,7 +160,7 @@ class Partitions(object):
             
         return None
 
-    def find(self, pid=None, **kwargs):
+    def find(self, pid=None, use_library=False, **kwargs):
         '''Return a Partition object from the database based on a PartitionId.
         The object returned is immutable; changes are not persisted'''
         import sqlalchemy.orm.exc
@@ -176,9 +177,8 @@ class Partitions(object):
 
             if len(partitions) == 1:
                 p =  partitions.pop()
-                if p.database.exists():
-                    return p
-                else:
+                
+                if use_library and not p.database.exists:
                     # Try to get it from the library, if it exists. 
                     b = self.bundle.library.get(p.identity.vname)
                     
@@ -186,6 +186,9 @@ class Partitions(object):
                         return p
                     else:
                         return b.partition
+                else:                   
+                    return p
+                    
                     
             elif len(partitions) > 1 :
                 from databundles.dbexceptions import ResultCountError

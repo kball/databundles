@@ -53,40 +53,45 @@ class RelationalWarehouse(WarehouseInterface):
     def install_by_name(self,name):
     
         self.progress_cb('install_name',name,None)
+
+        d, p = self.resolver.get_ref(name)
         
-        self.progress_cb('fetch',name,None)
-
-
-        return 
-
-        b_or_p = self.resolver(name)
+        if not d:
+            raise DependencyError("Resolver failed to get dataset reference for {}".format(name))
         
-        return self.install(b_or_p)
+        if not self.has(d.vid):
+            self.progress_cb('install_dataset',d.vname,None)
+            
+            b = self.resolver.get(d.vid)
+            
+            if not b:
+                raise DependencyError("Resolver failed to get dataset for {}".format(d.vname))
+                  
+            self._install_bundle(b)
+        else:
+            self.progress_cb('dataset already installed',d.vname,None)
+        
+        if p:
+            b = self.resolver.get(d.vid)
+            self.install_partition_by_name(b, p)
         
     
-    def install(self, b_or_p):
-        from ..bundle import Bundle
-        from ..partition import PartitionInterface
-
-        self.progress_cb('install',b_or_p.identity.vname,None)
-
-        if isinstance(b_or_p, Bundle):
-            self._install_bundle( b_or_p)
+    def install_partition_by_name(self, bundle, p):
+        
+        self.progress_cb('install_partition',p.vname,None)
+        
+        partition = bundle.partitions.partition(p.id_)
+    
+        if partition.record.format == 'geo':
+            self._install_geo_partition(bundle,  partition)
             
-        elif isinstance(b_or_p, PartitionInterface):
-            
-            if not self.has(b_or_p.bundle.identity.vname):
-                self.install_dependency(b_or_p.bundle.identity.vname)
-
-            if b_or_p.record.format == 'geo':
-                self._install_geo_partition( b_or_p)
-                
-            elif b_or_p.record.format == 'hdf':
-                self._install_hdf_partition( b_or_p)
-            else:
-                self._install_partition( b_or_p)
+        elif partition.record.format == 'hdf':
+            self._install_hdf_partition(bundle,  partition)
         else:
-            raise ValueError("Can only install a partition or bundle")
+            self._install_partition(bundle, partition)
+                
+    
+
         
     def _install_bundle(self, bundle):
         
@@ -94,7 +99,8 @@ class RelationalWarehouse(WarehouseInterface):
         self.library.install_bundle(bundle)
     
     def has_table(self, table_name):
-        pass
+
+        return table_name in self.database.inspector.get_table_names()
     
     def create_table(self, d_vid, table_name, use_id = True):
         
@@ -102,7 +108,11 @@ class RelationalWarehouse(WarehouseInterface):
 
         meta, table = Schema.get_table_meta_from_db(self.library, table_name, d_vid = d_vid,  use_id=use_id)
 
-        table.create(bind=self.database.engine)
+        if not self.has_table(table.name):
+            table.create(bind=self.database.engine)
+            self.progress_cb('create_table',table.name,None)
+        else:
+            self.progress_cb('table_exists',table.name,None)
 
         return table, meta
         

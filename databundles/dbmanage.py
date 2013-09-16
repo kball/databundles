@@ -158,7 +158,8 @@ def warehouse_drop(args, w,config):
     w.database.enable_delete = True
     w.drop()
    
-class Resolver(object):
+from warehouse import ResolverInterface
+class Resolver(ResolverInterface):
     
     def __init__(self, library):
     
@@ -173,12 +174,21 @@ class Resolver(object):
             return bundle
     
     def get_ref(self, name):
-        bundle = self.library.get_ref(name)
-        
-        if bundle.partition:
-            return bundle.partition
+        return self.library.get_ref(name)
+
+    def url(self, name):
+        dsi = self.library.remote.get_ref(name)
+
+        if not dsi:
+            return None
+
+        if dsi['ref_type'] == 'partition':
+            return dsi['partitions'].items()[0][1]['url']
         else:
-            return bundle
+            return dsi['dataset']['url']
+
+     
+
     
 def warehouse_install(args, w,config):
     import library
@@ -190,15 +200,8 @@ def warehouse_install(args, w,config):
 
     l = library.new_library(config.library(args.library))
 
-    def resolver(name):
-        bundle = l.get(name)
-        
-        if bundle.partition:
-            return bundle.partition
-        else:
-            return bundle
     
-    w.resolver = resolver
+    w.resolver = Resolver(l)
     
     def progress_cb(lr, type_,name,n):
         if n:
@@ -674,9 +677,9 @@ def remote_info(args, l, rc):
         if not dsi:
             err("Failed to find record for: {}", args.term)
             return 
-      
+
         d = new_identity(dsi['dataset'])
-        p = new_identity(dsi['partitions'].items()[0][1])
+        p = new_identity(dsi['partitions'].items()[0][1]) if dsi['ref_type'] == 'partition' else None
                 
         _print_info(l,d,p)
 

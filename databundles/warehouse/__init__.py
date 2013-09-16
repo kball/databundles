@@ -28,6 +28,19 @@ def new_warehouse(config):
         from .relational import RelationalWarehouse #@UnresolvedImport
         return RelationalWarehouse(database,storage=storage, library=library)
         
+   
+    
+class ResolverInterface(object):   
+    
+    def get(self, name):
+        raise NotImplemented()
+    
+    def get_ref(self, name):
+        raise NotImplemented()
+    
+    def url(self, name):
+        raise NotImplemented()
+    
     
 class WarehouseInterface(object):
     

@@ -78,7 +78,7 @@ class SqlitePartition(PartitionBase):
             self.database.create()
 
 
-    def csvize(self, logger=None, store_library=False):
+    def csvize(self, logger=None, store_library=False, write_header=False):
         '''Convert this partition to CSV files that are linked to the partition'''
         
         if not self.record.count:
@@ -135,7 +135,7 @@ class SqlitePartition(PartitionBase):
                 ident.segment = seg
 
                 p = self.bundle.partitions.find_or_new_csv(ident)
-                ins = p.inserter()
+                ins = p.inserter( write_header=write_header)
                 
             count += 1
             ins.insert(dict(row))
@@ -174,4 +174,4 @@ class SqlitePartition(PartitionBase):
 
 
     def __repr__(self):
-        return "<db partition: {}>".format(self.vname)
+        return "<db partition: {}>".format(self.identity.vname)
