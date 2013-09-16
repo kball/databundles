@@ -198,7 +198,7 @@ class Schema(object):
 
         def translate_type(column):
             # Creates a lot of unnecessary objects, but speed is not important here.  
-
+            
             if driver == 'mysql':
                 
                 if (column.datatype in (Column.DATATYPE_TEXT, column.datatype == Column.DATATYPE_VARCHAR) and
@@ -224,6 +224,10 @@ class Schema(object):
             if driver == 'postgres':
                 if (column.datatype == Column.DATATYPE_TEXT  and bool(column.size)):
                     column.datatype = Column.DATATYPE_VARCHAR            
+                  
+            if driver == 'sqlite' or driver is None:
+                if column.is_primary_key and column.datatype == Column.DATATYPE_INTEGER64:
+                    column.datatype = Column.DATATYPE_INTEGER # Required to trigger autoincrement
                   
             #print driver, column.name, column.size, column.default
                     
@@ -524,24 +528,21 @@ class Schema(object):
                 row['table'] = table.name
                 row['seq'] = col.sequence_id
                 row['column'] = col.name
-                row['description'] = col.description
                 row['is_pk'] = 1 if col.is_primary_key else ''
-                
-            
                 row['is_fk'] = col.foreign_key if col.foreign_key else None
-             
+                row['type'] = col.datatype.upper()   
+
                 for idx,s in indexes.items():
                     if idx:
                         row[idx] = 1 if col in s else None
-                   
-                row['type'] = col.datatype.upper()
-                
 
                 for field in opt_col_fields:
                     row[field] = getattr(col, field)
 
                 for k,v in col.data.items():
                     row['d_'+k]=v
+
+                row['description'] = col.description
 
                 row['id'] = col.id_
 

@@ -340,7 +340,7 @@ class Column(Base):
         DATATYPE_VARCHAR:(sqlalchemy.types.String,str,'VARCHAR'),
         DATATYPE_CHAR:(sqlalchemy.types.String,str,'VARCHAR'),
         DATATYPE_INTEGER:(sqlalchemy.types.Integer,int,'INTEGER'),
-        DATATYPE_INTEGER64:(sqlalchemy.types.BigInteger,int,'INTEGER'),
+        DATATYPE_INTEGER64:(sqlalchemy.types.BigInteger,int,'INTEGER64'),
         DATATYPE_REAL:(sqlalchemy.types.Float,float,'REAL'),
         DATATYPE_FLOAT:(sqlalchemy.types.Float,float,'REAL'),
         DATATYPE_NUMERIC:(sqlalchemy.types.Float,float,'REAL'),

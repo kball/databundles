@@ -37,7 +37,7 @@ class PartitionDb(SqliteDatabase, RelationalPartitionDatabaseMixin):
             table_name = table_or_name
             if not table_name in self.inspector.get_table_names():
                 t_meta, table = self.bundle.schema.get_table_meta(table_name) #@UnusedVariable
-                t_meta.create(bind=self.engine)
+                table.create(bind=self.engine)
                 
                 if not table_name in self.inspector.get_table_names():
                     raise Exception("Don't have table "+table_name)
@@ -81,23 +81,6 @@ class PartitionDb(SqliteDatabase, RelationalPartitionDatabaseMixin):
         
         if RelationalDatabase._create(self):
 
-            if False:
-                # Copy the dataset record
-                bdbs = self.bundle.database.session 
-                s = self.session
-                dataset = bdbs.query(Dataset).one()
-                s.merge(dataset)
-                s.commit()
-                
-                # Copy the partition record
-                from databundles.orm import Partition as OrmPartition 
-            
-                orm_p = bdbs.query(OrmPartition).filter(
-                                OrmPartition.id_ == self.partition.identity.id_).one()
-                s.merge(orm_p)
-            
-                s.commit()
-            
             self.post_create()
                   
 
