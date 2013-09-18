@@ -16,7 +16,7 @@ class CsvPartition(PartitionBase):
     
     FORMAT = 'csv'    
     
-    def __init__(self, bundle, record):
+    def __init__(self, bundle, record, **kwargs):
         super(CsvPartition, self).__init__(bundle, record)
 
         self._db_class = CsvDb

@@ -29,6 +29,50 @@ class UpdaterInterface(object):
     def close(self): raise NotImplemented()
 
 
+class SegmentInserterFactory(object):
+    
+    def next_inserter(self, segment): 
+        raise NotImplemented()
+
+class SegmentedInserter(InserterInterface):
+
+    def __init__(self, segment_size=100000, segment_factory = None):
+        pass
+    
+        self.segment = 0
+        self.inserter = None
+        self.count = 0
+        self.segment_size = segment_size
+        self.factory = segment_factory
+    
+    def __enter__(self): 
+        self.segment += 1
+         
+        self.inserter = self.factory.next_inserter(self.segment)
+       
+        self.inserter.__enter__()
+        return self
+            
+    def __exit__(self, type_, value, traceback):
+        self.inserter.__exit__(type_, value, traceback)
+        return self
+    
+    def insert(self, row, **kwargs):
+        
+        self.count += 1
+        
+        if self.count > self.segment_size:
+            self.segment += 1
+            self.inserter = self.factory.next_inserter(self.segment)
+            
+            self.count = 0
+        
+        return self.inserter.insert(row)
+        
+    
+    def close(self):
+        self.inserter.close()
+
 
 class ValueWriter(InserterInterface):
     '''Inserts arrays of values into  database table'''

@@ -18,7 +18,7 @@ class Partitions(object):
     def __init__(self, bundle):
         self.bundle = bundle
 
-    def partition(self, arg):
+    def partition(self, arg, **kwargs):
         '''Get a local partition object from either a Partion ORM object, or
         a partition name
         
@@ -59,7 +59,7 @@ class Partitions(object):
             s.commit()
 
 
-        return new_partition(self.bundle, orm_partition)
+        return new_partition(self.bundle, orm_partition, **kwargs)
 
 
 
@@ -173,7 +173,7 @@ class Partitions(object):
             elif not 'format' in kwargs:
                     kwargs['format'] = Identity.ANY
                 
-            partitions = [ self.partition(op) for op in self.find_orm(pid, **kwargs).all()];
+            partitions = [ self.partition(op, memory=kwargs.get('memory',False)) for op in self.find_orm(pid, **kwargs).all()];
 
             if len(partitions) == 1:
                 p =  partitions.pop()
@@ -354,7 +354,7 @@ class Partitions(object):
             self.bundle.error("{}, {}".format(pid, kwargs))
             raise
     
-        p = self.partition(op)
+        p = self.partition(op, **kwargs)
         return p
 
     def new_partition(self, pid=None, **kwargs):

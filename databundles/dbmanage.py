@@ -72,19 +72,17 @@ class Progressor(object):
 
 def bundle_command(args, rc, src):
   
-    from databundles.identity import Identity
+    from databundles.identity import new_identity
     from databundles.identity import DatasetNumber
     
     if args.subcommand == 'new':
-        # Remove the creator code and version. 
-        #name = '-'.join(Identity.name_parts(args)[:-2])
-        raise NotImplemented()
-        name = None
-    
-        if not os.path.exists(name):
-            os.makedirs(name)
-        elif not os.path.isdir(name):
-            raise IOError("Directory already exists: "+name)
+        
+        ident = new_identity(vars(args))
+
+        if not os.path.exists(ident.source_path):
+            os.makedirs(ident.source_path)
+        elif not os.path.isdir(ident.source_path):
+            raise IOError("Directory already exists: "+ident.source_path)
     
         config ={'identity':{
              'id': str(DatasetNumber()),
@@ -96,12 +94,20 @@ def bundle_command(args, rc, src):
              'revision': args.revision
              }}
         
-        file_ = os.path.join(name, 'bundle.yaml')
+        file_ = os.path.join(ident.source_path, 'bundle.yaml')
         yaml.dump(config, file(file_, 'w'), indent=4, default_flow_style=False)
     
         bundle_file =  os.path.join(os.path.dirname(__file__),'support','bundle.py')
     
-        shutil.copy(bundle_file ,name  )
+        shutil.copy(bundle_file, ident.source_path  )
+
+        os.makedirs(os.path.join(ident.source_path, 'meta'))
+
+        schema_file =  os.path.join(os.path.dirname(__file__),'support','schema.csv')
+        
+        shutil.copy(schema_file, os.path.join(ident.source_path, 'meta')  )
+
+        print("CREATED: {}".format(ident.source_path))
 
 def install_command(args, rc, src):
     import yaml, pkgutil

@@ -9,6 +9,7 @@ from .inserter import  ValueInserter, ValueUpdater
 import os 
 import logging
 from databundles.util import get_logger
+from ..database.inserter import SegmentedInserter, SegmentInserterFactory
 
 class RelationalDatabase(DatabaseInterface):
     '''Represents a Sqlite database'''
@@ -253,6 +254,26 @@ class RelationalDatabase(DatabaseInterface):
         return ValueInserter(None, table , self,**kwargs)
 
 
+    class csv_partition_factory(SegmentInserterFactory):
+       
+        def __init__(self, db, table):
+            self.db = db
+            self.table = table
+        
+        def next_inserter(self, seg): 
+            ident = self.db.partition.identity
+            ident.segment = seg
+            p = self.db.bundle.partitions.find_or_new_csv(ident)   
+            return p.inserter(self.table)
+
+    def csvinserter(self, table_or_name=None,segment_size=200000, **kwargs):
+        '''Return an inserter that writes to segmented CSV partitions'''
+        
+        sif = self.csv_partition_factory(self, table_or_name)
+
+        return SegmentedInserter(segment_size=segment_size, segment_factory = sif,  **kwargs)
+
+
     def set_config_value(self, d_vid, group, key, value):
         from databundles.orm import Config as SAConfig
         
@@ -297,6 +318,7 @@ class RelationalBundleDatabaseMixin(object):
     def _create(self):
         """Create the database from the base SQL"""
         from databundles.orm import  Dataset, Partition, Table, Column, File
+        from ..identity import new_identity
 
                  
         s =  self.session
@@ -311,8 +333,10 @@ class RelationalBundleDatabaseMixin(object):
         # Create the Dataset record
 
         ds = Dataset(**self.bundle.config.identity)
-        ds.name = self.bundle.config.identity.name
-        ds.vname = self.bundle.config.identity.vname
+        ident = new_identity(self.bundle.config.identity)
+        
+        ds.name = ident.name
+        ds.vname = ident.vname
         
         s.add(ds)
         s.commit()
@@ -328,9 +352,6 @@ class RelationalBundleDatabaseMixin(object):
         s = self.session
         s.merge(ds)
         s.commit()
-        
-        print ds.to_dict()
-        
 
     def _post_create(self):
         from ..orm import Config

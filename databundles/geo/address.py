@@ -103,8 +103,8 @@ class Parser(object):
     def geocode_validate(self, addrstr):
         """ Validate the  address with google geocoder, then parse.
         This is for the really difficult addresses that don't parse otherwise."""
-        from geopy.geocoders.googlev3 import GQueryError
-        from geopy import geocoders
+        from geopy.geocoders.googlev3 import GQueryError #@UnresolvedImport
+        from geopy import geocoders #@UnresolvedImport
         gc = geocoders.GoogleV3()
 
         try:

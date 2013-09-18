@@ -30,6 +30,7 @@ class Bundle(BuildBundle):
   
     def build(self):
 
+        self.build_segments()
         self.build_csv()
         self.build_db()
         self.build_geo()
@@ -37,6 +38,15 @@ class Bundle(BuildBundle):
     
         return True
 
+
+    def build_segments(self):
+        
+        p = self.partitions.find_or_new_db(table="tone")
+        
+        with p.database.csvinserter(segment_size=100) as ins:
+            for i in range(1000):
+                ins.insert((None,"str"+str(i),i,i))
+        
 
     def build_db(self):
 

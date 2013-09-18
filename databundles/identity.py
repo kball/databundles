@@ -227,6 +227,16 @@ class Identity(object):
         '''The name is a form suitable for use in a filesystem'''
         return self.path+self.PATH_EXTENSION
  
+ 
+    @property
+    def source_path(self):
+        '''The path of the bundle source. '''
+        import os
+        return os.path.join(self.source,
+                            '-'.join( [ x for x in [self.source,self.dataset, self.subset, self.variation] if x])
+                            )
+ 
+ 
     @classmethod
     def parse_name(cls,input):
         '''Parse a name to return the Identity. Will discard the Partition parts. '''

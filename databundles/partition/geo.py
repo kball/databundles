@@ -18,7 +18,7 @@ class GeoPartition(SqlitePartition):
     
     FORMAT = 'geo'
     
-    def __init__(self, bundle, record):
+    def __init__(self, bundle, record, **kwargs):
         super(GeoPartition, self).__init__(bundle, record)
 
     @property

@@ -16,12 +16,12 @@ from .inserter import InserterInterface
 
 class ValueInserter(InserterInterface):
     '''Inserts arrays of values into  database table'''
-    def __init__(self, bundle, path, table=None, header=None, delimiter = '|', encoding='utf-8', write_header = True,  buffer=2*1024*1024): 
+    def __init__(self, bundle, path, table=None, header=None, delimiter = '|', encoding='utf-8', write_header = False,  buffer_size=2*1024*1024): 
      
         self.table = table
         self.header = header
         self.path = path
-        self.buffer = buffer
+        self.buffer_size = buffer_size
         self.delimiter = delimiter
         self.encoding = encoding
         self.write_header = write_header
@@ -75,10 +75,10 @@ class ValueInserter(InserterInterface):
             if not os.path.exists(os.path.dirname(self.path)):
                 os.makedirs(os.path.dirname(self.path))
 
-        f = open(self.path, 'wb', buffering=self.buffer)
+        f = open(self.path, 'wb', buffering=self.buffer_size)
         
         self._f = f
-        
+
         delimiter = self.delimiter
         
         if row_is_dict and has_header:
@@ -136,10 +136,8 @@ class ValueInserter(InserterInterface):
                 mode = 'a+'
             else:
                 mode = 'w'
-            
 
-            
-            self.file = open(self.path, mode)
+            self.file = open(self.path, mode, buffering=self.buffer_size)
             self._writer = csv.writer(self.file)
 
         return self._writer

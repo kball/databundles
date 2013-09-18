@@ -637,8 +637,8 @@ Base = declarative_base()
         def write_class(table):
             return """
 class {name}(Base):
-    __tablename__ = '{name}'
-""".format(name=table.name.capitalize())
+    __tablename__ = '{tablelc}'
+""".format(name=table.name.capitalize(), tablelc=table.name.lower())
         
         def write_fields(table):
             import re
@@ -647,8 +647,9 @@ class {name}(Base):
             for col in table.columns:
                 opts = []
                 optstr = '';
+
                 if col.is_primary_key: opts.append("primary_key=True") 
-                if col.foreign_key: opts.append("ForeignKey('{tableuc}.{tablelc}_id')".format(
+                if col.foreign_key: opts.append("ForeignKey('{tablelc}')".format(
                                                     tableuc=col.foreign_key.capitalize(), tablelc=col.foreign_key)) 
                 
                 if  len(opts):
@@ -665,14 +666,14 @@ class {name}(Base):
     {rel_name}=relationship(\"{that_table_uc}\",
        foreign_keys=[{column}],
        backref=backref('{this_table}_{rel_name}', 
-                       order_by='{that_table_uc}.{that_table_lc}_id'))
+                       order_by='{that_table_lc}'))
 """
                     #t = "    {rel_name}=relationship(\"{that_table_uc}\")\n"
                     
                     o += t.format(
                            column=col.name, 
                            that_table_uc=col.foreign_key.capitalize(), 
-                           that_table_lc=col.foreign_key,
+                           that_table_lc=col.foreign_key.lower(), 
                            this_table = table.name,
                            rel_name = rel_name
                         

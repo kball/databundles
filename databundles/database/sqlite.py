@@ -13,7 +13,7 @@ class SqliteDatabase(RelationalDatabase):
     EXTENSION = '.db'
     SCHEMA_VERSION = 11
 
-    def __init__(self, dbname,  **kwargs):   
+    def __init__(self, dbname, memory = False,  **kwargs):   
         ''' '''
     
         # For database bundles, where we have to pass in the whole file path
@@ -30,6 +30,7 @@ class SqliteDatabase(RelationalDatabase):
         # DB-API is needed to issue INSERT OR REPLACE type inserts. 
         self._dbapi_cursor = None
         self._dbapi_connection = None
+        self.memory = memory
 
         kwargs['driver'] = 'sqlite'
 
@@ -37,12 +38,16 @@ class SqliteDatabase(RelationalDatabase):
         
     @property 
     def path(self):
-        return self.base_path+self.EXTENSION
+        if self.memory:
+            return ':memory:'
+        else:
+            return self.base_path+self.EXTENSION
      
 
     def require_path(self):
-        if not os.path.exists(os.path.dirname(self.base_path)):
-            os.makedirs(os.path.dirname(self.base_path))
+        if not self.memory:
+            if not os.path.exists(os.path.dirname(self.base_path)):
+                os.makedirs(os.path.dirname(self.base_path))
             
     @property
     def engine(self):
@@ -250,10 +255,10 @@ def _on_connect(dbapi_con, con_record):
     dbapi_con.execute('PRAGMA page_size = 8192')
     dbapi_con.execute('PRAGMA temp_store = MEMORY')
     dbapi_con.execute('PRAGMA cache_size = 500000')
-    dbapi_con.execute('PRAGMA foreign_keys=ON')
+    dbapi_con.execute('PRAGMA foreign_keys = ON')
     dbapi_con.execute('PRAGMA journal_mode = OFF')
+    dbapi_con.execute('PRAGMA synchronous = OFF')
     #dbapi_con.enable_load_extension(True)
-    #dbapi_con.execute('PRAGMA synchronous = OFF')
 
 
 def _on_connect_update_schema(conn):

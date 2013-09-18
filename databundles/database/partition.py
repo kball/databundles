@@ -11,11 +11,13 @@ class PartitionDb(SqliteDatabase, RelationalPartitionDatabaseMixin):
     '''a database for a partition file. Partition databases don't have a full schema
     and can load tables as they are referenced, by copying them from the prototype. '''
 
-    def __init__(self, bundle, partition, base_path, **kwargs):
+    def __init__(self, bundle, partition, base_path, memory = False, **kwargs):
         '''''' 
 
         RelationalPartitionDatabaseMixin._init(self,bundle,partition)
-        super(PartitionDb, self).__init__(base_path, **kwargs)  
+        self.memory = memory
+    
+        super(PartitionDb, self).__init__(base_path, memory=self.memory, **kwargs)  
 
     def query(self,*args, **kwargs):
         """Convience function for self.connection.execute()"""
@@ -45,8 +47,6 @@ class PartitionDb(SqliteDatabase, RelationalPartitionDatabaseMixin):
             
         else:
             table = self.table(table_or_name.name)
-
-    
 
         return ValueInserter(self.bundle, table , self,**kwargs)
         

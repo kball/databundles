@@ -6,25 +6,25 @@ from ..identity import ObjectNumber, PartitionNumber
 
 
 
-def new_partition(bundle, orm_partition):
+def new_partition(bundle, orm_partition, **kwargs):
     
     db_type = orm_partition.format
 
     if db_type == 'geo':
         from geo import GeoPartition
-        return GeoPartition(bundle, orm_partition)
+        return GeoPartition(bundle, orm_partition, **kwargs)
     
     elif db_type == 'hdf':
         from hdf import HdfPartition
-        return HdfPartition(bundle, orm_partition)
+        return HdfPartition(bundle, orm_partition, **kwargs)
     
     elif db_type == 'csv':
         from csv import CsvPartition
-        return CsvPartition(bundle, orm_partition)
+        return CsvPartition(bundle, orm_partition, **kwargs)
     
     elif db_type == 'db':
         from sqlite import SqlitePartition 
-        return SqlitePartition(bundle, orm_partition)
+        return SqlitePartition(bundle, orm_partition, **kwargs)
     
     else:
         raise ValueError("Unknown format: '{}' ".format(db_type))
@@ -266,7 +266,7 @@ class PartitionInterface(object):
 
 class PartitionBase(PartitionInterface):
 
-    def __init__(self, bundle, record):
+    def __init__(self, bundle, record, **kwargs):
         
         self.bundle = bundle
         self.record = record

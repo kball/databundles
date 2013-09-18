@@ -16,16 +16,17 @@ class SqlitePartition(PartitionBase):
     
     FORMAT = 'db'
     
-    def __init__(self, bundle, record):
+    def __init__(self, bundle, record, memory=False, **kwargs):
         
         super(SqlitePartition, self).__init__(bundle, record)
+        self.memory  = memory
         self.format = self.FORMAT
 
 
     @property
     def database(self):
         if self._database is None:
-            self._database = PartitionDb(self.bundle, self, base_path=self.path)          
+            self._database = PartitionDb(self.bundle, self, base_path=self.path, memory=self.memory)          
         return self._database
 
 
