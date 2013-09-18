@@ -1694,7 +1694,7 @@ class Library(object):
             dataset, partition = self.database.get_id(file_.ref)
             
             if not dataset:
-                raise Exception("Didn't get id from database for file ref: {}".foramt(file_.ref))
+                raise Exception("Didn't get id from database for file ref: {}".format(file_.ref))
             
             if partition:
                 identity = partition
