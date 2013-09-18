@@ -111,6 +111,8 @@ class ValueWriter(InserterInterface):
         if self.transaction:
             self.transaction.commit()
             self.transaction = self.connection.begin()
+        else:
+            print "NO TRANSACTION"
                 
         
     def close(self):
@@ -195,6 +197,7 @@ class ValueInserter(ValueWriter):
                 self.cache = []
                 
                 self.commit_continue()
+                
             
                 
         except (KeyboardInterrupt, SystemExit):

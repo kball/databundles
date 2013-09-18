@@ -257,7 +257,7 @@ def _on_connect(dbapi_con, con_record):
     dbapi_con.execute('PRAGMA cache_size = 500000')
     dbapi_con.execute('PRAGMA foreign_keys = ON')
     dbapi_con.execute('PRAGMA journal_mode = OFF')
-    dbapi_con.execute('PRAGMA synchronous = OFF')
+    #dbapi_con.execute('PRAGMA synchronous = OFF')
     #dbapi_con.enable_load_extension(True)
 
 

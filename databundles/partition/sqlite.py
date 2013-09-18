@@ -107,29 +107,31 @@ class SqlitePartition(PartitionBase):
 
         pk = self.table.primary_key.name
 
+        def store_library(p):
+            if store_library:
+                if logger:
+                    logger.always("Storing {} to Library".format(p.identity.name), now=True)
+                    
+                dst, _,_ = self.bundle.library.put(p)
+                p.database.delete()
+                
+                if logger:
+                    logger.always("Stored at {}".format(dst), now=True)            
+
         for i,row in enumerate(self.rows):
 
             if not min_key:
                 min_key = row[pk]
 
             if i % rows_per_seg == 0:
-                print "Next Segment"
-                
+                      
                 if p: # Don't do it on the first record. 
                     p.write_stats(min_key, max_key, count)
                     count = 0
                     min_key = row[pk]
                     ins.close()
 
-                    if store_library:
-                        if logger:
-                            logger.always("Storing {} to Library".format(p.vname), now=True)
-                            
-                        dst, cache_key, url = self.library.put(p)
-                        p.database.delete()
-                        
-                        if logger:
-                            logger.always("Stored at {}".format(dst), now=True)
+                    store_library(p)
 
                 seg += 1
                 ident = self.identity
@@ -137,6 +139,7 @@ class SqlitePartition(PartitionBase):
 
                 p = self.bundle.partitions.find_or_new_csv(ident)
                 ins = p.inserter( write_header=write_header)
+                logger.always("New CSV Segment: {}".format(p.identity.name), now=True)
                 
             count += 1
             ins.insert(dict(row))
@@ -147,6 +150,7 @@ class SqlitePartition(PartitionBase):
 
         p.write_stats(min_key, max_key, count)
         ins.close()
+        store_library(p)
 
     @property
     def rows(self):
