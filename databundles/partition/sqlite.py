@@ -87,9 +87,9 @@ class SqlitePartition(PartitionBase):
         
         BYTES_PER_CELL = 3.8 # Bytes per num_row * num_col, experimental
         
-        # Shoot for about 500M uncompressed, which should compress to about 100M
+        # Shoot for about 250M uncompressed, which should compress to about 25M
 
-        rows_per_seg = (512*1024*1024 / (len(self.table.columns) * BYTES_PER_CELL) ) 
+        rows_per_seg = (250*1024*1024 / (len(self.table.columns) * BYTES_PER_CELL) ) 
         
         # Round up to nearest 100K
         

@@ -1591,14 +1591,14 @@ class Library(object):
         '''Store a reference to a partition that has been uploaded directly to the remote'''
         pass
         
-    def put_file(self, identity, file_path, state='new'):
+    def put_file(self, identity, file_path, state='new', force=False):
         '''Store a dataset or partition file, without having to open the file
         to determine what it is, by using  seperate identity''' 
         
         if isinstance(identity , dict):
             identity = new_identity(identity)
 
-        if not self.cache.has(identity.cache_key):
+        if not self.cache.has(identity.cache_key) or force:
             dst = self.cache.put(file_path,identity.cache_key)
         else: 
             dst = self.cache.path(identity.cache_key)
