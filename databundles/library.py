@@ -1616,7 +1616,7 @@ class Library(object):
 
         return dst, identity.cache_key, self.cache.last_upstream().path(identity.cache_key)
      
-    def put(self, bundle):
+    def put(self, bundle, force=False):
         '''Install a bundle or partition file into the library.
         
         :param bundle: the file object to install
@@ -1635,7 +1635,7 @@ class Library(object):
         
         bundle.identity.name # throw exception if not right type. 
         
-        dst, cache_key, url = self.put_file(bundle.identity, bundle.database.path)
+        dst, cache_key, url = self.put_file(bundle.identity, bundle.database.path, force=force)
 
         return dst, cache_key, url
 
