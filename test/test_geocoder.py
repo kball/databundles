@@ -37,7 +37,7 @@ class Test(TestBase):
                 print "==", addr
                 print "->",r
                 if r:
-                    print "  ", r['coded_address']
+                    print "  ", r['codedaddress']
 
 
     def write_error_row(self, code, arg, p, w, address, city):

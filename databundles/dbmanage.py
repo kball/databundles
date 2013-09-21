@@ -585,10 +585,15 @@ def _print_info(l,d,p):
     remote_p = None
     
     if api:
-        r = api.get(d.vid, p.vid if p else None)
-        if r:
-            remote_d = r['dataset']
-            remote_p = r['partitions'].items()[0][1] if p and 'partitions' in r and len(r['partitions']) != 0 else None
+        from client.exceptions import NotFound
+        try:
+            r = api.get(d.vid, p.vid if p else None)
+            if r:
+                remote_d = r['dataset']
+                remote_p = r['partitions'].items()[0][1] if p and 'partitions' in r and len(r['partitions']) != 0 else None
+        except NotFound as e:
+            pass 
+        
 
 
     prt("D --- Dataset ---")

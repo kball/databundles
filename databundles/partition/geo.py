@@ -174,7 +174,9 @@ class GeoPartition(SqlitePartition):
                 ins.insert(line)
                 progress_f(i)
 
-    def load_shapefile(self, pid=None,  **kwargs):
+
+
+    def load_shapefile(self, path,  **kwargs):
         """Load a shape file into a partition as a spatialite database. 
         
         Will also create a schema entry for the table speficified in the 
@@ -185,18 +187,7 @@ class GeoPartition(SqlitePartition):
         from databundles.dbexceptions import ConfigurationError
         from databundles.geo.util import get_shapefile_geometry_types
         import os
-        
-        pid, name = self._pid_or_args_to_pid(self.bundle, pid, kwargs)
-        pid['format'] = 'geo'
-        partition = self.new_partition(pid)
-        try: extant = self.partitions.find(pid)
-        except: extant = None # Fails with ValueError because table does not exist. 
-        
-        if extant:
-            raise Exception('Geo partition already exists for pid: {}'.format(pid.name))                
-        
-        shape_file=kwargs.get('shape_file')
-        
+
         t_srs=kwargs.get('t_srs')
         
         if t_srs:
@@ -204,39 +195,30 @@ class GeoPartition(SqlitePartition):
         else:
             t_srs_opt = ''
         
-        if shape_file.startswith('http'):
-            shape_url = shape_file
-            shape_file = self.bundle.filesystem.download_shapefile(shape_url)
+        if path.startswith('http'):
+            shape_url = path
+            path = self.bundle.filesystem.download_shapefile(shape_url)
         
         try:
             subprocess.check_output('ogr2ogr --help-general', shell=True)
         except:
             raise ConfigurationError('Did not find ogr2ogr on path. Install gdal/ogr')
         
-        self.bundle.log("Checking types in file")
-        types, type = get_shapefile_geometry_types(shape_file)
+        self.bundle.log("Checking types in file {}".format(path))
+        types, type = get_shapefile_geometry_types(path)
         
         #ogr_create="ogr2ogr -explodecollections -skipfailures -f SQLite {output} -nlt  {type} -nln \"{table}\" {input}  -dsco SPATIALITE=yes"
         
         ogr_create="ogr2ogr  -progress -skipfailures -f SQLite {output} -gt 65536 {t_srs} -nlt  {type} -nln \"{table}\" {input}  -dsco SPATIALITE=yes"
-        
-        if not pid.table:
-            raise ValueError("Pid must have a table name")
-         
-        table_name = pid.table
-        
-        t = self.bundle.schema.add_table(pid.table)
-        self.bundle.database.commit()
 
-        
-        dir_ = os.path.dirname(partition.database.path)
+        dir_ = os.path.dirname(self.database.path)
         if not os.path.exists(dir_):
             self.bundle.log("Make dir: "+dir_)
             os.makedirs(dir_)
         
-        cmd = ogr_create.format(input = shape_file,
-                                output = partition.database.path,
-                                table = table_name,
+        cmd = ogr_create.format(input = path,
+                                output = self.database.path,
+                                table = self.table.name,
                                 type = type,
                                 t_srs = t_srs_opt
                                  )
@@ -245,10 +227,9 @@ class GeoPartition(SqlitePartition):
     
         output = subprocess.check_output(cmd, shell=True)
 
-        for row in partition.database.connection.execute("pragma table_info('{}')".format(table_name)):
-            self.bundle.schema.add_column(t,row[1],datatype = row[2].lower())
+        for row in self.database.connection.execute("pragma table_info('{}')".format(self.table.name)):
+            self.bundle.schema.add_column(self.table,row[1],datatype = row[2].lower())
 
-        return partition
 
     def __repr__(self):
         return "<geo partition: {}>".format(self.name)

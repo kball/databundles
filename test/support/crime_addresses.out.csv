@@ -1,5 +1,6 @@
 input,output,number,multinumber,fraction,street_direction,street_name,street_type,suite,city,state,zip,is_block
 "300  BLOCK ACACIA AVENUE,  Carlsbad CA","300 Acacia Ave, Carlsbad, CA",300,,,,Acacia,ave,,carlsbad,ca,,True
+"300  BLOCK 8 th AVENUE,  Carlsbad CA","300 8Th Ave, Carlsbad, CA",300,,,,8Th,ave,,carlsbad,ca,,True
 "300 Acacia Ave, Carlsbad, CA","300 Acacia Ave, Carlsbad, CA",300,,,,Acacia,ave,,carlsbad,ca,,False
 "2600 Carlsbad Blvd, Carlsbad, CA","2600 Carlsbad Blvd, Carlsbad, CA",2600,,,,Carlsbad,blvd,,carlsbad,ca,,False
 "300 Acacia Ave, Carlsbad, CA","300 Acacia Ave, Carlsbad, CA",300,,,,Acacia,ave,,carlsbad,ca,,False

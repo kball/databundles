@@ -189,6 +189,7 @@ select 'Loading CSV file','{path}';
         diff = time.clock() - start
         return count, diff
 
+
 class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
 
 
@@ -239,6 +240,22 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
         s.commit()
         
         return table
+    
+    def locked_commit(self):
+        '''Acquire a file lock before committing the session. we will wait for this lock
+        much longer than the lock internal to Sqlite '''
+        lock = self.lock
+        
+        with self.lock():
+            return self.session.commit()
+    
+    @property
+    def lock(self):
+        '''Return a file lock on the database'''
+        from lockfile import FileLock
+        path =   self.base_path+'.lock'
+        return FileLock(path)
+
 
 class SqliteWarehouseDatabase(SqliteDatabase):
 

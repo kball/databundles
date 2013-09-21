@@ -100,18 +100,20 @@ class Response(object):
         return it, to be raised later'''  
         
         import types
+        
         field = self.object['exception']['class']
-      
+
         pre_message = ''
         try:
-            class_ = getattr(sys.modules['exceptions'], field)
+            class_ = getattr(sys.modules['databundles.client.exceptions'], field)
         except AttributeError:
-            pre_message = "(Class: {}) ".format(field)
+            pre_message = "(Class: {}.) ".format(field)
             class_=Exception
             
         if not isinstance(class_, (types.ClassType, types.TypeType)):
-            pre_message = "(Class: {}) ".format(field)
+            pre_message = "(Class: {},) ".format(field)
             class_=Exception
+
         
         args = self.object['exception']['args']
         

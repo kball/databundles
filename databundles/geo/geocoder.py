@@ -160,6 +160,8 @@ class Geocoder(object):
         else:
             r['codedaddress'] = None
 
+        r = { k:v if v != '-' else None for k,v in r.items() }
+
         return r
         
     def geocode_street(self, street):
@@ -283,14 +285,14 @@ class Geocoder(object):
         return score
 
     def _do_search(self, queries, number, street, street_type, city, state):
-
+        from collections import defaultdict
         if not number:
             return [];
 
+        candidates = defaultdict(list)
+
         for quality, query, args in queries:
 
-            candidates = {}
-            print query, args
             for ar in self.addresses.query(query, *args  ):
                 ar = dict(ar)
                 
@@ -302,9 +304,9 @@ class Geocoder(object):
                     'segment_source_id':  ar.get('segment_source_id'),
                     'address_source_id': ar.get('addr_source_id'),
                     'zip': ar.get('zip'),
-                    'street': ar['street'],
-                    'street_dir': ar.get('street_dir',None),
-                    'street_type': ar['street_type'],
+                    'street': ar['name'],
+                    'street_dir': ar.get('dir',None),
+                    'street_type': ar['type'],
                     'x': ar.get('x'),
                     'y': ar.get('y'),
                     'lat': ar.get('lat'),
@@ -313,10 +315,11 @@ class Geocoder(object):
                     'city' : city
                 }
                 
-                candidates.setdefault((city,ar['street'],ar['street_type']),[]).append(r)
+               
+                candidates[(city,ar['name'],ar['type'])].append(r)
 
-            if len(candidates) > 0:
-                return candidates
+        if len(candidates) > 0:
+            return candidates
 
         return []
 
@@ -395,21 +398,30 @@ class Geocoder(object):
         block_number = int(float(number)/100.0)*100
 
         queries = [
-            (20, """SELECT * FROM addresses WHERE city = ? AND street = ? AND street_type = ? AND number = ?
+            (20, """SELECT * FROM addresses WHERE city = ? AND name = ? AND type = ? AND number = ?
             ORDER BY segment_source_id""",(city,  street, street_type, number )), 
-            (19, """SELECT * FROM addresses WHERE city = ? AND street = ? AND number = ?
+            (19, """SELECT * FROM addresses WHERE city = ? AND name = ? AND number = ?
             ORDER BY segment_source_id""",(city,  street, number )), 
-            (18, """SELECT * FROM addresses WHERE street = ? AND number = ?
+            (18, """SELECT * FROM addresses WHERE name = ? AND number = ?
             ORDER BY segment_source_id""",(street, number )),
-            (17, """SELECT * FROM addresses WHERE city = ? AND street = ? AND street_type = ? AND number BETWEEN ? AND ?
+            (17, """SELECT * FROM addresses WHERE city = ? AND name = ? AND type = ? AND number BETWEEN ? AND ?
             ORDER BY segment_source_id""",(city,  street, street_type, block_number,  str(int(block_number)+99)) ), 
-            (16, """SELECT * FROM addresses WHERE city = ? AND street = ? AND number BETWEEN ? AND ?
+            (16, """SELECT * FROM addresses WHERE city = ? AND name = ? AND number BETWEEN ? AND ?
             ORDER BY segment_source_id""",(city,  street, block_number,  str(int(block_number)+99)) ), 
-            (15, """SELECT * FROM addresses WHERE street = ? AND number BETWEEN ? AND ?
+            (15, """SELECT * FROM addresses WHERE name = ? AND number BETWEEN ? AND ?
             ORDER BY segment_source_id""",(street, block_number,  str(int(block_number)+99)) )
         ]
 
         return self._do_search(queries, number, street, street_type, city, state)
 
+    def geocode_to_addresses(self, street):
+        ''' '''
+        try: ps = self.parser.parse(street)
+        except: ps = False
+    
+        if not ps:
+            return None       
+        
+        return self._address_geocode_parts(ps.number, ps.street_name, ps.street_type, ps.city, ps.state)
 
     

@@ -53,14 +53,12 @@ class Partitions(object):
             raise ValueError("Arg must be a Partition or PartitionNumber")
 
 
-        s = self.bundle.database.session    
+        s =  self.bundle.database.session   
         if s.dirty:
             s.merge(orm_partition)
-            s.commit()
-
+            self.bundle.database.session.locked_commit()
 
         return new_partition(self.bundle, orm_partition, **kwargs)
-
 
 
     @property
@@ -347,8 +345,8 @@ class Partitions(object):
         
         s = self.bundle.database.session
         s.add(op)   
-        
-        try: s.commit()     
+
+        try: self.bundle.database.locked_commit()     
         except:
             self.bundle.error("Failed creating new partition for database: {} ".format(self.bundle.database.path)) 
             self.bundle.error("{}, {}".format(pid, kwargs))
@@ -376,13 +374,22 @@ class Partitions(object):
         else: 
             kwargs['format'] = 'geo'
         
-        if kwargs.get('shape_file'):
-            raise Exception("Link to .. Geopartition.load_shapefile()")
+        # We'll need to load a table from the shapefile, so that has to be created before
+        # we create the partition. 
+        if not pid.table:
+            raise ValueError("Pid must have a table name")
+
+        table_name = pid.table
         
-            return self._new_geo_partition_from_shape( pid, **kwargs)
-        else:
-                
-            return self._new_partition(pid, **kwargs)
+        t = self.bundle.schema.add_table(pid.table)
+        self.bundle.database.locked_commit()     
+        
+        p = self._new_partition(pid, **kwargs)
+
+        if kwargs.get('shape_file'):
+            p.load_shapefile( kwargs.get('shape_file'), **kwargs)
+     
+        return p
         
     def new_hdf_partition(self, pid=None, **kwargs):
         

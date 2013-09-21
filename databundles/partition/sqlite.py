@@ -79,21 +79,30 @@ class SqlitePartition(PartitionBase):
             self.database.create()
 
 
+    def optimal_rows_per_segment(self, size = 500*1024*1024):
+        '''Calculate how many rows to put into a CSV segment for a target number
+        of bytes per file'''
+        
+        BYTES_PER_CELL = 3.8 # Bytes per num_row * num_col, experimental
+        
+        # Shoot for about 250M uncompressed, which should compress to about 25M
+
+        rows_per_seg = (size / (len(self.table.columns) * BYTES_PER_CELL) ) 
+        
+        # Round up to nearest 100K
+        
+        rows_per_seg = round(rows_per_seg/100000+1) * 100000
+        
+        return rows_per_seg
+        
+
     def csvize(self, logger=None, store_library=False, write_header=False):
         '''Convert this partition to CSV files that are linked to the partition'''
         
         if not self.record.count:
             raise Exception("Must run stats before cvsize")
         
-        BYTES_PER_CELL = 3.8 # Bytes per num_row * num_col, experimental
-        
-        # Shoot for about 250M uncompressed, which should compress to about 25M
-
-        rows_per_seg = (250*1024*1024 / (len(self.table.columns) * BYTES_PER_CELL) ) 
-        
-        # Round up to nearest 100K
-        
-        rows_per_seg = round(rows_per_seg/100000+1) * 100000
+        rows_per_seg = self.optimal_rows_per_segment()
         
         if logger:
             logger.always("Csvize: {} rows per segment".format(rows_per_seg))

@@ -16,7 +16,8 @@ from .inserter import InserterInterface
 
 class ValueInserter(InserterInterface):
     '''Inserts arrays of values into  database table'''
-    def __init__(self, bundle, path, table=None, header=None, delimiter = '|', encoding='utf-8', write_header = False,  buffer_size=2*1024*1024): 
+    def __init__(self, bundle, path, table=None, header=None, delimiter = '|', encoding='utf-8', 
+                 write_header = False,  buffer_size=2*1024*1024): 
      
         self.table = table
         self.header = header

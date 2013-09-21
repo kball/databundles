@@ -180,6 +180,9 @@ class RelationalDatabase(DatabaseInterface):
             
         return self._session
    
+
+        
+   
     def open(self):
         # Fetching the connection objects the database
         # This isn't necessary for Sqlite databases. 
@@ -196,6 +199,7 @@ class RelationalDatabase(DatabaseInterface):
    
     def commit(self):
         self.session.commit()
+
 
     def clean_table(self, table):
 
@@ -266,12 +270,12 @@ class RelationalDatabase(DatabaseInterface):
             p = self.db.bundle.partitions.find_or_new_csv(ident)   
             return p.inserter(self.table)
 
-    def csvinserter(self, table_or_name=None,segment_size=200000, **kwargs):
-        '''Return an inserter that writes to segmented CSV partitions'''
+    def csvinserter(self, table_or_name=None,segment_rows=200000,  **kwargs):
+        '''Return an inserter that writes to segmented CSV partitons'''
         
         sif = self.csv_partition_factory(self, table_or_name)
 
-        return SegmentedInserter(segment_size=segment_size, segment_factory = sif,  **kwargs)
+        return SegmentedInserter(segment_size=segment_rows, segment_factory = sif,  **kwargs)
 
 
     def set_config_value(self, d_vid, group, key, value):

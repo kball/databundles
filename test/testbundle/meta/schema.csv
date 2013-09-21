@@ -3,6 +3,8 @@
 "tone"	2	"text"			1		"VARCHAR"			"DEFAULT"		20	1	1	"two"	
 "tone"	3	"integer"				1	"INTEGER"			-1			1		"three"	
 "tone"	4	"float"				1	"REAL"			3.14					"four"	
+"tone"	5	"extra"				1	"TEXT"								"extra"	
+"tone"	6	"extra2"				1	"TEXT"			"DEFAULT"		20			"extra"	
 																
 "ttwo"	1	"ttwo_id"	1				"INTEGER"								"one"	1
 "ttwo"	2	"text"			1		"VARCHAR"			"DEFAULT"		20			"two"	

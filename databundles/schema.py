@@ -369,7 +369,11 @@ class Schema(object):
         from orm import Column
         import csv, re
         
-        dlct = csv.Sniffer().sniff(file_.read(2024))
+        try:
+            dlct = csv.Sniffer().sniff(file_.read(2024))
+        except:
+            dlct = None
+            
         file_.seek(0)
 
         if not progress_cb:
@@ -389,7 +393,7 @@ class Schema(object):
             if not row.get('column', False) and not row.get('table', False):
                 continue
             
-            row = { k:str(v).decode('utf8', 'ignore').encode('ascii','ignore').strip() for k,v in row.items()}
+            row = { k:str(v).decode('utf8', 'ignore').encode('ascii','ignore').strip() for k,v in row.items() }
 
             if  row['table'] and row['table'] != last_table:
                 new_table = True

@@ -265,6 +265,8 @@ class ParserState(object):
             self.state = None
             self.city = None
             self.cross_street = None
+            
+            self._hash = None
 
 
         def __str__(self):
@@ -327,12 +329,43 @@ class ParserState(object):
                     'suite' : self.suite, 
                     'is_block': self.is_block,
                     'street_name':self.street_name,
+                    'name':self.street_name,
                     'street_direction':self.street_direction,
+                    'dir':self.street_direction,
                     'street_type':self.street_type,
+                    'type':self.street_type,
                     'city':self.city,
                     'state':self.state,
-                    'zip':self.zip
+                    'zip':self.zip,
+                    'hash':self.hash
                     }
+        
+        @property
+        def hash(self):
+            
+            if not self._hash:
+                
+                import hashlib
+                m = hashlib.md5()
+                
+                s = '|'.join([
+                        str(self.number),
+                        self.multinumber or '.',
+                        self.fraction or '.', 
+                        self.suite or '.', 
+                        str(self.is_block),
+                        self.street_name or '.',
+                        self.street_direction or '.',
+                        self.street_type or '.',
+                        self.city or '.',
+                        self.state or '.',
+                        str(self.zip)
+                        ])
+                
+                m.update(s)
+
+                self._hash = m.hexdigest()
+            return self._hash
         
         def next(self, location = 0):
             try:

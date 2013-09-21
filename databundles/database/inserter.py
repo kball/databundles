@@ -39,18 +39,18 @@ class SegmentedInserter(InserterInterface):
     def __init__(self, segment_size=100000, segment_factory = None):
         pass
     
-        self.segment = 0
+        self.segment = 1
         self.inserter = None
         self.count = 0
         self.segment_size = segment_size
         self.factory = segment_factory
-    
-    def __enter__(self): 
-        self.segment += 1
-         
+
         self.inserter = self.factory.next_inserter(self.segment)
        
         self.inserter.__enter__()
+    
+    def __enter__(self): 
+
         return self
             
     def __exit__(self, type_, value, traceback):
@@ -85,7 +85,7 @@ class ValueWriter(InserterInterface):
         self.session = self.db.session
         self.connection = self.db.connection
 
-        self.transaction = None
+        self.transaction = self.connection.begin()
         self.cache_size = cache_size
         self.statement = None
         self.caster = caster
@@ -94,7 +94,6 @@ class ValueWriter(InserterInterface):
             self.db.engine.raw_connection().connection.text_factory = text_factory
 
     def __enter__(self): 
-        self.transaction = self.connection.begin()
         return self
         
     def rollback_end(self):
@@ -160,6 +159,8 @@ class ValueInserter(ValueWriter):
         
         self.skip_none = skip_none
         
+        self.null_row = self.bundle.schema.table(table.name).null_dict
+    
         if replace:
             self.statement = self.statement.prefix_with('OR REPLACE')
 
@@ -173,8 +174,10 @@ class ValueInserter(ValueWriter):
                     d = dict(values)
     
                 if self.skip_none:
-                    d = {k:v for k,v in d.items() if v is not None}
-
+            
+                    d = { k: d[k] if k in d and d[k] is not None else v for k,v in self.null_row.items() }
+                  
+                    
             else:
                 
                 if self.caster:
@@ -188,7 +191,7 @@ class ValueInserter(ValueWriter):
                 d  = dict(zip(self.header, d))
                 
                 if self.skip_none:
-                    d = {k:v for k,v in d.items() if v is not None}
+                    d = { k: d[k] if k in d and d[k] is not None else v for k,v in self.null_row.items() }
                 
             self.cache.append(d)
          
@@ -197,9 +200,7 @@ class ValueInserter(ValueWriter):
                 self.cache = []
                 
                 self.commit_continue()
-                
-            
-                
+
         except (KeyboardInterrupt, SystemExit):
             if self.bundle:
                 self.bundle.log("Processing keyboard interrupt or system exist")

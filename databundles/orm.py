@@ -680,10 +680,14 @@ class Table(Base):
         if self._null_row is None:
             self._null_row = []
             for col in self.columns:
-                if col.default:
-                    self._null_row.append(col.default)
+                if col.is_primary_key:
+                    v = None
+                elif col.default:
+                    v = col.default
                 else:
-                    self._null_row.append(None)
+                    v = None
+                    
+                self._null_row.append(v)
             
         return self._null_row
 
@@ -692,10 +696,14 @@ class Table(Base):
         if self._null_row is None:
             self._null_row = {}
             for col in self.columns:
-                if col.default:
-                    self._null_row[col.name] = col.default
+                if col.is_primary_key:
+                    v = None
+                elif col.default:
+                    v = col.default
                 else:
-                    self._null_row[col.name] = None
+                    v = None
+                    
+                self._null_row[col.name] = v
             
         return self._null_row
 
