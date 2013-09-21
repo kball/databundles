@@ -241,12 +241,16 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
         
         return table
     
+    def commit(self):
+        print "UNLOCKED COMMIT"
+        super(SqliteBundleDatabase, self).commit()
+     
+    
     def locked_commit(self):
         '''Acquire a file lock before committing the session. we will wait for this lock
         much longer than the lock internal to Sqlite '''
-        lock = self.lock
-        
-        with self.lock():
+
+        with self.lock:
             return self.session.commit()
     
     @property
