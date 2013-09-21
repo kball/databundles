@@ -366,7 +366,7 @@ class BuildBundle(Bundle):
     def init_log_rate(self, N=5000, message=''):
         """Initialze the log_rate function. Returnas a partial function to call for
         each event"""
-      
+
         import functools, time
         d =  [0,  # number of items processed
                 time.clock(), # start time. This one gets replaced after first message
