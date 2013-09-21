@@ -86,24 +86,25 @@ class Schema(object):
         if not name_or_id:
             raise ValueError("Got an invalid argument: {}".format(name_or_id))
         
-        try: 
-            if d_vid:
-                return (db.session.query(Table).filter(
-                         and_(Table.d_vid ==  d_vid,   
-                         or_(Table.vid==name_or_id,
-                             Table.id_==name_or_id,
-                             Table.name==name_or_id))
-                        ).one())
-                
-            else:
-    
-                return (db.session.query(Table).filter(
-                         or_(Table.vid==name_or_id,
-                             Table.id_==name_or_id,
-                             Table.name==name_or_id)
-                        ).one())
-        except Exception as e:
-            raise sqlalchemy.orm.exc.NoResultFound("No table for name_or_id: {}".format(name_or_id))
+        with db.lock:
+            try: 
+                if d_vid:
+                    return (db.session.query(Table).filter(
+                             and_(Table.d_vid ==  d_vid,   
+                             or_(Table.vid==name_or_id,
+                                 Table.id_==name_or_id,
+                                 Table.name==name_or_id))
+                            ).one())
+                    
+                else:
+        
+                    return (db.session.query(Table).filter(
+                             or_(Table.vid==name_or_id,
+                                 Table.id_==name_or_id,
+                                 Table.name==name_or_id)
+                            ).one())
+            except Exception as e:
+                raise sqlalchemy.orm.exc.NoResultFound("No table for name_or_id: {}".format(name_or_id))
 
 
     def table(self, name_or_id):
