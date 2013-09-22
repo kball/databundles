@@ -213,9 +213,6 @@ class PartitionInterface(object):
     @property
     def name(self):  raise NotImplementedError()
     
-    @property
-    def identity(self):  raise NotImplementedError()
-    
     def _path_parts(self): 
         raise NotImplementedError()
     
@@ -272,6 +269,7 @@ class PartitionBase(PartitionInterface):
         self.record = record
         
         self.dataset = self.record.dataset
+        self.identity = self.record.identity
         
         self._db_class = None
         self._database =  None
@@ -284,11 +282,6 @@ class PartitionBase(PartitionInterface):
     def name(self):
         return self.identity.name
     
-    @property
-    def identity(self):
-        
-        return self.record.identity
-
     
     @property
     def path(self):

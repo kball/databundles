@@ -66,7 +66,7 @@ class SegmentedInserter(InserterInterface):
             self.inserter = self.factory.next_inserter(self.segment)
             
             self.count = 0
-        
+
         return self.inserter.insert(row)
         
     

@@ -270,6 +270,10 @@ class BuildBundle(Bundle):
         return self.database.lock
 
     @property
+    def has_session(self):
+        return self.database.has_session
+
+    @property
     def db_config(self):
         return BundleDbConfig(self.database)
 

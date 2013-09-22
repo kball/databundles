@@ -218,9 +218,6 @@ class BundleLockContext(object):
         Session = sessionmaker(bind=self._bundle.engine,autocommit=False)
         self._session =  Session()
 
-        if self._lock.is_locked():
-            raise Exception("Already lock for this process: ")
-
         #print " #### LOCKING ", self._lock_path
         self._lock.acquire()
 
@@ -286,6 +283,10 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
         
         return self._session
         
+    @property
+    def has_session(self):
+        return self._session is not None
+                
     @property
     def lock(self):
         return BundleLockContext(self)

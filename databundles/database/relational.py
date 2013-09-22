@@ -253,20 +253,26 @@ class RelationalDatabase(DatabaseInterface):
 
     class csv_partition_factory(SegmentInserterFactory):
        
-        def __init__(self, db, table):
+        def __init__(self, bundle, db, table):
             self.db = db
             self.table = table
+            self.bundle = bundle
         
         def next_inserter(self, seg): 
             ident = self.db.partition.identity
             ident.segment = seg
-            p = self.db.bundle.partitions.find_or_new_csv(ident)   
+            
+            if self.bundle.has_session:
+                p = self.db.bundle.partitions.find_or_new_csv(ident)  
+            else:
+                with self.bundle.session:
+                    p = self.db.bundle.partitions.find_or_new_csv(ident)  
             return p.inserter(self.table)
 
     def csvinserter(self, table_or_name=None,segment_rows=200000,  **kwargs):
         '''Return an inserter that writes to segmented CSV partitons'''
         
-        sif = self.csv_partition_factory(self, table_or_name)
+        sif = self.csv_partition_factory(self.bundle, self, table_or_name)
 
         return SegmentedInserter(segment_size=segment_rows, segment_factory = sif,  **kwargs)
 
