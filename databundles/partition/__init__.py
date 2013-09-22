@@ -235,17 +235,7 @@ class PartitionInterface(object):
         '''Removes the database record from the object'''
         raise NotImplementedError()
     
-    @property
-    def data(self):
-        return self.record.data
-    
-    
-    @property
-    def table(self):
-        '''Return the orm table for this partition, or None if
-        no table is specified. 
-        '''
-        raise NotImplementedError()
+
        
     @property
     def tables(self):  raise NotImplementedError() 
@@ -270,6 +260,8 @@ class PartitionBase(PartitionInterface):
         
         self.dataset = self.record.dataset
         self.identity = self.record.identity
+        self.data = self.record.data
+        self.table = self.get_table()
         
         self._db_class = None
         self._database =  None
@@ -299,8 +291,8 @@ class PartitionBase(PartitionInterface):
     def tables(self):
         return self.data.get('tables',[])
 
-    @property
-    def table(self):
+
+    def get_table(self):
         '''Return the orm table for this partition, or None if
         no table is specified. 
         '''
@@ -317,10 +309,7 @@ class PartitionBase(PartitionInterface):
         '''Removes the database record from the object'''
         self._database = None
        
-    @property
-    def data(self):
-        return self.record.data 
-    
+
     
     def inserter(self, table_or_name=None,**kwargs):
         

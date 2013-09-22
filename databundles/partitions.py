@@ -221,6 +221,7 @@ class Partitions(object):
         '''Return a Partition object from the database based on a PartitionId.
         An ORM object is returned, so changes can be persisted. '''
         import sqlalchemy.orm.exc
+
         from databundles.identity import Identity
         from databundles.orm import Partition as OrmPartition
         
@@ -258,6 +259,8 @@ class Partitions(object):
                         raise ValueError("Didn't find table named {} in {} bundle path = {}".format(pid.table, pid.vname, self.bundle.database.path))
                     
                     q = q.filter(OrmPartition.t_id==tr.id_)
+ 
+        q = q.order_by(OrmPartition.vid.asc()).order_by(OrmPartition.segment.asc())
  
         return q
 

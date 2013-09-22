@@ -79,6 +79,13 @@ class SqlitePartition(PartitionBase):
             self.database.create()
 
 
+    def clean(self):
+        '''Delete all of the records in the tables declared for this oartition'''
+        
+        for table in self.data.get('tables',[]):
+            self.database.query("DELETE FROM {}".format(table))
+        
+
     def optimal_rows_per_segment(self, size = 500*1024*1024):
         '''Calculate how many rows to put into a CSV segment for a target number
         of bytes per file'''
@@ -160,6 +167,33 @@ class SqlitePartition(PartitionBase):
         p.write_stats(min_key, max_key, count)
         ins.close()
         store_library(p)
+
+    def get_csv_parts(self):
+        ident = self.identity.clone()   
+        ident.format = 'csv'
+        ident.segment = self.identity.ANY
+
+        return self.bundle.partitions.find_all(ident)
+
+    def load_csv(self, table=None, parts=None):
+        '''Loads the database from a collection of CSV files that have the same identity, 
+        except for a format of 'csv' and possible segments. '''
+
+        if not parts:
+            parts = self.get_csv_parts()
+
+        
+        self.clean()
+      
+        lr = self.bundle.init_log_rate(100000)
+      
+        if table is None:
+            table = self.table
+      
+        for p in parts:
+            print p.identity.vname
+            self.database.load(p.database, table, logger=lr )
+        
 
     @property
     def rows(self):

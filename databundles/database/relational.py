@@ -277,6 +277,7 @@ class RelationalDatabase(DatabaseInterface):
         return SegmentedInserter(segment_size=segment_rows, segment_factory = sif,  **kwargs)
 
 
+
     def set_config_value(self, d_vid, group, key, value):
         from databundles.orm import Config as SAConfig
         
