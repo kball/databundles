@@ -43,6 +43,9 @@ class SqliteDatabase(RelationalDatabase):
         else:
             return self.base_path+self.EXTENSION
      
+    @property
+    def lock_path(self):
+        return self.base_path
 
     def require_path(self):
         if not self.memory:
@@ -51,6 +54,9 @@ class SqliteDatabase(RelationalDatabase):
             
     @property
     def engine(self):
+        return self._get_engine(_on_connect)
+    
+    def _get_engine(self, connect_listener):
         '''return the SqlAlchemy engine for this database'''
         from sqlalchemy import create_engine  
         import sqlite3
@@ -64,7 +70,7 @@ class SqliteDatabase(RelationalDatabase):
             
             from sqlalchemy import event
             
-            event.listen(self._engine, 'connect', _on_connect)
+            event.listen(self._engine, 'connect',connect_listener)
             #event.listen(self._engine, 'connect', _on_connect_update_schema)
             _on_connect_update_schema(self.connection)
              
@@ -190,6 +196,56 @@ select 'Loading CSV file','{path}';
         return count, diff
 
 
+    
+class BundleLockContext(object):
+    
+    def __init__( self, bundle):
+
+        from lockfile import FileLock
+
+        self._bundle = bundle
+        self._lock_path = self._bundle.path
+
+        self._lock = FileLock(self._lock_path)
+
+            
+    def __enter__( self ):
+        from sqlalchemy.orm import sessionmaker
+        
+        if self._bundle._session:
+            raise Exception("Bundle already has a session")
+        
+        Session = sessionmaker(bind=self._bundle.engine,autocommit=False)
+        self._session =  Session()
+
+        if self._lock.is_locked():
+            raise Exception("Already lock for this process: ")
+
+        #print " #### LOCKING ", self._lock_path
+        self._lock.acquire()
+
+        self._bundle._session = self._session
+        return self._session
+    
+    def __exit__( self, exc_type, exc_val, exc_tb ):
+
+        if  exc_type is not None:
+            self._session.rollback()
+            self._lock.release()
+            self._bundle._session.close()
+            self._bundle._session = None
+            #print " #### UNLOCKED w/Exception", self._lock_path
+            return False
+        else:
+            #print " #### UNLOCKING ", self._lock_path
+            self._session.commit()
+            self._lock.release()
+            self._bundle._session.close()
+            self._bundle._session = None
+            #print " #### UNLOCKED ", self._lock_path
+            return True
+            
+
 class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
 
 
@@ -200,19 +256,39 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
         RelationalBundleDatabaseMixin._init(self, bundle)
         super(SqliteBundleDatabase, self).__init__(dbname,  **kwargs)
 
+        self._session = None # This is controlled by the BundleLockContext
+
     def create(self):
 
         self.require_path()
-        
+  
         if RelationalDatabase._create(self):
             
             RelationalBundleDatabaseMixin._create(self)
-            
-            s =  self.session
-            s.execute("PRAGMA user_version = {}".format(self.SCHEMA_VERSION))
-            s.commit()
-            
+
+            self._unmanaged_session.execute("PRAGMA user_version = {}".format(self.SCHEMA_VERSION))
+
             self.post_create()
+            
+            self._unmanaged_commit()
+
+        
+    @property
+    def engine(self):
+        return self._get_engine(_on_connect_bundle)
+        
+    @property
+    def session(self):
+        from ..dbexceptions import  NoLock
+        
+        if not self._session:
+            raise NoLock("Must use bundle.lock to acquire a session lock")
+        
+        return self._session
+        
+    @property
+    def lock(self):
+        return BundleLockContext(self)
         
             
     def copy_table_from(self, source_db, table_name):
@@ -225,40 +301,19 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
         from databundles.schema import Schema
         
         table = Schema.get_table_from_database(source_db, table_name)
-        
-        s = self.session
-        
-        table.session_id = None
-     
-        s.merge(table)
-        s.commit()
-        
-        for column in table.columns:
-            column.session_id = None
-            s.merge(column)
-        
-        s.commit()
-        
+
+        with self.session_context as s:
+            table.session_id = None
+         
+            s.merge(table)
+            s.commit()
+            
+            for column in table.columns:
+                column.session_id = None
+                s.merge(column)
+
         return table
     
-    def commit(self):
-        print "UNLOCKED COMMIT"
-        super(SqliteBundleDatabase, self).commit()
-     
-    
-    def locked_commit(self):
-        '''Acquire a file lock before committing the session. we will wait for this lock
-        much longer than the lock internal to Sqlite '''
-
-        with self.lock:
-            return self.session.commit()
-    
-    @property
-    def lock(self):
-        '''Return a file lock on the database'''
-        from lockfile import FileLock
-        path =   self.base_path+'.lock'
-        return FileLock(path)
 
 
 class SqliteWarehouseDatabase(SqliteDatabase):
@@ -280,6 +335,14 @@ def _on_connect(dbapi_con, con_record):
     dbapi_con.execute('PRAGMA journal_mode = OFF')
     #dbapi_con.execute('PRAGMA synchronous = OFF')
     #dbapi_con.enable_load_extension(True)
+
+def _on_connect_bundle(dbapi_con, con_record):
+    '''ISSUE some Sqlite pragmas when the connection is created
+    
+    Bundles have different parameters because they are more likely to be accessed concurrently. 
+    '''
+
+
 
 
 def _on_connect_update_schema(conn):

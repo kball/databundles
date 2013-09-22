@@ -33,7 +33,7 @@ def get_identity(path):
     else:
         raise Exception("Invalid type: {}", type)
     
-
+            
     
 class Bundle(object):
     '''Represents a bundle, including all configuration 
@@ -96,16 +96,13 @@ class Bundle(object):
             self._identity =  Identity(**self.config.identity)
             
         return self._identity            
-        
-    @property
-    def dataset(self):
+
+    def get_dataset(self, session):
         '''Return the dataset'''
         
         from databundles.orm import Dataset
- 
-        s = self.database.session
 
-        return  (s.query(Dataset).one())
+        return  (session.query(Dataset).one())
         
     @property
     def library(self):
@@ -157,15 +154,15 @@ class Bundle(object):
 class DbBundle(Bundle):
 
     def __init__(self, database_file, logger=None):
-        '''Initialize a bundle and all of its sub-components. 
+        '''Initialize a db and all of its sub-components. 
         
-        If it does not exist, creates the bundle database and initializes the
-        Dataset record and Config records from the bundle.yaml file. Through the
-        config object, will trigger a re-load of the bundle.yaml file if it
+        If it does not exist, creates the db database and initializes the
+        Dataset record and Config records from the db.yaml file. Through the
+        config object, will trigger a re-load of the db.yaml file if it
         has changed. 
         
         Order of operations is:
-            Create bundle.db if it does not exist
+            Create db.db if it does not exist
         '''
         from .database.sqlite import SqliteBundleDatabase #@UnresolvedImport
         import os
@@ -267,6 +264,10 @@ class BuildBundle(Bundle):
             self._database  = BuildBundleDb(self, self.path)
 
         return self._database
+
+    @property
+    def session(self):
+        return self.database.lock
 
     @property
     def db_config(self):
@@ -439,7 +440,7 @@ class BuildBundle(Bundle):
 
     def pre_prepare(self):
 
-        if not vars(self.run_args).get('rebuild',False) and  self.database.exists() and self.db_config.get_value('process','prepared'):
+        if self.database.exists() and not vars(self.run_args).get('rebuild',False) and  self.db_config.get_value('process','prepared'):
             self.log("Bundle has already been prepared")
             #raise ProcessError("Bundle has already been prepared")
      
@@ -451,14 +452,15 @@ class BuildBundle(Bundle):
         if not self.database.exists():
             self.database.create()
 
-        if vars(self.run_args).get('rebuild',False):
-            self.rebuild_schema()
-        else:
-            sf  = self.filesystem.path(self.config.build.get('schema_file', 'meta/schema.csv'))
-            if os.path.exists(sf):
-                with open(sf, 'rbU') as f:
-                    self.schema.clean()
-                    self.schema.schema_from_file(f)      
+        with self.session:
+            if vars(self.run_args).get('rebuild',False):
+                self.rebuild_schema()
+            else:
+                sf  = self.filesystem.path(self.config.build.get('schema_file', 'meta/schema.csv'))
+                if os.path.exists(sf):
+                    with open(sf, 'rbU') as f:
+                        self.schema.clean()
+                        self.schema.schema_from_file(f)      
 
         return True
     
@@ -470,36 +472,41 @@ class BuildBundle(Bundle):
             self.schema.clean()
             self.schema.schema_from_file(f)  
             
-            s = self.database.session
             for p in partitions:
                 self.partitions.new_db_partition(p)
-            s.commit()
+
     
     
     def post_prepare(self):
         '''Set a marker in the database that it is already prepared. '''
         from datetime import datetime
-        self.db_config.set_value('process','prepared',datetime.now().isoformat())
-        self.update_configuration()
-
-        sf  = self.filesystem.path('meta','schema-revised.csv')
-
-        with open(sf, 'w') as f:
-            self.schema.as_csv(f)
-                        
+        
+        with self.session:
+            self.db_config.set_value('process','prepared',datetime.now().isoformat())
+            
+        with self.session:
+            self.update_configuration()
+    
+            sf  = self.filesystem.path('meta','schema-revised.csv')
+    
+            with open(sf, 'w') as f:
+                self.schema.as_csv(f)
+                    
         return True
    
     ### Build the final package
 
     def pre_build(self):
         from time import time
+        
         if not self.database.exists():
             raise ProcessError("Database does not exist yet. Was the 'prepare' step run?")
         
-        if not self.db_config.get_value('process','prepared'):
-            raise ProcessError("Build called before prepare completed")
-        
-        self._build_time = time()
+        with self.session:
+            if not self.db_config.get_value('process','prepared', False):
+                raise ProcessError("Build called before prepare completed")
+            
+            self._build_time = time()
         
         return True
         
@@ -509,9 +516,12 @@ class BuildBundle(Bundle):
     def post_build(self):
         from datetime import datetime
         from time import time
-        self.db_config.set_value('process', 'built', datetime.now().isoformat())
-        self.db_config.set_value('process', 'buildtime',time()-self._build_time)
-        self.update_configuration()
+        
+        with self.session:
+            self.db_config.set_value('process', 'built', datetime.now().isoformat())
+            self.db_config.set_value('process', 'buildtime',time()-self._build_time)
+            self.update_configuration()
+            
         return True
     
         
@@ -1004,7 +1014,7 @@ class BundleFileConfig(BundleConfig):
         self.local_file = os.path.join(self.root_dir,'bundle.yaml')
         
         self._run_config = get_runconfig(self.local_file)
-        
+
         # If there is no id field, create it immediately and
         # write the configuration back out. 
    
@@ -1075,11 +1085,8 @@ class BundleFileConfig(BundleConfig):
 
 from databundles.run import AttrDict
 class BundleDbConfigDict(AttrDict):
-    
-    _parent_key = None
-    _bundle = None
-    
-    def __init__(self, bundle):
+
+    def __init__(self, parent):
 
         super(BundleDbConfigDict, self).__init__()
     
@@ -1088,21 +1095,18 @@ class BundleDbConfigDict(AttrDict):
         
         for k,v in self.items():
             del self[k]
-        
-        s = bundle.database.session
+
         # Load the dataset
         self['identity'] = {}
-        for k,v in bundle.dataset.to_dict().items():
+        for k,v in parent.dataset.to_dict().items():
             self['identity'][k] = v
             
-        for row in s.query(SAConfig).all():
+        for row in parent.database.session.query(SAConfig).all():
             if row.group not in self:
                 self[row.group] = {}
                 
             self[row.group][row.key] = row.value
-            
 
-    
 class BundleDbConfig(BundleConfig):
     ''' Retrieves configuration from the database, rather than the .yaml file. '''
 
@@ -1118,7 +1122,11 @@ class BundleDbConfig(BundleConfig):
             raise Exception("Didn't get database")
         
         self.database = database
-        self.dataset = self.get_dataset()
+
+        from databundles.orm import Dataset
+
+
+        self.dataset = (self.database.session.query(Dataset).one())
        
     @property
     def dict(self): #@ReservedAssignment
@@ -1152,40 +1160,31 @@ class BundleDbConfig(BundleConfig):
         if self.group == 'identity':
             raise ValueError("Can't set identity group from this interface. Use the dataset")
         
-        s = self.database.session
-     
-        key = key.strip('_')
-  
-        s.query(SAConfig).filter(SAConfig.group == group,
-                                 SAConfig.key == key,
-                                 SAConfig.d_vid == self.dataset.vid).delete()
-        
-
+            key = key.strip('_')
+      
+        self.database.session.query(SAConfig).filter(SAConfig.group == group,
+                                  SAConfig.key == key,
+                                  SAConfig.d_vid == self.dataset.vid).delete()
+         
+ 
         o = SAConfig(group=group, key=key,d_vid=self.dataset.vid,value = value)
-        s.add(o)
-        s.commit()       
+        self.database.session.add(o)
 
-    def get_value(self, group, key):
+
+    def get_value(self, group, key, default=None):
         
         group = self.group(group)
         
         if not group:
             return None
         
-        return group.__getattr__(key)
-
-    def get_dataset(self):
-        '''Initialize the identity, creating a dataset record, 
-        from the bundle.yaml file'''
-        from databundles.orm import Dataset
-        from sqlalchemy.exc import DatabaseError
- 
-        s = self.database.session
-
         try:
-            return  (s.query(Dataset).one())
-        except Exception as e:
-            raise Exception("ERROR: BundleDbConfig.get_dataset() got bad database: '{}'; {}".format(self.database.path, e))
+            return group.__getattr__(key)
+        except KeyError:
+            if default is not None:
+                return default
+            raise
+
 
     @property
     def partition(self):
@@ -1193,10 +1192,8 @@ class BundleDbConfig(BundleConfig):
         from the bundle.yaml file'''
         
         from databundles.orm import Partition
- 
-        s = self.database.session
 
-        return  (s.query(Partition).first())
+        return  (self.database.session.query(Partition).first())
    
    
 if __name__ == '__main__':

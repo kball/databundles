@@ -43,27 +43,27 @@ class Schema(object):
 
         
         self._seen_tables = {}
-      
+
         self.table_sequence = len(self.tables)+1
         self.col_sequence = 1 
 
         self.auto_col_numbering = False
 
-        self.dataset = self.get_dataset()
 
-    def get_dataset(self):
+
+    @property
+    def dataset(self,):
         '''Initialize the identity, creating a dataset record, 
         from the bundle.yaml file'''
         
         from databundles.orm import Dataset
- 
-        s = self.bundle.database.session
 
-        return  (s.query(Dataset).one())
+        return (self.bundle.database.session.query(Dataset).one())
 
     def clean(self):
         from databundles.orm import Table, Column, Partition
-        s = self.bundle.database.session 
+        
+        s = self.bundle.database.session
         s.query(Partition).delete()        
         s.query(Column).delete() 
         s.query(Table).delete()       
@@ -72,47 +72,51 @@ class Schema(object):
     def tables(self):
         '''Return a list of tables for this bundle'''
         from databundles.orm import Table
-        q = (self.bundle.database.session.query(Table)
-                .filter(Table.d_id==self.d_id))
+
+        from databundles.orm import Table
+        
+        q = (self.bundle.database.session.query(Table).filter(Table.d_id==self.d_id))
 
         return q.all()
-    
+
     @classmethod
-    def get_table_from_database(cls, db, name_or_id, d_vid=None):
+    def get_table_from_database(cls, db, name_or_id, session=None, d_vid=None):
         from databundles.orm import Table
         import sqlalchemy.orm.exc
         from sqlalchemy.sql import or_, and_
         
         if not name_or_id:
             raise ValueError("Got an invalid argument: {}".format(name_or_id))
+
         
-        with db.lock:
-            try: 
-                if d_vid:
-                    return (db.session.query(Table).filter(
-                             and_(Table.d_vid ==  d_vid,   
-                             or_(Table.vid==name_or_id,
-                                 Table.id_==name_or_id,
-                                 Table.name==name_or_id))
-                            ).one())
-                    
-                else:
-        
-                    return (db.session.query(Table).filter(
-                             or_(Table.vid==name_or_id,
-                                 Table.id_==name_or_id,
-                                 Table.name==name_or_id)
-                            ).one())
-            except Exception as e:
-                raise sqlalchemy.orm.exc.NoResultFound("No table for name_or_id: {}".format(name_or_id))
+        try: 
+            if d_vid:
+                return (session.query(Table).filter(
+                         and_(Table.d_vid ==  d_vid,   
+                         or_(Table.vid==name_or_id,
+                             Table.id_==name_or_id,
+                             Table.name==name_or_id))
+                        ).one())
+                
+            else:
+    
+                return (session.query(Table).filter(
+                         or_(Table.vid==name_or_id,
+                             Table.id_==name_or_id,
+                             Table.name==name_or_id)
+                        ).one())
+                
+        except sqlalchemy.orm.exc.NoResultFound as e:
+            raise sqlalchemy.orm.exc.NoResultFound("No table for name_or_id: {}".format(name_or_id))
 
 
     def table(self, name_or_id):
         '''Return an orm.Table object, from either the id or name'''
-        return Schema.get_table_from_database(self.bundle.database, name_or_id)
+
+        return Schema.get_table_from_database(self.bundle.database, name_or_id, session = self.bundle.database.session)
      
 
-    def add_table(self, name, **kwargs):
+    def add_table(self, name,  **kwargs):
         '''Add a table to the schema'''
         from orm import Table
         from identity import TableNumber, ObjectNumber
@@ -128,7 +132,7 @@ class Schema(object):
                     name=name, 
                     sequence_id=self.table_sequence,
                     data=data)
-
+        
         self.bundle.database.session.add(row)
 
         for key, value in kwargs.items():
@@ -142,14 +146,11 @@ class Schema(object):
         self.table_sequence += 1
         self.col_sequence = 1
         self.auto_col_numbering = False
-        
-        if kwargs.get('commit', True):
-            self.bundle.database.session.commit()
-     
+ 
         return row
         
     
-    def add_column(self, table, name,**kwargs):
+    def add_column(self, table, name,  **kwargs):
         '''Add a column to the schema'''
     
         if not kwargs.get('sequence_id', False):
@@ -174,18 +175,17 @@ class Schema(object):
     def columns(self):
         '''Return a list of tables for this bundle'''
         from databundles.orm import Column
-        return (self.bundle.database.session.query(Column).all())
+        return (self.database.session.query(Column).all())
         
     def get_table_meta(self, name_or_id, use_id=False, driver=None):
-        
-        return self.get_table_meta_from_db(self.bundle.database, name_or_id, use_id, driver)
+        return self.get_table_meta_from_db(self.bundle.database, name_or_id, use_id, driver, session = self.bundle.database.session)
         
     @classmethod
-    def get_table_meta_from_db(self,db,  name_or_id, use_id=False, driver=None, d_vid = None):
+    def get_table_meta_from_db(self,db,  name_or_id,  use_id=False, driver=None, d_vid = None, session=None ):
         '''
             use_id: prepend the id to the class name
         '''
-        s = db.session
+        
         from databundles.orm import Table, Column
         
         import sqlalchemy
@@ -195,7 +195,7 @@ class Schema(object):
         
         metadata = MetaData()
         
-        table = self.get_table_from_database(db, name_or_id, d_vid = d_vid)
+        table = self.get_table_from_database(db, name_or_id, d_vid = d_vid, session=session)
 
         def translate_type(column):
             # Creates a lot of unnecessary objects, but speed is not important here.  
@@ -388,6 +388,8 @@ class Schema(object):
         new_table = True
         last_table = None
         line_no = 1; # Accounts for file header. Data starts on line 2
+        s = self.bundle.database.session
+    
         for row in reader:
             line_no += 1
             
@@ -417,7 +419,7 @@ class Schema(object):
                     self.bundle.error("schema_from_file Failed to add table: "+row['table'])
                     self.bundle.error(str(row))
                     self.bundle.error(str(e))
-                    self.bundle.database.session.rollback()
+                    
                     raise
                     return 
                 new_table = False

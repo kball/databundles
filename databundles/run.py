@@ -57,6 +57,7 @@ class RunConfig(object):
                           RunConfig.DIR_CONFIG, 
                           path]
 
+
         loaded = False
 
         for f in self.files:

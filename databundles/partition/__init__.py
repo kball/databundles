@@ -266,10 +266,12 @@ class PartitionInterface(object):
 
 class PartitionBase(PartitionInterface):
 
-    def __init__(self, bundle, record, **kwargs):
+    def __init__(self, db, record, **kwargs):
         
-        self.bundle = bundle
+        self.bundle = db
         self.record = record
+        
+        self.dataset = self.record.dataset
         
         self._db_class = None
         self._database =  None
@@ -284,7 +286,9 @@ class PartitionBase(PartitionInterface):
     
     @property
     def identity(self):
+        
         return self.record.identity
+
     
     @property
     def path(self):

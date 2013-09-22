@@ -18,7 +18,7 @@ class Partitions(object):
     def __init__(self, bundle):
         self.bundle = bundle
 
-    def partition(self, arg, **kwargs):
+    def partition(self, arg,  **kwargs):
         '''Get a local partition object from either a Partion ORM object, or
         a partition name
         
@@ -34,29 +34,27 @@ class Partitions(object):
         
         from partition import new_partition
         
+        session = self.bundle.database.session
+
         if isinstance(arg,OrmPartition):
             orm_partition = arg
             
         elif isinstance(arg, basestring):
-            s = self.bundle.database.session        
-            orm_partition = s.query(OrmPartition).filter(or_(OrmPartition.id_==arg,OrmPartition.vid==arg)).one()
+      
+            orm_partition = session.query(OrmPartition).filter(or_(OrmPartition.id_==arg,OrmPartition.vid==arg)).one()
 
-        elif isinstance(arg, PartitionNumber):
-            s = self.bundle.database.session        
-            orm_partition = s.query(OrmPartition).filter(OrmPartition.id_==str(arg) ).one()
+        elif isinstance(arg, PartitionNumber):      
+            orm_partition = session.query(OrmPartition).filter(OrmPartition.id_==str(arg) ).one()
             
-        elif isinstance(arg, PartitionIdentity):  
-            s = self.bundle.database.session        
-            orm_partition = s.query(OrmPartition).filter(OrmPartition.id_==str(arg.id_) ).one()  
+        elif isinstance(arg, PartitionIdentity):      
+            orm_partition = session.query(OrmPartition).filter(OrmPartition.id_==str(arg.id_) ).one()  
                
         else:
             raise ValueError("Arg must be a Partition or PartitionNumber")
 
+        if session.dirty:
+            session.merge(orm_partition)
 
-        s =  self.bundle.database.session   
-        if s.dirty:
-            s.merge(orm_partition)
-            self.bundle.database.session.locked_commit()
 
         return new_partition(self.bundle, orm_partition, **kwargs)
 
@@ -64,9 +62,8 @@ class Partitions(object):
     @property
     def count(self):
         from databundles.orm import Partition as OrmPartition
-        
-        s = self.bundle.database.session
-        return s.query(OrmPartition).count()
+    
+        return self.bundle.database.session.query(OrmPartition).count()
     
     @property 
     def all(self): #@ReservedAssignment
@@ -74,8 +71,7 @@ class Partitions(object):
         from databundles.orm import Partition as OrmPartition
         import sqlalchemy.exc
         try:
-            s = self.bundle.database.session      
-            return [self.partition(op) for op in s.query(OrmPartition).all()]
+            return [self.partition(op) for op in self.bundle.database.session.query(OrmPartition).all()]
         except sqlalchemy.exc.OperationalError:
             raise
             return []
@@ -85,14 +81,7 @@ class Partitions(object):
         return iter(self.all)
 
             
-    @property
-    def query(self):
-        from databundles.orm import Partition as OrmPartition
-        
-        s = self.bundle.database.session
-        
-        return s.query(OrmPartition)
- 
+
     
     def get(self, id_):
         '''Get a partition by the id number 
@@ -114,20 +103,19 @@ class Partitions(object):
         from databundles.orm import Partition as OrmPartition
         from sqlalchemy import or_
         
-        # This is needed to flush newly created partitions, I think ... 
-        self.bundle.database.session.close()
-        
+
         if isinstance(id_, PartitionIdentity):
             id_ = id_.identity.id_
-            
+     
+        s = self.bundle.database.session
         
-        q = (self.bundle.database.session
+        q = (s
              .query(OrmPartition)
              .filter(or_(
                          OrmPartition.id_==str(id_).encode('ascii'),
                           OrmPartition.vid==str(id_).encode('ascii')
                          )))
-      
+  
         try:
             orm_partition = q.one()
           
@@ -136,8 +124,7 @@ class Partitions(object):
             orm_partition = None
             
         if not orm_partition:
-            q = (self.bundle.database.session
-             .query(OrmPartition)
+            q = (s.query(OrmPartition)
              .filter(OrmPartition.name==id_.encode('ascii')))
 
             try:
@@ -171,7 +158,8 @@ class Partitions(object):
             elif not 'format' in kwargs:
                     kwargs['format'] = Identity.ANY
                 
-            partitions = [ self.partition(op, memory=kwargs.get('memory',False)) for op in self.find_orm(pid, **kwargs).all()];
+            partitions = [ self.partition(op, memory=kwargs.get('memory',False)) 
+                          for op in self._find_orm(pid, **kwargs).all()];
 
             if len(partitions) == 1:
                 p =  partitions.pop()
@@ -211,7 +199,7 @@ class Partitions(object):
         elif not 'format' in kwargs:
                 kwargs['format'] = Identity.ANY
 
-        ops = self.find_orm(pid, **kwargs).all()
+        ops = self._find_orm(pid, **kwargs).all()
         
         return [ self.partition(op) for op in ops]
 
@@ -229,16 +217,16 @@ class Partitions(object):
             return new_identity(args, bundle=bundle), None
 
     
-    def  find_orm(self, pid=None, **kwargs):
+    def  _find_orm(self, pid=None,  **kwargs):
         '''Return a Partition object from the database based on a PartitionId.
         An ORM object is returned, so changes can be persisted. '''
         import sqlalchemy.orm.exc
         from databundles.identity import Identity
-
+        from databundles.orm import Partition as OrmPartition
+        
         pid, name = self._pid_or_args_to_pid(self.bundle, pid, kwargs)
 
-        from databundles.orm import Partition as OrmPartition
-        q = self.query
+        q =  self.bundle.database.session.query(OrmPartition)
         
         if name is not None:
             q = q.filter(OrmPartition.name==name)
@@ -270,23 +258,22 @@ class Partitions(object):
                         raise ValueError("Didn't find table named {} in {} bundle path = {}".format(pid.table, pid.vname, self.bundle.database.path))
                     
                     q = q.filter(OrmPartition.t_id==tr.id_)
-
+ 
         return q
-    
-   
-    def new_orm_partition(self, pid, **kwargs):
+
+    def new_orm_partition(self, pid,  **kwargs):
         '''Create a new ORM Partrition object, or return one if
         it already exists '''
         from databundles.orm import Partition as OrmPartition, Table
      
-        s = self.bundle.database.session
-   
+        session = self.bundle.database.session
+
         if pid.table:
-            q =s.query(Table).filter( (Table.name==pid.table) |  (Table.id_==pid.table) )
+            q =session.query(Table).filter( (Table.name==pid.table) |  (Table.id_==pid.table) )
             table = q.one()
         else:
             table = None
-         
+     
         # 'tables' are additional tables that are part of the partion ,beyond the one in the identity
         # Probably a bad idea. 
         tables = kwargs.get('tables',kwargs.get('table',pid.table if pid else None))
@@ -313,29 +300,30 @@ class Partitions(object):
         if 'dataset' in d:
             del d['dataset']
          
-  
+        # This code must have the session established in the context be active. 
         op = OrmPartition(
-                self.bundle.dataset,         
+                self.bundle.get_dataset(session),         
                 t_id = table.id_ if table else None,
                 data=data,
                 state=kwargs.get('state',None),
                 **d
              )  
-
+        
+        self.bundle.database._session.commit()
+        
         return op
 
-    def clean(self):
+    def clean(self, session):
         from databundles.orm import Partition as OrmPartition
-       
-        s = self.bundle.database.session
-        s.query(OrmPartition).delete()
+   
+        session.query(OrmPartition).delete()
         
-    def _new_partition(self, pid=None, **kwargs):
+    def _new_partition(self, pid=None, session = None,**kwargs):
         '''Creates a new OrmPartition record'''
         
         pid, _ = self._pid_or_args_to_pid(self.bundle, pid, kwargs)
- 
-        extant = self.find_orm(pid, **kwargs).all()
+
+        extant = self._find_orm(pid, **kwargs).all()
         
         for p in extant:
             if p.name == pid.name:
@@ -343,17 +331,12 @@ class Partitions(object):
        
         op = self.new_orm_partition(pid, **kwargs)
         
-        s = self.bundle.database.session
-        s.add(op)   
+        self.bundle.database.session.add(op)   
+        self.bundle.database.session.commit()
 
-        try: self.bundle.database.locked_commit()     
-        except:
-            self.bundle.error("Failed creating new partition for database: {} ".format(self.bundle.database.path)) 
-            self.bundle.error("{}, {}".format(pid, kwargs))
-            raise
-    
-        p = self.partition(op, **kwargs)
+        p = self.partition(op,  **kwargs)
         return p
+
 
     def new_partition(self, pid=None, **kwargs):
         return self.new_db_partition( pid, **kwargs)
@@ -376,14 +359,14 @@ class Partitions(object):
         
         # We'll need to load a table from the shapefile, so that has to be created before
         # we create the partition. 
-        if not pid.table:
+        table_name = kwargs.get('table',pid.table if pid else None)
+        
+        if not table_name:
             raise ValueError("Pid must have a table name")
 
-        table_name = pid.table
-        
-        t = self.bundle.schema.add_table(pid.table)
-        self.bundle.database.locked_commit()     
-        
+        if not self.bundle.schema.table(table_name):
+            self.bundle.schema.add_table(table_name)
+
         p = self._new_partition(pid, **kwargs)
 
         if kwargs.get('shape_file'):
@@ -421,11 +404,12 @@ class Partitions(object):
         '''
         
         if pid:
-            pid.format = 'csv'
+            pid.format = 'db'
         else: 
-            kwargs['format'] = 'csv'
+            kwargs['format'] = 'db'
         
-        try: partition =  self.find(pid, **kwargs)
+
+        try: partition =  self.find(pid **kwargs)
         except: partition = None
     
         if partition:
@@ -438,8 +422,8 @@ class Partitions(object):
     
         if tables and pid and pid.table and pid.table not in tables:
             tables.append(partition.identity.table)
-
-        partition = self.new_partition(pid, **kwargs)
+   
+        partition =  self._new_partition(pid, **kwargs)
         
         if tables:   
             partition.create_with_tables(tables, clean)  
@@ -532,9 +516,8 @@ class Partitions(object):
 
     def delete(self, partition):
         from databundles.orm import Partition as OrmPartition
-
-        q = (self.bundle.database.session
-             .query(OrmPartition)
+ 
+        q = (self.bundle.database.session.query(OrmPartition)
              .filter(OrmPartition.id_==partition.identity.id_))
       
         q.delete()

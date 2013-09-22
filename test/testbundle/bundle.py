@@ -12,9 +12,9 @@ class Bundle(BuildBundle):
 
     def prepare(self):
         from databundles.partition import PartitionIdentity 
+        
         super(self.__class__, self).prepare()
     
-  
         return True
   
     @property
@@ -25,21 +25,44 @@ class Bundle(BuildBundle):
                   ('tone_id', lambda: None),
                   ('text',partial(random.choice, ['chocolate', 'strawberry', 'vanilla'])),
                   ('integer', partial(random.randint, 0, 500)),
-                  ('float', random.random)
+                  ('float', random.random),
+                  ]
+  
+    @property
+    def fields2(self):
+        from functools import partial
+        import random
+        return   [
+                  ('tone_id', lambda: None),
+                  ('text',partial(random.choice, ['chocolate', 'strawberry', 'vanilla'])),
+                  ('integer', partial(random.randint, 0, 500)),
+                  ('float', random.random),
+                  ('extra', lambda: None),
+                  ('extra2', lambda: None),
                   ]
   
     def build(self):
 
-        self.build_with_missing()
-        
-        return True
-        
-        self.build_csvsegments()
-        self.build_csv()
-        self.build_db()
-        self.build_geo()
-        self.build_hdf()
-    
+        with self.session:
+            self.log("Build missing")
+            self.build_with_missing()
+            
+
+            self.log("Build csvsegments")
+            self.build_csvsegments()
+
+            self.log("Build csv")
+            self.build_csv()
+
+            self.log("Build db")
+            self.build_db()
+
+            self.log("Build geo")
+            self.build_geo()
+
+            self.log("Build hdf")
+            self.build_hdf()
+
         return True
 
 
@@ -47,7 +70,7 @@ class Bundle(BuildBundle):
         
         p = self.partitions.find_or_new_db(table="tone")
         
-        with p.database.csvinserter(segment_size=100) as ins:
+        with p.database.csvinserter(segment_rows=100) as ins:
             for i in range(1000):
                 ins.insert((None,"str"+str(i),i,i))
         
@@ -67,7 +90,12 @@ class Bundle(BuildBundle):
 
         # Now write random data to each of the pable partitions. 
         
-        for table_name in  ('tone','ttwo'):
+        for table_name in  ('tone',):
+            p = self.partitions.find_or_new_db(table=table_name)
+            petl.dummytable(30000,self.fields2).tosqlite3(p.database.path, table_name, create=False) #@UndefinedVariable
+
+        
+        for table_name in  ('ttwo',):
             p = self.partitions.find_or_new_db(table=table_name)
             petl.dummytable(30000,self.fields).tosqlite3(p.database.path, table_name, create=False) #@UndefinedVariable
 

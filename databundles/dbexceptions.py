@@ -28,3 +28,5 @@ class NotFoundError(BundleError):
 class DependencyError(Exception):
     """Required bundle dependencies not satisfied"""
 
+class NoLock(BundleError):
+    '''Error in the configuration files'''

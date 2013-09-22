@@ -10,6 +10,8 @@ import os
 import logging
 from databundles.util import get_logger
 from ..database.inserter import SegmentedInserter, SegmentInserterFactory
+from contextlib import contextmanager
+             
 
 class RelationalDatabase(DatabaseInterface):
     '''Represents a Sqlite database'''
@@ -48,7 +50,7 @@ class RelationalDatabase(DatabaseInterface):
             self.colon_port = ''
                 
         self._engine = None
-        self._session = None
+
         self._connection = None
 
     
@@ -60,6 +62,8 @@ class RelationalDatabase(DatabaseInterface):
        
         self.logger = get_logger(__name__)
         self.logger.setLevel(logging.INFO) 
+        
+        self._unmanaged_session_ = None
 
     def log(self,message):
         self.logger.info(message)
@@ -83,15 +87,11 @@ class RelationalDatabase(DatabaseInterface):
         if not self.exists():    
 
             self.require_path()
-                     
-            s =  self.session
-         
+      
             tables = [ Config ]
 
             for table in tables:
                 table.__table__.create(bind=self.engine)
-    
-            self.session.commit()
 
             return True #signal did create
             
@@ -122,10 +122,8 @@ class RelationalDatabase(DatabaseInterface):
             table.drop(self.engine, checkfirst=True)
 
     def drop(self):
-        s = self.session
 
-        self._drop(s)
-        s.commit()
+        self._drop(self.session)
 
     @property
     def connection(self):
@@ -152,6 +150,19 @@ class RelationalDatabase(DatabaseInterface):
 
         return self._engine
 
+    @property
+    def _unmanaged_session(self):
+        
+        if not self._unmanaged_session_:
+            from sqlalchemy.orm import sessionmaker
+            Session = sessionmaker(bind=self.engine,autocommit=False)
+            self._unmanaged_session_ =  Session()
+        
+        return self._unmanaged_session_
+
+    def _unmanaged_commit(self):
+        self._unmanaged_session_.commit()
+        self._unmanaged_session_ = None
 
     @property
     def metadata(self):
@@ -169,17 +180,6 @@ class RelationalDatabase(DatabaseInterface):
 
         return Inspector.from_engine(self.engine)
 
-    @property
-    def session(self):
-        '''Return a SqlAlchemy session'''
-        from sqlalchemy.orm import sessionmaker
-        
-        if not self._session:    
-            Session = sessionmaker(bind=self.engine,autocommit=False)
-            self._session = Session()
-            
-        return self._session
-   
 
         
    
@@ -189,17 +189,10 @@ class RelationalDatabase(DatabaseInterface):
         return self.connection
    
     def close(self):
-        if self._session:    
-            self._session.close()
-            self._session = None
-        
+
         if self._connection:
             self._connection.close()
             self._connection = None
-   
-    def commit(self):
-        self.session.commit()
-
 
     def clean_table(self, table):
 
@@ -283,10 +276,14 @@ class RelationalDatabase(DatabaseInterface):
         
         if group == 'identity' and d_vid != SAConfig.ROOT_CONFIG_NAME_V:
             raise ValueError("Can't set identity group from this interface. Use the dataset")
-        
-        s = self.session
-     
+
+      
         key = key.strip('_')
+  
+        try:
+            s = self._session or self._unmanaged_session
+        except:
+            s = self._unmanaged_session
   
         s.query(SAConfig).filter(SAConfig.group == group,
                                  SAConfig.key == key,
@@ -295,17 +292,17 @@ class RelationalDatabase(DatabaseInterface):
 
         o = SAConfig(group=group, key=key,d_vid=d_vid,value = value)
         s.add(o)
-        s.commit() 
+        s.commit()
+
 
 
     def get_config_value(self, d_vid, group, key):
         from databundles.orm import Config as SAConfig
-        
-        s = self.session
-     
+
+
         key = key.strip('_')
   
-        return s.query(SAConfig).filter(SAConfig.group == group,
+        return self.session.query(SAConfig).filter(SAConfig.group == group,
                                  SAConfig.key == key,
                                  SAConfig.d_vid == d_vid).first()
         
@@ -324,26 +321,23 @@ class RelationalBundleDatabaseMixin(object):
         from databundles.orm import  Dataset, Partition, Table, Column, File
         from ..identity import new_identity
 
-                 
-        s =  self.session
-     
         tables = [ Dataset, Partition, Table, Column, File ]
 
         for table in tables:
             table.__table__.create(bind=self.engine)
 
-        self.session.commit()
-        
         # Create the Dataset record
 
         ds = Dataset(**self.bundle.config.identity)
+
         ident = new_identity(self.bundle.config.identity)
         
         ds.name = ident.name
         ds.vname = ident.vname
-        
-        s.add(ds)
-        s.commit()
+
+        session = self._unmanaged_session
+        session.add(ds)
+        session.commit()
 
     def rewrite_dataset(self):
         from ..orm import Dataset
@@ -352,10 +346,9 @@ class RelationalBundleDatabaseMixin(object):
         ds = Dataset(**self.bundle.identity.to_dict())
         ds.name = self.bundle.identity.name
         ds.vname = self.bundle.identity.vname
-        
-        s = self.session
-        s.merge(ds)
-        s.commit()
+
+        self.session.merge(ds)
+
 
     def _post_create(self):
         from ..orm import Config

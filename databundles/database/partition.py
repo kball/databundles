@@ -19,6 +19,8 @@ class PartitionDb(SqliteDatabase, RelationalPartitionDatabaseMixin):
     
         super(PartitionDb, self).__init__(base_path, memory=self.memory, **kwargs)  
 
+        self._session = None
+
     def query(self,*args, **kwargs):
         """Convience function for self.connection.execute()"""
         
@@ -83,6 +85,17 @@ class PartitionDb(SqliteDatabase, RelationalPartitionDatabaseMixin):
 
             self.post_create()
                   
+    # DEPRECATED! Should use the session_context instead
+    @property
+    def session(self):
+        '''Return a SqlAlchemy session'''
+        from sqlalchemy.orm import sessionmaker
+        if not self._session:
+            Session = sessionmaker(bind=self.engine,autocommit=False)
+            self._session =  Session()
+            
+        return self._session
+
 
     def attach(self,id_, name=None):
         """Attach another sqlite database to this one
