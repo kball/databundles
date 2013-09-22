@@ -1129,8 +1129,7 @@ class BundleDbConfig(BundleConfig):
 
         from databundles.orm import Dataset
 
-
-        self.dataset = (self.database.session.query(Dataset).one())
+        self.dataset = (self.database._unmanaged_session.query(Dataset).one())
        
     @property
     def dict(self): #@ReservedAssignment

@@ -505,8 +505,8 @@ class LibraryDb(object):
             identity = new_identity(identity)
             
         if identity.is_bundle:
-            bundle = DbBundle(bundle_file)
             
+            bundle = DbBundle(bundle_file)
             self.install_bundle(bundle)
         
         
@@ -527,7 +527,8 @@ class LibraryDb(object):
                     
         # There should be only one dataset record in the 
         # bundle
-        bdbs = bundle.database.session 
+        bdbs = bundle.database._unmanaged_session
+    
         s = self.session
         dataset = bdbs.query(Dataset).one()
         s.merge(dataset)
@@ -1629,12 +1630,9 @@ class Library(object):
         if not isinstance(bundle, (PartitionInterface, Bundle)):
             raise ValueError("Can only install a Partition or Bundle object")
         
-        # In the past, Partitions could be cloaked as Bundles. Disallow this 
-        if isinstance(bundle, Bundle) and bundle.db_config.info.type == 'partition':
-            raise RuntimeError("Don't allow partitions cloaked as bundles anymore ")
         
         bundle.identity.name # throw exception if not right type. 
-        
+
         dst, cache_key, url = self.put_file(bundle.identity, bundle.database.path, force=force)
 
         return dst, cache_key, url
