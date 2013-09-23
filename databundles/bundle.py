@@ -564,7 +564,7 @@ class BuildBundle(Bundle):
         
         return True
     
-    def install(self, library_name=None):  
+    def install(self, library_name=None, delete=False):  
         '''Install the bundle and all partitions in the default library'''
      
         import databundles.library
@@ -575,20 +575,28 @@ class BuildBundle(Bundle):
     
             library = databundles.library.new_library(self.config.config.library(library_name))
          
-            self.log("Install bundle {} to  library {}".format(self.identity.name, library_name))  
+            self.log("{} Install to  library {}".format(self.identity.name, library_name))  
             dest = library.put(self)
-            self.log("Installed to {} ".format(dest[1]))
+            self.log("{} Installed".format(dest[1]))
             
             skips = self.config.group('build').get('skipinstall',[])
             
             for partition in self.partitions:
                 
+                if not os.path.exists(partition.database.path):
+                    self.log("{} File does not exist, skipping".format(partition.database.path))
+                    continue
+                
                 if partition.name in skips:
-                    self.log('Skipping: {}'.format(partition.name))
+                    self.log('{} Skipping'.format(partition.name))
                 else:
-                    self.log("Install partition {}".format(partition.name))  
+                    self.log("{} Install".format(partition.name))  
                     dest = library.put(partition)
-                    self.log("Installed to {} ".format(dest[1]))
+                    self.log("{} Installed".format(dest[1]))
+                    if delete:
+                        os.remove(partition.database.path)
+                        self.log("{} Deleted".format(partition.database.path))
+                    
 
         return True
         
