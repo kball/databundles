@@ -21,7 +21,6 @@ def get_identity(path):
     
     db = SqliteBundleDatabase(path)
     
-
     bdc = BundleDbConfig(db)
     
     type_ = bdc.get_value('info','type')
@@ -32,9 +31,7 @@ def get_identity(path):
         return  bdc.partition.identity 
     else:
         raise Exception("Invalid type: {}", type)
-    
-            
-    
+  
 class Bundle(object):
     '''Represents a bundle, including all configuration 
     and top level operations. '''
@@ -558,7 +555,8 @@ class BuildBundle(Bundle):
  
     def pre_install(self):
         
-        self.update_configuration()
+        with self.session:
+            self.update_configuration()
         
         return True
     
@@ -567,25 +565,26 @@ class BuildBundle(Bundle):
      
         import databundles.library
 
-        library_name = vars(self.run_args).get('library', 'default') if library_name is None else 'default'
-        library_name = library_name if library_name else 'default'
-
-        library = databundles.library.new_library(self.config.config.library(library_name))
-     
-        self.log("Install bundle {} to  library {}".format(self.identity.name, library_name))  
-        dest = library.put(self)
-        self.log("Installed to {} ".format(dest[1]))
-        
-        skips = self.config.group('build').get('skipinstall',[])
-        
-        for partition in self.partitions:
+        with self.session:
+            library_name = vars(self.run_args).get('library', 'default') if library_name is None else 'default'
+            library_name = library_name if library_name else 'default'
+    
+            library = databundles.library.new_library(self.config.config.library(library_name))
+         
+            self.log("Install bundle {} to  library {}".format(self.identity.name, library_name))  
+            dest = library.put(self)
+            self.log("Installed to {} ".format(dest[1]))
             
-            if partition.name in skips:
-                self.log('Skipping: {}'.format(partition.name))
-            else:
-                self.log("Install partition {}".format(partition.name))  
-                dest = library.put(partition)
-                self.log("Installed to {} ".format(dest[1]))
+            skips = self.config.group('build').get('skipinstall',[])
+            
+            for partition in self.partitions:
+                
+                if partition.name in skips:
+                    self.log('Skipping: {}'.format(partition.name))
+                else:
+                    self.log("Install partition {}".format(partition.name))  
+                    dest = library.put(partition)
+                    self.log("Installed to {} ".format(dest[1]))
 
         return True
         
