@@ -1443,7 +1443,7 @@ class Library(object):
             return False
 
         bundle = DbBundle(abs_path)
-            
+
         # Do we have it in the database? If not install it. 
         # It should be installed if it was retrieved remotely, 
         # but may not be installed if there is a local copy in the dcache. 

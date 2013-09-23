@@ -263,6 +263,8 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
 
         self._session = None # This is controlled by the BundleLockContext
 
+        self.use_unmanaged_session = False
+
     def create(self):
 
         self.require_path()
@@ -287,9 +289,15 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
         from ..dbexceptions import  NoLock
         
         if not self._session:
-            raise NoLock("Must use bundle.lock to acquire a session lock")
+            
+            if self.use_unmanaged_session:
+                return self._unmanaged_session
+            
+            raise NoLock("Must use bundle.session to acquire a session lock, or set bundle.use_unmanaged_session")
         
         return self._session
+        
+    
         
     @property
     def has_session(self):

@@ -168,13 +168,17 @@ class DbBundle(Bundle):
        
         self.database_file = database_file
 
-
         self.database = SqliteBundleDatabase(self, database_file)
+        self.database.use_unmanaged_session = True # Don't require using "with self.session" everywhere. 
+        
         self.db_config = self.config = BundleDbConfig(self.database)
         
         self.partition = None # Set in Library.get() and Library.find() when the user requests a partition. 
         
         self.run_args = None
+        
+       
+        
         
     @property
     def path(self):
