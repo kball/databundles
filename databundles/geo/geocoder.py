@@ -160,7 +160,7 @@ class Geocoder(object):
         else:
             r['codedaddress'] = None
 
-        r = { k:v if v != '-' else None for k,v in r.items() }
+        r = { k:v.strip() if v.strip() != '-' else None for k,v in r.items() }
 
         return r
         
@@ -182,7 +182,7 @@ class Geocoder(object):
         street_type = ps.street_type
         number = ps.number
         
-        q = """SELECT  * FROM segments WHERE street = ?""";
+        q = """SELECT  * FROM segments WHERE name = ?""";
 
         # If this fails, the "city" is probably an unincorporated place, which is in the county. 
         try: in_city = self.by_name[ps.city.title()]
@@ -261,11 +261,11 @@ class Geocoder(object):
         
         score = 0
         
-        if (row['street_dir'] or direction) or (not row['street_dir']  and not direction):
-            if row['street_dir'] == direction:
+        if (row['dir'] or direction) or (not row['dir']  and not direction):
+            if row['dir'] == direction:
                 score += 10
             
-        if row['street_type'] == street_type:
+        if row['type'] == street_type:
             score += 10    
 
 
@@ -315,6 +315,7 @@ class Geocoder(object):
                     'city' : city
                 }
                 
+                r = { k:v if v != '-' else None for k,v in r.items() }
                
                 candidates[(city,ar['name'],ar['type'])].append(r)
 

@@ -23,14 +23,19 @@ class PartitionDb(SqliteDatabase, RelationalPartitionDatabaseMixin):
 
     def query(self,*args, **kwargs):
         """Convience function for self.connection.execute()"""
+        from sqlalchemy.exc import OperationalError
+        from ..dbexceptions import QueryError
         
         if isinstance(args[0], basestring):
             fd = { x:x for x in self._attachments }
         
             args = (args[0].format(**fd),) + args[1:]
             
+        try:
+            return self.connection.execute(*args, **kwargs)
+        except OperationalError as e:
+            raise QueryError("Error while executing {} in database {} : {}".format(args, self.dsn, e.message))
         
-        return self.connection.execute(*args, **kwargs)
 
     def inserter(self, table_or_name=None,**kwargs):
 

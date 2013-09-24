@@ -312,7 +312,7 @@ class Partitions(object):
                 **d
              )  
         
-        self.bundle.database._session.commit()
+        self.bundle.database.session.commit()
         
         return op
 

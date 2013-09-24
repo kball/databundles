@@ -254,7 +254,7 @@ class BundleLockContext(object):
 class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
 
 
-    def __init__(self, bundle, dbname, **kwargs):   
+    def __init__(self, bundle, dbname, use_unmanaged_session = False, **kwargs):   
         '''
         '''
 
@@ -263,7 +263,7 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
 
         self._session = None # This is controlled by the BundleLockContext
 
-        self.use_unmanaged_session = False
+        self.use_unmanaged_session = use_unmanaged_session
 
     def create(self):
 
@@ -289,11 +289,11 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
         from ..dbexceptions import  NoLock
         
         if not self._session:
-            
+
             if self.use_unmanaged_session:
                 return self._unmanaged_session
             
-            raise NoLock("Must use bundle.session to acquire a session lock, or set bundle.use_unmanaged_session")
+            raise NoLock("For multi-process,  use bundle.session to acquire a session lock, or set bundle.use_unmanaged_session, on {}".format(self.dsn))
         
         return self._session
         

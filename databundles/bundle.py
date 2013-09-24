@@ -102,6 +102,13 @@ class Bundle(object):
         return  (session.query(Dataset).one())
         
     @property
+    def dataset(self):
+        '''Return the dataset'''
+        return self.get_dataset(self.database.session)
+        
+        
+        
+    @property
     def library(self):
         '''Return the library set for the bundle, or 
         local library from get_library() if one was not set. '''
@@ -169,6 +176,7 @@ class DbBundle(Bundle):
         self.database_file = database_file
 
         self.database = SqliteBundleDatabase(self, database_file)
+        
         self.database.use_unmanaged_session = True # Don't require using "with self.session" everywhere. 
         
         self.db_config = self.config = BundleDbConfig(self.database)
@@ -247,6 +255,8 @@ class BuildBundle(Bundle):
 
         self._build_time = None
         self._update_time = None
+        self.run_args = None # set externally in parse_args
+        
 
     @property
     def path(self):
@@ -261,8 +271,13 @@ class BuildBundle(Bundle):
     @property
     def database(self):
         from .database.sqlite import BuildBundleDb #@UnresolvedImport
+
         if self._database is None:
-            self._database  = BuildBundleDb(self, self.path)
+            
+            use_unmanaged = not self.run_args or not self.run_args.multi or self.run_args.multi < 2
+
+            self._database  = BuildBundleDb(self, self.path, use_unmanaged_session=use_unmanaged)
+
 
         return self._database
 
@@ -458,7 +473,7 @@ class BuildBundle(Bundle):
             self.database.create()
 
         with self.session:
-            if vars(self.run_args).get('rebuild',False):
+            if self.run_args and vars(self.run_args).get('rebuild',False):
                 self.rebuild_schema()
             else:
                 sf  = self.filesystem.path(self.config.build.get('schema_file', 'meta/schema.csv'))
@@ -569,6 +584,8 @@ class BuildBundle(Bundle):
      
         import databundles.library
 
+        force = vars(self.run_args).get('force', False)
+
         with self.session:
             library_name = vars(self.run_args).get('library', 'default') if library_name is None else 'default'
             library_name = library_name if library_name else 'default'
@@ -576,7 +593,7 @@ class BuildBundle(Bundle):
             library = databundles.library.new_library(self.config.config.library(library_name))
          
             self.log("{} Install to  library {}".format(self.identity.name, library_name))  
-            dest = library.put(self)
+            dest = library.put(self, force=force)
             self.log("{} Installed".format(dest[1]))
             
             skips = self.config.group('build').get('skipinstall',[])
@@ -591,7 +608,7 @@ class BuildBundle(Bundle):
                     self.log('{} Skipping'.format(partition.name))
                 else:
                     self.log("{} Install".format(partition.name))  
-                    dest = library.put(partition)
+                    dest = library.put(partition, force=force)
                     self.log("{} Installed".format(dest[1]))
                     if delete:
                         os.remove(partition.database.path)
@@ -784,7 +801,8 @@ class BuildBundle(Bundle):
         command_p.set_defaults(command='install')  
         command_p.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')
         command_p.add_argument('-l','--library',  help='Name of the library, defined in the config file')
-             
+        command_p.add_argument('-f','--force', default=False,action="store_true", help='Force storing the file')
+        
         
         #
         # run Command

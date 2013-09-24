@@ -384,7 +384,7 @@ class Test(TestBase):
         p = self.bundle.partitions.find(pid3)   
         self.assertEquals('pid3',p.data['pid'] ) 
          
-        p = self.bundle.partitions.find_orm(pid3).first()  
+        p = self.bundle.partitions._find_orm(pid3).first()  
         s = self.bundle.database.session
         p.data['foo'] = 'bar'
         s.commit()
@@ -437,7 +437,7 @@ class Test(TestBase):
             part = self.bundle.partitions.new_db_partition(pid)
             part.create()
             
-            parts = self.bundle.partitions.find_orm(pid).all()
+            parts = self.bundle.partitions._find_orm(pid).all()
             self.assertIn(pid.name, [p.name for p in parts])
 
         
