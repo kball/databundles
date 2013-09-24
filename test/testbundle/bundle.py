@@ -119,10 +119,7 @@ class Bundle(BuildBundle):
         
         # Create other types of partitions. 
         geot2 = self.partitions.find_or_new_geo(table='geot2')
-        
-        for row in geot1.database.query('SELECT X(Centroid(GeomFromText("POINT(25 75)")))'):
-            print row
-                
+     
         
         with geot2.database.inserter() as ins:
             for lat in range(10):

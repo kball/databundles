@@ -882,6 +882,7 @@ def test_command(args,rc, src):
         for row in rs:
             msg = "> SQLite v%s Spatialite v%s" % (row[0], row[1])
             print(msg)
+
     
     else:
         prt('Testing')

@@ -15,6 +15,7 @@ import logging
 import yaml
 from collections import Mapping, OrderedDict, defaultdict
 import os 
+import sys
 
 
 logger_init = set()
@@ -966,5 +967,27 @@ def daemonize(f, args,  rc, prog_name='databundles'):
         with context:
             f(prog_name, args, rc, logger)
             
+
+# from http://stackoverflow.com/questions/6796492/python-temporarily-redirect-stdout-stderr
+# Use as a context manager
+class RedirectStdStreams(object):
+    def __init__(self, stdout=None, stderr=None):
+        
+        self.devnull = open(os.devnull, 'w')
+        
+        self._stdout = stdout or self.devnull
+        self._stderr = stderr or self.devnull
+
+    def __enter__(self):
+        
+        self.old_stdout, self.old_stderr = sys.stdout, sys.stderr
+        self.old_stdout.flush(); self.old_stderr.flush()
+        sys.stdout, sys.stderr = self._stdout, self._stderr
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self._stdout.flush(); self._stderr.flush()
+        sys.stdout = self.old_stdout
+        sys.stderr = self.old_stderr
+        self.devnull.close()
 
         
