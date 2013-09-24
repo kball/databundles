@@ -70,8 +70,12 @@ class Partitions(object):
         '''Return an iterator of all partitions'''
         from databundles.orm import Partition as OrmPartition
         import sqlalchemy.exc
+
         try:
-            return [self.partition(op) for op in self.bundle.database.session.query(OrmPartition).all()]
+            return [self.partition(op) 
+                    for op in self.bundle.database.session.query(OrmPartition)
+                                    .order_by(OrmPartition.vid.asc())
+                                    .order_by(OrmPartition.segment.asc()).all()]
         except sqlalchemy.exc.OperationalError:
             raise
             return []

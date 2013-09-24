@@ -57,6 +57,9 @@ class GeoDb(PartitionDb):
     
     def __init__(self, bundle, partition, base_path, **kwargs):
         ''''''    
+
+        kwargs['driver'] = 'spatialite' 
+        
         super(GeoDb, self).__init__(bundle, partition, base_path, **kwargs)  
 
    

@@ -44,6 +44,10 @@ class Bundle(BuildBundle):
     def build(self):
 
         with self.session:
+            
+            self.log("Build geo")
+            self.build_geo()
+            
             self.log("Build missing")
             self.build_with_missing()
             
@@ -57,8 +61,6 @@ class Bundle(BuildBundle):
             self.log("Build db")
             self.build_db()
 
-            self.log("Build geo")
-            self.build_geo()
 
             self.log("Build hdf")
             self.build_hdf()
@@ -109,6 +111,7 @@ class Bundle(BuildBundle):
         # Create other types of partitions. 
         geot1 = self.partitions.find_or_new_geo(table='geot1')
         
+
         with geot1.database.inserter() as ins:
             for lat in range(10):
                 for lon in range(10):
@@ -116,10 +119,16 @@ class Bundle(BuildBundle):
         
         # Create other types of partitions. 
         geot2 = self.partitions.find_or_new_geo(table='geot2')
+        
+        for row in geot1.database.query('SELECT X(Centroid(GeomFromText("POINT(25 75)")))'):
+            print row
+                
+        
         with geot2.database.inserter() as ins:
             for lat in range(10):
                 for lon in range(10):
-                    ins.insert({'name': str(lon)+';'+str(lat), 'wkt':"POINT({} {})".format(lon,lat)})
+                    ins.insert({'name': "Centroid(POINT({} {}))".format(lon,lat),
+                                'wkt':"POINT({} {})".format(lon,lat)})
         
     def build_hdf(self):
         import numpy as np

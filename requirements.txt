@@ -1,5 +1,7 @@
 PyYAML
 SQLAlchemy
+# This pysqlite clone enables load_extension
+# -e git+https://github.com/clarinova/pysqlite.git#egg=pysqlite
 petl
 decorator
 simplejson

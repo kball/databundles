@@ -19,6 +19,7 @@ class RelationalDatabase(DatabaseInterface):
     DBCI = {
             'postgres':'postgresql+psycopg2://{user}:{password}@{server}{colon_port}/{name}', # Stored in the databundles module. 
             'sqlite':'sqlite:///{name}',
+            'spatialite':'sqlite:///{name}', # Only works if you properly install spatialite. 
             'mysql':'mysql://{user}:{password}@{server}{colon_port}/{name}'
             }
     

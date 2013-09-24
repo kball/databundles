@@ -32,7 +32,8 @@ class SqliteDatabase(RelationalDatabase):
         self._dbapi_connection = None
         self.memory = memory
 
-        kwargs['driver'] = 'sqlite'
+        if not 'driver' in kwargs:
+            kwargs['driver'] = 'sqlite'
 
         super(SqliteDatabase, self).__init__(dbname=self.path,   **kwargs)
         
@@ -63,7 +64,7 @@ class SqliteDatabase(RelationalDatabase):
         
         if not self._engine:
             self.require_path()
-            self._engine = create_engine('sqlite:///'+self.path,
+            self._engine = create_engine(self.dsn,
                                          connect_args={'detect_types': sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES},
                                          native_datetime=True,
                                          echo=False) 

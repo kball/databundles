@@ -6,7 +6,6 @@ from . import  PartitionBase, PartitionIdentity
 from sqlite import SqlitePartition
 from ..database.geo import GeoDb
 
-
 class GeoPartitionIdentity(PartitionIdentity):
     PATH_EXTENSION = '.db'
     pass

@@ -856,8 +856,22 @@ def test_command(args,rc, src):
     
     if args.subcommand == 'config':
         prt(rc.dump())
-    elif args.subcommand == 'foobar':
-        pass
+    elif args.subcommand == 'spatialite':
+        from pysqlite2 import dbapi2 as db
+        import os
+        
+        f = '/tmp/_db_spatialite_test.db'
+        
+        if os.path.exists(f):
+            os.remove(f)
+        
+        conn = db.connect(f)
+        cur = conn.cursor()
+        rs = cur.execute('SELECT sqlite_version(), spatialite_version()')
+        for row in rs:
+            msg = "> SQLite v%s Spatialite v%s" % (row[0], row[1])
+            print(msg)
+    
     else:
         prt('Testing')
         prt(args)
@@ -1129,7 +1143,10 @@ def main():
     sp = asp.add_parser('config', help='Dump the configuration')
     sp.set_defaults(subcommand='config')
     group.add_argument('-v', '--version',  default=False, action='store_true', help='Display module version')
-                 
+ 
+    sp = asp.add_parser('spatialite', help='Test spatialite configuration')
+    sp.set_defaults(subcommand='spatialite')
+         
     args = parser.parse_args()
 
     if args.single_config:
