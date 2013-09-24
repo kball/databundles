@@ -60,6 +60,10 @@ class GeoDb(PartitionDb):
 
         kwargs['driver'] = 'spatialite' 
         
+        # This is only needed on some environments, and this particular code
+        # is tailor to ubuntu
+        
+        
         super(GeoDb, self).__init__(bundle, partition, base_path, **kwargs)  
 
    

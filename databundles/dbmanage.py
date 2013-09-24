@@ -866,8 +866,19 @@ def test_command(args,rc, src):
             os.remove(f)
         
         conn = db.connect(f)
+    
         cur = conn.cursor()
+        
+        try:
+            conn.enable_load_extension(True)
+            conn.execute("select load_extension('/usr/lib/libspatialite.so')")
+            loaded_extension = True
+        except AttributeError:
+            loaded_extension = False
+            prt("WARNING: Could not enable load_extension(). ")
+        
         rs = cur.execute('SELECT sqlite_version(), spatialite_version()')
+
         for row in rs:
             msg = "> SQLite v%s Spatialite v%s" % (row[0], row[1])
             print(msg)
