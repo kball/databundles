@@ -85,7 +85,7 @@ def _on_connect_geo(dbapi_con, con_record):
     #dbapi_con.execute('PRAGMA synchronous = OFF')
     
     try:
-        from util import RedirectStdStreams
+        from ..util import RedirectStdStreams
         with RedirectStdStreams():
             # Spatialite prints its version header always, this supresses it. 
             dbapi_con.enable_load_extension(True)
