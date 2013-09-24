@@ -59,13 +59,13 @@ class GeoDb(PartitionDb):
         ''''''    
 
         kwargs['driver'] = 'spatialite' 
-        
-        # This is only needed on some environments, and this particular code
-        # is tailor to ubuntu
-        
-        
+
         super(GeoDb, self).__init__(bundle, partition, base_path, **kwargs)  
 
+    @property
+    def engine(self):
+        return self._get_engine(_on_connect_geo)
+   
    
     def inserter(self,  table = None, dest_srs=4326, source_srs=None, layer_name=None):
         
@@ -73,3 +73,20 @@ class GeoDb(PartitionDb):
             table = self.partition.identity.table
         
         return FeatureInserter(self.partition,  table, dest_srs, source_srs, layer_name = layer_name)
+    
+def _on_connect_geo(dbapi_con, con_record):
+    '''ISSUE some Sqlite pragmas when the connection is created'''
+
+    dbapi_con.execute('PRAGMA page_size = 8192')
+    dbapi_con.execute('PRAGMA temp_store = MEMORY')
+    dbapi_con.execute('PRAGMA cache_size = 500000')
+    dbapi_con.execute('PRAGMA foreign_keys = ON')
+    dbapi_con.execute('PRAGMA journal_mode = OFF')
+    #dbapi_con.execute('PRAGMA synchronous = OFF')
+    
+    try:
+        dbapi_con.enable_load_extension(True)
+        dbapi_con.execute("select load_extension('/usr/lib/libspatialite.so')")
+    except:
+        pass
+    
