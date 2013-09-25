@@ -34,7 +34,7 @@ class PartitionDb(SqliteDatabase, RelationalPartitionDatabaseMixin):
         try:
             return self.connection.execute(*args, **kwargs)
         except OperationalError as e:
-            raise QueryError("Error while executing {} in database {} : {}".format(args, self.dsn, e.message))
+            raise QueryError("Error while executing {} in database {} ({}): {}".format(args, self.dsn, type(self), e.message))
         
 
     def inserter(self, table_or_name=None,**kwargs):
