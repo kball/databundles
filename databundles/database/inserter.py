@@ -83,9 +83,7 @@ class ValueWriter(InserterInterface):
         self.bundle = bundle
         self.db = db
         self.session = self.db.session
-        self.connection = self.db.connection
 
-        self.transaction = self.connection.begin()
         self.cache_size = cache_size
         self.statement = None
         self.caster = caster
@@ -96,38 +94,30 @@ class ValueWriter(InserterInterface):
     def __enter__(self): 
         return self
         
-    def rollback_end(self):
-        if self.transaction:
-            self.transaction.rollback()
-            self.transaction = None
+    def rollback(self):
+        self.session.rollback()
     
     def commit_end(self):
-        if self.transaction:
-            self.transaction.commit()
-            self.transaction = None
+        self.session.rollback()
         
     def commit_continue(self):
-        if self.transaction:
-            self.transaction.commit()
-            self.transaction = self.connection.begin()
-        else:
-            print "NO TRANSACTION"
-                
+        self.session.rollback()
+ 
         
     def close(self):
 
         if len(self.cache) > 0 :       
             try:
-                self.connection.execute(self.statement, self.cache)
+                self.session.execute(self.statement, self.cache)
                 self.commit_end()
                 self.cache = []
             except (KeyboardInterrupt, SystemExit):
-                self.rollback_end()
+                self.rollback()
                 raise
             except Exception as e:
                 if self.bundle:
                     self.bundle.error("Exception during ValueWriter.insert: "+str(e))
-                self.rollback_end()
+                self.rollback()
                 raise
         else:
             self.commit_end()
@@ -196,7 +186,7 @@ class ValueInserter(ValueWriter):
             self.cache.append(d)
          
             if len(self.cache) >= self.cache_size: 
-                self.connection.execute(self.statement, self.cache)
+                self.session.execute(self.statement, self.cache)
                 self.cache = []
                 
                 self.commit_continue()
@@ -206,7 +196,7 @@ class ValueInserter(ValueWriter):
                 self.bundle.log("Processing keyboard interrupt or system exist")
             else:
                 print "Processing keyboard interrupt or system exist" 
-            self.rollback_end()
+            self.rollback()
             self.cache = []
             raise
         except Exception as e:
@@ -214,7 +204,7 @@ class ValueInserter(ValueWriter):
                 self.bundle.error("Exception during ValueInserter.insert: {}".format(e))
             else:
                 print "ERROR: Exception during ValueInserter.insert: {}".format(e)
-            self.rollback_end()
+            self.rollback()
             self.cache = []
             raise
 
@@ -268,18 +258,16 @@ class ValueUpdater(ValueWriter, UpdaterInterface):
          
             if len(self.cache) >= self.cache_size:
                 
-                self.connection.execute(self.statement, self.cache)
+                self.session.execute(self.statement, self.cache)
                 self.cache = []
                 
         except (KeyboardInterrupt, SystemExit):
-            self.transaction.rollback()
-            self.transaction = None
+            self.rollback()
             self.cache = []
             raise
         except Exception as e:
             self.bundle.error("Exception during ValueUpdater.insert: "+str(e))
-            self.transaction.rollback()
-            self.transaction = None
+            self.rollback()
             self.cache = []
             raise e
 
