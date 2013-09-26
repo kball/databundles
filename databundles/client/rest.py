@@ -140,6 +140,7 @@ class RestApi(object):
         did = did.replace('/','|')
         pid = pid.replace('/','|') if pid else None
 
+
         if pid:
             response  = self.remote.datasets(did).partitions(pid).get()
         else:

@@ -141,26 +141,6 @@ class RestRemote(RemoteInterface):
     def list(self, path=None,with_metadata=False): 
         
         return  self.api.list()
-
-        path = self.prefix+'/'+path.strip('/') if path else self.prefix
-        
-        l = {}
-        for e in self.bucket.list(path):
-            path = e.name.replace(self.prefix,'',1).strip('/')
-            if path.startswith('_'):
-                continue
-            
-            if path.count('/') > 1:
-                continue # partition files
-            
-            if with_metadata:
-                d = self.metadata(path)
-            else:
-                d = {}
-            
-            l[path] = d
-
-        return l
         
         
     def get_upstream(self, type_):

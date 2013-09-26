@@ -312,6 +312,8 @@ def get_dataset(did, library, pid=None):
     if file:
         d['dataset']['file'] = file.to_dict()
 
+        d['dataset']['config']  = gr.db_config.dict
+
     if pid:
         pid = pid.replace('|','/')
         partitions = [gr.partitions.partition(pid)]

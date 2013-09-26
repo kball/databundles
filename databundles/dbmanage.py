@@ -365,19 +365,11 @@ def library_rebuild(args, l, config):
 def library_list(args, l, config):    
 
     if not args.term:
-        for i in l.database.connection.execute('SELECT * from datasets'):
-            d =  dict(i)
-            prt("{:10s} {}", d['d_vid'], d['d_name'])
+
+        for ident in l.list():
+            prt("{} {:10s} {}", ident['location'], ident['vid'], ident['vname'])
     else:
-        d = l.get(args.term)
-        
-        if not d:
-            prt("Error: no bundle found for identifier {} ", args.term)
-            return 
-        
-        for p in d.partitions:
-            prt("{:15s} {}", p.identity.vid, p.identity.vname)
-            
+        library_info(args, l, config, list_all=False)    
  
 def library_delete(args, l, config):   
     
@@ -395,7 +387,7 @@ def library_delete(args, l, config):
 
     l.cache.remove(key, propagate = True)
 
-def library_info(args, l, config):    
+def library_info(args, l, config, list_all=False):    
 
     if args.term:
 
@@ -405,7 +397,10 @@ def library_info(args, l, config):
             err("Failed to find record for: {}", args.term)
             return 
                 
-        _print_info(l,d,p)
+        _print_info(l,d,p, list_partitions=list_all)
+         
+        config = l.config(args.term)
+        print(config)
         
     else:
 
@@ -572,7 +567,7 @@ def library_schema(args, l, config):
     else:
         raise Exception("Unknown format" )    
         
-def _print_info(l,d,p):
+def _print_info(l,d,p, list_partitions=False):
     from cache import RemoteMarker
     
     api = None
@@ -593,19 +588,26 @@ def _print_info(l,d,p):
                 remote_p = r['partitions'].items()[0][1] if p and 'partitions' in r and len(r['partitions']) != 0 else None
         except NotFound as e:
             pass 
-        
-
 
     prt("D --- Dataset ---")
     prt("D Dataset   : {}; {}",d.vid, d.vname)
     prt("D Is Local  : {}",l.cache.has(d.cache_key) is not False)
     prt("D Rel Path  : {}",d.cache_key)
     prt("D Abs Path  : {}",l.cache.path(d.cache_key) if l.cache.has(d.cache_key) else '')
-    
+
     if remote_d:
         prt("D Web Path  : {}",remote_d['url'])
     
-    
+    if l.cache.has(d.cache_key):
+        b = l.get(d.vid)
+        prt("D Partitions: {}",b.partitions.count)
+        
+        if not p and (list_partitions or b.partitions.count < 12):
+            for partition in  b.partitions.all:
+                prt("P {:15s} {}", partition.identity.vid, partition.identity.vname)
+    else:
+        print(remote_d)
+
     if p:
         prt("P --- Partition ---")
         prt("P Partition : {}; {}",p.vid, p.vname)
@@ -700,6 +702,7 @@ def remote_info(args, l, rc):
 def remote_list(args, l, rc):
         
     if args.datasets:
+        # List just the partitions in some data sets. This should probably be combined into info. 
         for ds in args.datasets:
             dsi = l.remote.get_ref(ds)
 

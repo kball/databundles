@@ -1269,6 +1269,27 @@ class Library(object):
         return self.__class__(self.cache, self.database.clone(), self._remote, self.sync, self.require_upload, self.host, self.port)
     
     
+    def list(self, with_meta = True):
+        from orm import Dataset
+        
+        datasets = {}
+
+        print self.remote
+
+        for k,v in self.remote.list(with_metadata=with_meta).items():
+            if v and v['identity']['id'] != 'a0':
+                v['identity']['location'] = 'R'
+                datasets[k] =  v['identity']
+
+
+        for r in self.database.session.query(Dataset).filter(Dataset.id_ != 'a0').all():
+            v = r.identity.to_dict()
+            v['location'] = 'L'
+            datasets[r.identity.cache_key] = v
+
+        return sorted(datasets.values(), key=lambda x: x['vname'])
+    
+    
     @property
     def remote(self):
         if self._remote:
@@ -1324,6 +1345,35 @@ class Library(object):
    
         
         return d, p
+
+    def config(self, bp_id):
+        
+        from cache import RemoteMarker
+        
+        d,p = self.get_ref(bp_id)
+        
+        try:
+            api = self.remote.get_upstream(RemoteMarker)
+        except AttributeError: # No api
+            api = self.remote
+        
+      
+        if self.cache.has(d.cache_key):
+            b = self.get(d.vid)
+            config = b.db_config.dict
+        
+        elif api:
+            from client.exceptions import NotFound
+            
+            try:
+                r = api.get(d.vid, p.vid if p else None)
+                if r:
+                    remote_d = r['dataset']['config']
+                    
+            except NotFound as e:
+                pass 
+        else:
+            return None
 
     def _get_remote_dataset(self, dataset, cb=None):
         from identity import new_identity

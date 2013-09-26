@@ -1163,8 +1163,16 @@ class BundleDbConfig(BundleConfig):
     @property
     def dict(self): #@ReservedAssignment
         '''Return a dict/array object tree for the bundle configuration'''
+        from databundles.orm import Config
+        from collections import defaultdict
+        
+        d = defaultdict(dict)
       
-        return {'identity':self.dataset.to_dict()}
+        for cfg in self.database._unmanaged_session.query(Config).all():
+           
+            d[cfg.group][cfg.key] = cfg.value
+      
+        return d
 
     def __getattr__(self, group):
         '''Fetch a confiration group and return the contents as an 
