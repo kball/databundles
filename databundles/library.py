@@ -1248,7 +1248,7 @@ class Library(object):
         self.bundle = None # Set externally in bundle.library()
         self.host = host
         self.port = port
-
+        self.dep_cb = None# Callback for dependency resolution
         self.require_upload = require_upload
 
         self.dependencies = None
@@ -1635,6 +1635,10 @@ class Library(object):
         if not b:
             self.bundle.error("Failed to get dependency,  key={}, id={}".format(name, bundle_name))
             raise NotFoundError("Failed to get dependency, key={}, id={}".format(name, bundle_name))
+        
+        
+        if self.dep_cb:
+            self.dep_cb( self, name, bundle_name, b)
         
         return b
 

@@ -152,8 +152,14 @@ class Bundle(BuildBundle):
                     ins.insert(r)
                     lr()
 
-    def fetch(self):
-        pass
+
+    def deps(self):
+        
+        com = self.library.dep('communities').partition
+        
+        print com.database.path
+        
+        
 
 
 

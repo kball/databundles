@@ -24,7 +24,8 @@ logger.setLevel(logging.DEBUG)
 class Test(TestBase):
  
     def setUp(self):
-        import testbundle.bundle
+        import testbundle.bundle, shutil, os
+        
         self.bundle_dir = os.path.dirname(testbundle.bundle.__file__)
         self.rc = get_runconfig((os.path.join(self.bundle_dir,'source-test-config.yaml'),
                                  os.path.join(self.bundle_dir,'bundle.yaml'),
@@ -32,38 +33,48 @@ class Test(TestBase):
 
         self.copy_or_build_bundle()
 
-        self.bundle = Bundle()    
+        bundle = Bundle()    
 
         print "Deleting: {}".format(self.rc.group('filesystem').root_dir)
         databundles.util.rm_rf(self.rc.group('filesystem').root_dir)
 
+        bdir = os.path.join(self.rc.sourcerepo('clarinova.data')['dir'],'testbundle')
+
+
+        pats = shutil.ignore_patterns('build', 'build-save','*.pyc', '.git','.gitignore','.ignore','__init__.py')
+
+        print "Copying test dir tree to ", bdir
+        shutil.copytree(bundle.bundle_dir, bdir, ignore=pats)
+
+        # Import the bundle file from the directory
+        from databundles.run import import_file
+        import imp
+        rp = os.path.realpath(os.path.join(bdir, 'bundle.py'))
+        mod = import_file(rp)
+     
+        dir_ = os.path.dirname(rp)
+        self.bundle = mod.Bundle(dir_)
+
+        print self.bundle.bundle_dir
 
     def tearDown(self):
         pass
 
- 
     def testBasic(self):
         import random
-        
         repo = new_repository(self.rc.sourcerepo('clarinova.data'))
     
-        print repo
-        
+        repo.bundle = self.bundle
+
+        repo.delete_remote()
     
-        name = 'foobar'; # %08x' % random.randrange(8**30)
-        
-        if not repo.service.has(name):
-       
-            print "Creating repo ", name
-            
-            repo.service.create(name)
-        
-            
         repo.init()
- 
-        repo.add('bundle.py')
+        repo.init_remote()
         
-        repo.commit()
+        repo.push()
+        
+        
+ 
  
 
 def suite():

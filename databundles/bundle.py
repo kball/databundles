@@ -75,8 +75,8 @@ class Bundle(object):
     @property
     def repository(self):
         '''Return a repository object '''
-        from databundles.repository import Repository
-        from databundles.dbexceptions import ConfigurationError       
+        from repository import Repository #@UnresolvedImport
+        from dbexceptions import ConfigurationError       
         
         if not self._repository:
             repo_name = 'default'
@@ -106,7 +106,20 @@ class Bundle(object):
         '''Return the dataset'''
         return self.get_dataset(self.database.session)
         
+       
+    def _dep_cb(self, library, key, name, resolved_bundle):
+        '''A callback that is called when the library resolves a dependency.
+        It stores the resolved dependency into the bundle database'''
+        import json
         
+        if resolved_bundle.partition:
+            ident = resolved_bundle.partition.identity
+        else:
+            ident = resolved_bundle.identity
+    
+            
+        self.db_config.set_value('rdep', key, ident.to_dict())
+        self.database.session.commit()
         
     @property
     def library(self):
@@ -123,6 +136,8 @@ class Bundle(object):
         l.logger = self.logger
         l.database.logger = self.logger
         l.bundle = self
+        l.dep_cb = self._dep_cb
+        
         return l
 
     @library.setter
@@ -307,7 +322,9 @@ class BuildBundle(Bundle):
         if self.config.build.get('dependencies'):
             dbc = self.db_config
             for k,v in self.config.build.get('dependencies').items():
-                dbc.set_value('dependencies', k, v)
+                dbc.set_value('odep', k, v)
+
+        self.database.session.commit()
                 
         self.database.rewrite_dataset()
                 

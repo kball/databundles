@@ -259,26 +259,31 @@ def run(argv, bundle_class):
 
     raise Exception("Deprecated. Remove __main__ section from end of bundle.py")
 
-def import_(filename):
+def import_file(filename):
+    ''' '''
+    import imp
     (path, name) = os.path.split(filename)
     (name, ext) = os.path.splitext(name)
 
     (file, filename, data) = imp.find_module(name, [path])
     return imp.load_module(name, file, filename, data)
+       
+
                 
 if __name__ == '__main__':
-
+    '''When dbundle is run, this routine will load the bundle module from a file
+    wire it into the namespace and run it with the arguments passed into dbundle. '''
     import sys, os, imp, pprint
 
     args = list(sys.argv)
 
     bundle_file = sys.argv[1]
     
+    # Import the bundle file from the 
     rp = os.path.realpath(os.path.join(os.getcwd(), bundle_file))
-    dir_ = os.path.dirname(rp)
-
-    mod = import_(rp)
+    mod = import_file(rp)
  
+    dir_ = os.path.dirname(rp)
     b = mod.Bundle(dir_)
 
     b.run(args[2:])

@@ -1,0 +1,5 @@
+.project
+*.pyc
+build
+.pydevproject
+meta/schema-revised.csv

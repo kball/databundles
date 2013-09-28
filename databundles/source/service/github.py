@@ -17,7 +17,9 @@ class GitHubService(ServiceInterface,GitServiceMarker):
         
         self.urls ={ 
                     'repos' : ur+'orgs/{}/repos'.format(self.org) if self.org else ur+'users/{}/repos'.format(self.user), 
-                    'info' : ur+'repos/{}/{{name}}'.format(self.org)
+                    'deleterepo' : ur+'repos/{}/{{name}}'.format(self.org if self.org else self.user),
+                    'info' : ur+'repos/{}/{{name}}'.format(self.org),
+                    'repogit' : ur+'{}/{{name}}.git'.format(self.org),
                     }
         
         self.auth = (self.user, self.password)
@@ -40,14 +42,29 @@ class GitHubService(ServiceInterface,GitServiceMarker):
         import requests, json
         
         payload = json.dumps({'name':name})
-
         r = requests.post(self.urls['repos'], data=payload, auth=self.auth)
-    
-        if r.status_code != 200:
-            raise Exception(r.json())
+        if r.status_code >= 300:
+            raise Exception(r.headers)
             
         else:
             return r.json()
+    
+    def delete(self, name):
+        '''Delete the upstream repository'''
+        import requests, json
+
+        r = requests.delete(self.urls['deleterepo'].format(name=name), auth=self.auth)
+
+        if r.status_code != 204:
+            raise Exception(r.headers)
+            
+        else:
+            return True
+    
+    
+    def repo_url(self, name):
+        
+        return self.urls['repogit'].format(name=name)
     
     
     def ident(self):

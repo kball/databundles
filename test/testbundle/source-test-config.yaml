@@ -8,6 +8,6 @@ sourcerepo:
   
   clarinova.data:
     account: clarinova-data
-    dir: /tmp/testbundle
+    dir: /tmp/test-source/bundles
 
         

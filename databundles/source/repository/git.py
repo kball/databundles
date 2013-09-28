@@ -5,9 +5,9 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 from . import RepositoryInterface, RepositoryException  #@UnresolvedImport
+from databundles.dbexceptions import ConfigurationError
 
-
-from sh import git #@UnresolvedImport
+from sh import git,ErrorReturnCode_1 #@UnresolvedImport
 
 class GitShellService(object):
     '''Interact with GIT services using the shell commands'''
@@ -31,6 +31,22 @@ class GitShellService(object):
         
         return True
 
+    def init_remote(self, url):
+        
+        return git.remote('add','origin',url)
+
+
+    def deinit(self):
+        import os
+        fn = os.path.join(self.dir_, '.gitignore')
+        if os.path.exists(fn):
+            os.remove(fn)
+            
+        dn = os.path.join(self.dir_, '.git')
+        if os.path.exists(dn):
+            from  databundles.util import rm_rf
+            rm_rf(dn)
+            
     def has(self, path):
         pass
         
@@ -46,12 +62,32 @@ class GitShellService(object):
   
     def commit(self,message="."):
         
-        o = git.commit(a=True, m=message)
-        
-        if o.exit_code != 0:
-            raise RepositoryException("Failed to commit git repo: {}".format(o))
-        
+        try:
+            o = git.commit(a=True, m=message)
+        except ErrorReturnCode_1:
+            pass
+
         return True  
+     
+    def ignore(self, pattern):
+        import os
+        
+        fn = os.path.join(self.dir_,'.ignore')
+        
+        if os.path.exists(fn):
+            with open(fn,'rb') as f:
+                lines = set([line.strip() for line in f])
+        else:
+            lines = set()
+            
+        lines.add(pattern)
+        
+        with open(fn,'wb') as f:
+            for line in lines:
+                f.write(line+'\n')      
+    
+    def output(self,line):
+        print 'OUTPUT: ', line
      
 
 class GitRepository(RepositoryInterface):
@@ -63,17 +99,88 @@ class GitRepository(RepositoryInterface):
         
         self.service = service
         self.dir_ = dir
-        self.impl = GitShellService(self.dir_)
+        self._bundle = None
+        self._impl = None
+        
+    
+    @property
+    def bundle(self):
+        if not self._bundle:
+            from databundles.dbexceptions import ConfigurationError
+            raise ConfigurationError("Must assign bundle to repostitory before this operation")        
+        
+        
+        return self._bundle
+    
+    @bundle.setter
+    def bundle(self, b):
+        from databundles.bundle import BuildBundle
+        self._bundle = b
+    
+        if not isinstance(b, BuildBundle):
+            raise ValueError("B parameter must be a build bundle ")
+        
+    
+        self._impl = GitShellService(b.bundle_dir)
+
+    @property
+    def impl(self):
+        if not self._impl:
+            raise ConfigurationError("Must assign bundle to repostitory before this operation")
+
+        return self._impl
 
     def ident(self):
         '''Return an identifier for this service'''
         
     def init(self):
         '''Initialize the repository, both load and the upstream'''
+        
+        self.bundle.log("Create .git directory")
         self.impl.init()
+        
+        self.bundle.log("Create .gitignore")
+        for p in ('*.pyc', 'build','.project','.pydevproject', 'meta/schema-revised.csv'):
+            self.impl.ignore(p)
+               
+        self.bundle.log("Create remote {}".format(self.name))
+   
+        self.add('bundle.py')
+        self.add('bundle.yaml')
+        self.add('meta/*')
+        
+        self.commit()
+            
+        
+    def init_remote(self):
+        self.bundle.log("Check existence of repository: {}".format(self.name))
+        
+        if not self.service.has(self.name):
+            pass
+            #raise ConfigurationError("Repo {} already exists. Checkout instead?".format(self.name))
+            self.bundle.log("Creating repository: {}".format(self.name))
+            self.service.create(self.name)
+         
+
+        self.impl.init_remote(self.service.repo_url(self.name))
+
+    def delete_remote(self):
+        
+        if  self.service.has(self.name):
+            self.bundle.log("Deleting remote: {}".format(self.name))
+            self.service.delete(self.name)
+
+        
+    def de_init(self):
+        self.impl.deinit()
+        
     
     def is_initialized(self):
         '''Return true if this repository has already been initialized'''
+    
+    @property
+    def name(self):
+        return self.bundle.identity.name+"-dbundle"
     
     
     def create_upstream(self): raise NotImplemented()
@@ -88,10 +195,6 @@ class GitRepository(RepositoryInterface):
     def clone(self, library, name):
         '''Locate the source for the named bundle from the library and retrieve the 
         source '''
-        raise NotImplemented()
-    
-    def push(self):
-        '''Push any changes to the repository to the origin server'''
         raise NotImplemented()
     
     def register(self, library): 
