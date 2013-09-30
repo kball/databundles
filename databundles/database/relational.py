@@ -180,9 +180,7 @@ class RelationalDatabase(DatabaseInterface):
         from sqlalchemy.engine.reflection import Inspector
 
         return Inspector.from_engine(self.engine)
-
-
-        
+ 
    
     def open(self):
         # Fetching the connection objects the database

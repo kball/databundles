@@ -27,6 +27,11 @@ def err(template, *args, **kwargs):
     print("ERROR: "+template.format(*args, **kwargs))
     sys.exit(1)
 
+def warn(template, *args, **kwargs):
+    import sys
+    print("WARN: "+template.format(*args, **kwargs))
+
+
 class Progressor(object):
 
     start = None
@@ -431,7 +436,7 @@ def library_push(args, l, config):
                 
 def library_files(args, l, config):
 
-    files_ = l.database.get_file_by_state(args.file_state)
+    files_ = l.database.get_file_by_state(args.file_state, type_='bundle')
     if len(files_):
         prt("-- Display {} files",args.file_state)
         for f in files_:
@@ -786,75 +791,176 @@ def ckan_command(args,rc, src):
         pass
  
 
-def source_command(args,rc, src):
+def source_command(args, rc, src):
+
+
+    globals()['source_'+args.subcommand](args, rc,src)
+
+def source_info(args,rc, src):
     
-    if args.subcommand == 'find':
-        import os
-        import sys
-        import library
-        
-        from databundles.identity import Identity
-        from databundles.bundle import BuildBundle
-        from databundles.util import toposort
-        
-        l = library.new_library(rc.library(args.name))
-        
-        if not os.path.exists(args.term) and os.path.isdir(args.term):
-            err("ERROR: '{}' is not a valid directory ",args.term)
-            sys.exit(1)
-            
-        
-        topo = {}
+    prt("Source dir: {}", rc.sourcerepo.dir)
+    for repo in  rc.sourcerepo.list:
+        prt("Repo      : {}", repo.ident)
 
-        for root, subFolders, files in os.walk(args.term):
+
+def source_init(args,rc, src):
+    from source.repository import new_repository
+
+    dir = args.dir
+    
+    if not dir:
+        dir = os.getcwd()
+    
+    repo = new_repository(rc.sourcerepo(args.name))
+
+    repo.bundle_dir = dir
+
+    repo.delete_remote()
+    import time
+    time.sleep(3)
+    repo.init()
+    repo.init_remote()
+    
+    repo.push()
+    
+def source_sync(args,rc, src):
+    '''Synchronize all of the repositories with the local library'''
+    from source.repository import new_repository
+    import library
+    from identity import new_identity
+
+    l = library.new_library(rc.library(args.library))
+
+
+    for repo in rc.sourcerepo.list:
+        for e in repo.service.list():
+
+            ident = new_identity(e)
+
+            l.database.add_file(e['clone_url'], repo.service.ident, ident.name, state='synced', type_='source', data=e)
+            
+            prt("Added {:50s} {}",ident.name,e['clone_url'] )
+            
+            
+
+def source_clone(args,rc, src):   
+    '''Clone one or more registered source packages ( via sync ) into the source directory '''
+    import library
+    from dbexceptions import ConflictError
+    from identity import new_identity
+    l = library.new_library(rc.library(args.library))
+
+    def get_by_group(group):
+        return [f for f in  l.database.get_file_by_type('source') if f.group == group]
+
+    for repo in rc.sourcerepo.list:
+        print ("--- Cloning sources from: ", repo.ident)
+        for f in get_by_group(repo.ident):
+            try:
+                ident = new_identity(f.data)
+                d = repo.clone(f.path, ident.path_no_rev,repo.dir) 
+                prt("Cloned {} to {}",f.path, d)
+            except ConflictError as e :
+                warn("Clone failed for {}: {}".format(f.path, e.message))
                 
-            for f in files: 
-                if f == 'bundle.yaml':
-                    
-                    try: 
-                        b = BuildBundle(root)
-
-                        name_set = set([Identity.parse_name(n).name for n in b.config.group('build').get('dependencies', {}).values() ])
-
-                        topo[b.identity.name] = set(name_set)
-
-                    except:
-                        pass
-
+        l.database.add_file(e['clone_url'], repo.service.ident, ident.name, state='synced', type_='source', data=e)
+            
+def load_bundle(bundle_dir):
+    from databundles.run import import_file
+    
+    rp = os.path.realpath(os.path.join(bundle_dir, 'bundle.py'))
+    mod = import_file(rp)
+  
+    return mod.Bundle
+    
+def source_make(args,rc, src):
+    from os import walk
+    from os.path import basename
+    
+    dir = args.dir
+    
+    if not dir:
+        dir = rc.sourcerepo.dir
         
-        for group  in  toposort(topo):
-            prt(group)
+        
+    def build(bundle_dir):
+        # Import the bundle file from the directory
+        
+        import imp, os
+
+        bundle_class = load_bundle(bundle_dir)
+        bundle = bundle_class(root)
+
+        if bundle.is_built: # and not args.clean:
+            bundle.log("Bundle {} is already built".format(bundle.identity.name))
+        else:
+            bundle.log("-------------")
+            bundle.log("Building {} ".format(bundle.identity.name))
+            bundle.log("-------------")
+
+            bundle.clean()
+            bundle = bundle_class(root)
+    
+            bundle.run_prepare()
             
+            bundle.run_build()
             
-        return 
+        if args.install:
+            bundle.install()
             
-        for name, (dir,deps) in topo.items():
-            if len(deps) < 1:
-                continue
+        
+    
+    for root, dirs, files in os.walk(dir):
+        if 'bundle.yaml' in files:
+            build(root)
             
-            x = ''
-            x += '{} {}\n'.format(name, dir)
-            error = False
-            for d in deps:
-               
-                try: 
-                    dep = l.get(d)
-                    
-                    if  dep:
-                        x += "   {} {}\n".format(d, dep.identity)
-                    else:
-                        x += "   {} {}\n".format(d, "Not Installed")
-                    
-                    
-                except: 
-                    x += "   {} {}\n".format(d, "Error")
-                    error = True
-                    
+def source_run(args,rc, src):
+    from os.path import basename
+
+    dir = args.dir
+
+    cmd = ' '.join(args.cmd)
+
+    if not dir:
+        dir = rc.sourcerepo.dir
+
+    for root, dirs, files in os.walk(dir):
+        if 'bundle.yaml' in files:
+            saved_path = os.getcwd()
+            os.chdir(root)   
+            prt('----- {}', root)
+            prt('----- {}', cmd)
+
+            os.system(cmd)
+            prt('')
+            os.chdir(saved_path)         
+       
+def source_find(args,rc, src):
+    from source.repository.git import GitRepository
+    
+    dir = args.dir
+    
+    if not dir:
+        dir = rc.sourcerepo.dir   
+
+    for root, dirs, files in os.walk(dir):
+        if 'bundle.yaml' in files:
+
+            repo = GitRepository(None, root)
+            repo.bundle_dir = root
+            if args.commit:
+                if repo.needs_commit():
+                    print(root)
+            elif args.push:
+                if repo.needs_push():
+                    print(root)
+            else:
+                err("Must specify either --push or --commit")
                 
-
-            if error:
-                err(x)
-
+                
+            
+            
+                     
 def test_command(args,rc, src):
     
     if args.subcommand == 'config':
@@ -890,6 +996,9 @@ def test_command(args,rc, src):
     else:
         prt('Testing')
         prt(args)
+
+def source_deps(args,rc, src):
+    pass
 
 def main():
     import argparse
@@ -1100,13 +1209,52 @@ def main():
     src_p = cmd.add_parser('source', help='Manage bundle source files')
     src_p.set_defaults(command='source')
     asp = src_p.add_subparsers(title='source commands', help='command help')  
+
+    sp = asp.add_parser('info', help='Information about the source configuration')
+    sp.set_defaults(subcommand='info')
+
+    
     sp = asp.add_parser('find', help='Find source bundle source directories')
     sp.set_defaults(subcommand='find')
     sp.add_argument('term', type=str,help='Query term')
     sp.add_argument('-r','--register',  default=False,action="store_true",  help='Register directories in the library. ')
     sp.add_argument('-l','--library',  default='default',  help='Select a different name for the library')
       
-    
+    sp = asp.add_parser('init', help='Intialize the local and remote git repositories')
+    sp.set_defaults(subcommand='init')
+    sp.add_argument('-n','--name',  default='default',  help='Select the name for the repository. Defaults to "default" ')
+    sp.add_argument('dir', type=str,nargs='?',help='Directory')
+
+    sp = asp.add_parser('sync', help='Load references from the confiurged source remotes')
+    sp.set_defaults(subcommand='sync')
+    sp.add_argument('-l','--library',  default='default',  help='Select a library to add the references to')
+  
+    sp = asp.add_parser('clone', help='Clone source into a local directory')
+    sp.set_defaults(subcommand='clone')
+    sp.add_argument('-l','--library',  default='default',  help='Select a library to take references from')
+    sp.add_argument('dir', type=str,nargs='?',help='Source id')      
+  
+    sp = asp.add_parser('make', help='Build sources')
+    sp.set_defaults(subcommand='make')
+    sp.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')
+    sp.add_argument('-i','--install', default=False,action="store_true", help='Install after build')
+
+    sp.add_argument('dir', type=str,nargs='?',help='Directory to start search for sources in. ')      
+ 
+ 
+    sp = asp.add_parser('run', help='Run a shell command in source directories')
+    sp.set_defaults(subcommand='run')
+    sp.add_argument('-l','--library',  default='default',  help='Select a library to take references from')
+    sp.add_argument('-d','--dir',  help='Directory to start recursing from ')
+    sp.add_argument('cmd',nargs=argparse.REMAINDER, type=str,help='Shell command to run')        
+      
+    sp = asp.add_parser('find', help='Find source packages that meet a vareity of conditions')
+    sp.set_defaults(subcommand='find')
+    sp.add_argument('-d','--dir',  help='Directory to start recursing from ')
+    group = sp.add_mutually_exclusive_group()
+    group.add_argument('-c', '--commit',  default=False, dest='commit',   action='store_true', help='Find bundles that need to be committed')
+    group.add_argument('-p', '--push',  default=False, dest='push',   action='store_true', help='Find bundles that need to be pushed')
+      
     #
     # Remote Command
     #

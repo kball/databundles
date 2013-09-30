@@ -15,6 +15,7 @@ def new_repository(config):
     
     if isinstance(service,GitServiceMarker):
         from .git import GitRepository #@UnresolvedImport
+
         return GitRepository(**config)
     else:
         from databundles.dbexceptions import ConfigurationError

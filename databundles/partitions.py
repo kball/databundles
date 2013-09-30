@@ -358,6 +358,7 @@ class Partitions(object):
         return self._new_partition(pid, **kwargs)
     
     def new_geo_partition(self, pid=None, **kwargs):
+        from sqlalchemy.orm.exc import  NoResultFound
         
         if pid:
             pid.format = 'geo'
@@ -371,8 +372,11 @@ class Partitions(object):
         if not table_name:
             raise ValueError("Pid must have a table name")
 
-        if not self.bundle.schema.table(table_name):
-            self.bundle.schema.add_table(table_name)
+        try:
+            self.bundle.schema.table(table_name)
+        except NoResultFound:
+            with self.bundle.session:
+                t = self.bundle.schema.add_table(table_name)
 
         p = self._new_partition(pid, **kwargs)
 

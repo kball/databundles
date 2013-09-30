@@ -808,7 +808,7 @@ class LibraryDb(object):
         self.add_file(identity.cache_key, 'remote', identity.vid, state='remote')
 
         
-    def add_file(self,path, group, ref, state='new'):
+    def add_file(self,path, group, ref, state='new', type_='bundle', data=None, source_url=None):
         from databundles.orm import  File
 
         if os.path.exists(path):
@@ -832,7 +832,11 @@ class LibraryDb(object):
                      ref=ref,
                      modified=modified, 
                      state = state,
-                     size=size)
+                     size=size,
+                     type_=type_,
+                     data=data,
+                     source_url=source_url
+                     )
     
         # Sqlalchemy doesn't automatically rollback on exceptsions, and you
         # can't re-try the commit until you roll back. 
@@ -875,7 +879,7 @@ class LibraryDb(object):
         return s.query(File).filter(File.group == ticket).one()
         
 
-    def get_file_by_state(self, state):
+    def get_file_by_state(self, state, type_=None):
         """Return all files in the database with the given state"""
         from databundles.orm import  File
         s = self.session
@@ -884,18 +888,41 @@ class LibraryDb(object):
         # required to install correctly. 
         
         if state == 'all':
-            return s.query(File).order_by(File.ref).all()
+            q =  s.query(File).order_by(File.ref)
         else:
-            return s.query(File).filter(File.state == state).order_by(File.ref).all()
+            q =  s.query(File).filter(File.state == state).order_by(File.ref)
+            
+        if type:
+            q = q.filter(File.type_ == type_)
+            
+        return q.all()
 
-    def get_file_by_ref(self, ref):
+    def get_file_by_ref(self, ref, type_=None):
         """Return all files in the database with the given state"""
         from databundles.orm import  File
         from sqlalchemy.orm.exc import NoResultFound 
         s = self.session
 
         try:
-            return s.query(File).filter(File.ref == ref).one()
+            q = s.query(File).filter(File.ref == ref)
+
+            if type:
+                q = q.filter(File.type_ == type_)
+                
+            return q.all()
+        
+        except NoResultFound:
+            return None
+
+    def get_file_by_type(self, type_=None):
+        """Return all files in the database with the given state"""
+        from databundles.orm import  File
+        from sqlalchemy.orm.exc import NoResultFound 
+        s = self.session
+
+        try:
+            return s.query(File).filter(File.type_ == type_).all()
+
         except NoResultFound:
             return None
 
@@ -1274,12 +1301,11 @@ class Library(object):
         
         datasets = {}
 
-        print self.remote
-
-        for k,v in self.remote.list(with_metadata=with_meta).items():
-            if v and v['identity']['id'] != 'a0':
-                v['identity']['location'] = 'R'
-                datasets[k] =  v['identity']
+        if self.remote:
+            for k,v in self.remote.list(with_metadata=with_meta).items():
+                if v and v['identity']['id'] != 'a0':
+                    v['identity']['location'] = 'R'
+                    datasets[k] =  v['identity']
 
 
         for r in self.database.session.query(Dataset).filter(Dataset.id_ != 'a0').all():
@@ -1616,7 +1642,22 @@ class Library(object):
         
         for k,v in deps.items():
             self.dependencies[k] = v
-                
+             
+    def check_dependencies(self, throw=True):
+        
+        if not self.dependencies:
+            self._add_dependencies()
+            
+        errors = {}
+        for k,v in self.dependencies.items():
+            b = self.get(v)
+             
+            if not b:
+                if throw:
+                    raise NotFoundError("Failed to get dependency, key={}, id={}".format(k, v))
+                else:
+                    errors[k] = v
+
     def dep(self,name):
         """"Bundle version of get(), which uses a key in the 
         bundles configuration group 'dependencies' to resolve to a name"""
@@ -1633,7 +1674,6 @@ class Library(object):
         b = self.get(bundle_name)
         
         if not b:
-            self.bundle.error("Failed to get dependency,  key={}, id={}".format(name, bundle_name))
             raise NotFoundError("Failed to get dependency, key={}, id={}".format(name, bundle_name))
         
         
@@ -1882,13 +1922,13 @@ class Library(object):
         for bundle in bundles:
             self.logger.info('Installing: {} '.format(bundle.identity.name))
             self.database.install_bundle(bundle)
-            self.database.add_file(bundle.database.path, self.cache.repo_id, bundle.identity.vid,  'rebuilt')
+            self.database.add_file(bundle.database.path, self.cache.repo_id, bundle.identity.vid,  'rebuilt', type_='bundle')
 
             for p in bundle.partitions:
                 
                 if self.cache.has(p.identity.cache_key, use_upstream=False):
                     self.logger.info('            {} '.format(p.identity.name))
-                    self.database.add_file(p.database.path, self.cache.repo_id, p.identity.vid,  'rebuilt')
+                    self.database.add_file(p.database.path, self.cache.repo_id, p.identity.vid,  'rebuilt', type_='partition')
     
 
         self.database.commit()

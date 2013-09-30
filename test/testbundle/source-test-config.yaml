@@ -5,9 +5,10 @@ filesystem:
   root_dir: /tmp/test-source
 
 sourcerepo:
+  dir: /tmp/test-source/bundles
   
   clarinova.data:
     account: clarinova-data
-    dir: /tmp/test-source/bundles
+
 
         

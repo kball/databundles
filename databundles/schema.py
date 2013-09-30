@@ -175,7 +175,7 @@ class Schema(object):
     def columns(self):
         '''Return a list of tables for this bundle'''
         from databundles.orm import Column
-        return (self.database.session.query(Column).all())
+        return (self.bundle.database.session.query(Column).all())
         
     def get_table_meta(self, name_or_id, use_id=False, driver=None):
         return self.get_table_meta_from_db(self.bundle.database, name_or_id, use_id, driver, session = self.bundle.database.session)
@@ -359,11 +359,11 @@ class Schema(object):
                     
     def create_tables(self):
         '''Create the defined tables as database tables.'''
-        self.bundle.database.commit()
-        for t in self.tables:
-            if not t.name in self.bundle.database.inspector.get_table_names():
-                t_meta, table = self.bundle.schema.get_table_meta(t.name) #@UnusedVariable
-                table.create(bind=self.bundle.database.engine)
+        with self.bundle.session:
+            for t in self.tables:
+                if not t.name in self.bundle.database.inspector.get_table_names():
+                    t_meta, table = self.bundle.schema.get_table_meta(t.name) #@UnusedVariable
+                    table.create(bind=self.bundle.database.engine)
         
     def schema_from_file(self, file_, progress_cb=None):
         '''Read a CSV file, in a particular format, to generate the schema'''
@@ -516,11 +516,12 @@ class Schema(object):
                             indexes[idx] = set()
                             
                         indexes[idx].add(col)
-                        
-                        for field in all_opt_col_fields:
-                            v = getattr(col, field)
-                            if v and field not in opt_col_fields:
-                                opt_col_fields.append(field)
+                    
+                for field in all_opt_col_fields:
+
+                    v = getattr(col, field)
+                    if v and field not in opt_col_fields:
+                        opt_col_fields.append(field)
                                 
                      
         # Put back into same order as in app_opt_col_fields            
@@ -568,8 +569,12 @@ class Schema(object):
         
         g = self._dump_gen()
         
-        header = g.next()
-        
+        try:
+            header = g.next()
+        except StopIteration:
+            # No schema file at all!
+            return 
+            
         w = csv.DictWriter(f,header)
         w.writeheader()
         last_table = None

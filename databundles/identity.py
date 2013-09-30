@@ -223,6 +223,14 @@ class Identity(object):
         return os.path.join(source, '-'.join(parts) )
   
     @property
+    def path_no_rev(self):
+        '''The name is a form suitable for use in a filesystem'''
+        parts = self._name_parts(use_revision=False)
+        source = parts.pop(0)
+        
+        return os.path.join(source, '-'.join(parts) ) 
+  
+    @property
     def cache_key(self):
         '''The name is a form suitable for use in a filesystem'''
         return self.path+self.PATH_EXTENSION

@@ -12,16 +12,21 @@ from sh import git,ErrorReturnCode_1 #@UnresolvedImport
 class GitShellService(object):
     '''Interact with GIT services using the shell commands'''
 
-    def __init__(self,dir):
+    def __init__(self,repo, dir):
         import os
+        self.repo = repo
         self.dir_ = dir
-        
-        self.savedPath = os.getcwd()
-        os.chdir(self.dir_)
+
+        if self.dir_:
+            self.saved_path = os.getcwd()
+            os.chdir(self.dir_)
+        else:
+            self.saved_path = None
 
     def __del__( self ): # Should be ContextManager, but not right model ... 
         import os
-        os.chdir( self.savedPath )
+        if self.saved_path:
+            os.chdir( self.save_path )
         
     def init(self):
         o = git.init()
@@ -69,10 +74,24 @@ class GitShellService(object):
 
         return True  
      
+    def needs_commit(self):
+        for line in git.status(porcelain=True):
+            if line.strip():
+                return True
+  
+        return False
+    
+    def needs_push(self):
+        for line in git.push('origin','master',n=True, porcelain=True):
+            if '[up to date]' in line:
+                return False
+
+        return True
+    
     def ignore(self, pattern):
         import os
         
-        fn = os.path.join(self.dir_,'.ignore')
+        fn = os.path.join(self.dir_,'.gitignore')
         
         if os.path.exists(fn):
             with open(fn,'rb') as f:
@@ -85,23 +104,82 @@ class GitShellService(object):
         with open(fn,'wb') as f:
             for line in lines:
                 f.write(line+'\n')      
-    
-    def output(self,line):
-        print 'OUTPUT: ', line
-     
+
+    def char_to_line(self,line_proc):
+        
+        import StringIO
+        sio = StringIO.StringIO('bingo')
+        def _rcv(chr,stdin):
+            sio.write(chr)
+            if chr == '\n' or chr == ':':
+                # This is a total hack, but there is no other way to detect when the line is
+                # done being displayed that looking for the last character, which is not a \n
+                if not sio.getvalue().endswith('http:') and not sio.getvalue().endswith('https:'):
+                    line_proc(sio.getvalue(),stdin)
+                    sio.truncate(0)
+        return _rcv
+                
+    def push(self, username="Noone", password="None"):
+        '''Push to  remote'''
+        import sys, os
+        from sh import ErrorReturnCode_128 #@UnresolvedImport
+
+        def line_proc(line,stdin):
+
+            if "Username for" in line:
+                stdin.put(username+ "\n")
+                
+            elif "Password for" in line:
+                stdin.put(password+ "\n")
+
+            else:
+                print "git-push: ", line.strip()
+
+        rcv = self.char_to_line(line_proc)
+
+        
+        try:
+            # This is a super hack. See http://amoffat.github.io/sh/tutorials/2-interacting_with_processes.html
+            # for some explaination. 
+            p =  git.push('-u','origin','master',  _out=rcv,  _out_bufsize=0, _tty_in=True)
+            p.exit_code
+        except ErrorReturnCode_128:
+            raise Exception("""Push to repository repository failed. You will need to store or cache credentials. 
+            You can do this by using ssh, .netrc, or a credential maanger. 
+            See: https://www.kernel.org/pub/software/scm/git/docs/gitcredentials.html""")
+            
+        return True
+
+    def clone(self,url,  dir_):
+        import os
+        from databundles.dbexceptions import ConflictError
+       
+        if not os.path.exists(dir_):
+            p = git.clone(url,dir_)
+        else:
+            raise ConflictError("{} already exists".format(dir_))
+        
+
 
 class GitRepository(RepositoryInterface):
     '''
     classdocs
     '''
 
+    SUFFIX = '-dbundle'
+
     def __init__(self,service, dir, **kwargs):
         
         self.service = service
         self.dir_ = dir
         self._bundle = None
+        self._bundle_dir = None
         self._impl = None
         
+    
+    @property
+    def dir(self):
+        return self.dir_
     
     @property
     def bundle(self):
@@ -109,19 +187,46 @@ class GitRepository(RepositoryInterface):
             from databundles.dbexceptions import ConfigurationError
             raise ConfigurationError("Must assign bundle to repostitory before this operation")        
         
-        
         return self._bundle
     
     @bundle.setter
     def bundle(self, b):
         from databundles.bundle import BuildBundle
+        
         self._bundle = b
     
         if not isinstance(b, BuildBundle):
             raise ValueError("B parameter must be a build bundle ")
         
     
-        self._impl = GitShellService(b.bundle_dir)
+        self._impl = GitShellService(self,b.bundle_dir)
+
+    
+    @property
+    def bundle_dir(self):
+        if not self._bundle and not self._bundle_dir:
+            from databundles.dbexceptions import ConfigurationError
+            raise ConfigurationError("Must assign bundle or bundle_dir to repostitory before this operation")             
+    
+        if self._bundle_dir:
+            return self._bundle_dir
+        else:
+            return self.bundle_dir
+        
+    @bundle_dir.setter
+    def bundle_dir(self, bundle_dir):
+        self._bundle_dir = bundle_dir
+        
+        # Import the bundle file from the directory
+        from databundles.run import import_file
+        import imp, os
+        rp = os.path.realpath(os.path.join(bundle_dir, 'bundle.py'))
+        mod = import_file(rp)
+     
+        dir_ = os.path.dirname(rp)
+        self.bundle = mod.Bundle(dir_)
+        
+        
 
     @property
     def impl(self):
@@ -130,11 +235,16 @@ class GitRepository(RepositoryInterface):
 
         return self._impl
 
+    @property
     def ident(self):
         '''Return an identifier for this service'''
+        return self.service.ident
         
     def init(self):
         '''Initialize the repository, both load and the upstream'''
+        import os 
+        
+        self.impl.deinit()
         
         self.bundle.log("Create .git directory")
         self.impl.init()
@@ -147,7 +257,14 @@ class GitRepository(RepositoryInterface):
    
         self.add('bundle.py')
         self.add('bundle.yaml')
-        self.add('meta/*')
+
+        if os.path.exists(self.bundle.filesystem.path('meta')):
+            self.add('meta/*')
+     
+        if os.path.exists(self.bundle.filesystem.path('config')):
+            self.add('config/*')
+            
+        self.add('.gitignore')
         
         self.commit()
             
@@ -180,7 +297,7 @@ class GitRepository(RepositoryInterface):
     
     @property
     def name(self):
-        return self.bundle.identity.name+"-dbundle"
+        return self.bundle.identity.name+self.SUFFIX
     
     
     def create_upstream(self): raise NotImplemented()
@@ -192,10 +309,30 @@ class GitRepository(RepositoryInterface):
     def commit(self):
         return self.impl.commit()
     
-    def clone(self, library, name):
+    def needs_commit(self):
+        return self.impl.needs_commit()
+    
+    def needs_push(self):
+        return self.impl.needs_push()
+    
+    def clone(self, url, path, dir_):
         '''Locate the source for the named bundle from the library and retrieve the 
         source '''
-        raise NotImplemented()
+        import os
+        from urlparse import urlparse
+
+        d = os.path.join(self.dir, path)
+       
+        impl = GitShellService(self,None)
+
+        impl.clone(url,d)
+        
+        return d
+        
+    def push(self, username="Noone", password="None"):
+        '''Push any changes to the repository to the origin server'''
+        self.bundle.log("Push to remote: {}".format(self.name))
+        return self.impl.push(username=username, password=password)
     
     def register(self, library): 
         '''Register the source location with the library, and the library
@@ -206,7 +343,6 @@ class GitRepository(RepositoryInterface):
         '''Ignore a file'''
         raise NotImplemented()
 
-        
     def __str__(self):
         return "<GitRepository: account={}, dir={}".format(self.service, self.dir_)
     

@@ -392,7 +392,7 @@ class Column(Base):
         
     def __init__(self,table, **kwargs):
 
-        self.sequence_id = kwargs.get("sequence_id",None) 
+        self.sequence_id = kwargs.get("sequence_id",len(table.columns)+1) 
         self.name = kwargs.get("name",None) 
         self.altname = kwargs.get("altname",None) 
         self.is_primary_key = _clean_flag(kwargs.get("is_primary_key",False))
@@ -574,10 +574,7 @@ class Table(Base):
         else:
             sequence = None
 
-        row = Column(self, 
-                     name=name, 
-                     **kwargs              
-                     )
+        row = Column(self, name=name,  **kwargs  )
          
         width = kwargs.get('width', None)
         size = kwargs.get('size', None)
@@ -841,8 +838,10 @@ class File(Base, SavableMixin):
     modified = SAColumn('f_modified',Integer)
     size = SAColumn('f_size',BigInteger)
     group = SAColumn('f_group',Text)
+    type_ = SAColumn('f_type',Text)
     ref = SAColumn('f_ref',Text)
- 
+    data = SAColumn('p_data',MutationDict.as_mutable(JSONEncodedObj))
+
     def __init__(self,**kwargs):
         self.oid = kwargs.get("oid",None) 
         self.path = kwargs.get("path",None)
@@ -853,7 +852,9 @@ class File(Base, SavableMixin):
         self.size = kwargs.get("size",None)
         self.group = kwargs.get("group",None)
         self.ref = kwargs.get("ref",None)
+        self.type_ = kwargs.get("type",kwargs.get("type_",None))
         self.content_hash = kwargs.get("content_hash",None) 
+        self.data = kwargs.get('data',None)
       
     def __repr__(self):
         return "<file: {}; {}>".format(self.path, self.state)
@@ -861,7 +862,7 @@ class File(Base, SavableMixin):
     def to_dict(self):
 
         return  dict((col, getattr(self, col)) for col 
-                     in ['path', 'source_url', 'process', 'state', 'content_hash', 'modified', 'size', 'group', 'ref'])
+                     in ['path', 'source_url', 'process', 'state', 'content_hash', 'modified', 'size', 'group', 'ref', 'type_','data'])
     
     
 

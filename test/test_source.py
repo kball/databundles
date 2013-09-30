@@ -38,7 +38,7 @@ class Test(TestBase):
         print "Deleting: {}".format(self.rc.group('filesystem').root_dir)
         databundles.util.rm_rf(self.rc.group('filesystem').root_dir)
 
-        bdir = os.path.join(self.rc.sourcerepo('clarinova.data')['dir'],'testbundle')
+        bdir = os.path.join(self.rc.group('sourcerepo')['dir'],'testbundle')
 
 
         pats = shutil.ignore_patterns('build', 'build-save','*.pyc', '.git','.gitignore','.ignore','__init__.py')
@@ -62,20 +62,28 @@ class Test(TestBase):
 
     def testBasic(self):
         import random
+
         repo = new_repository(self.rc.sourcerepo('clarinova.data'))
     
-        repo.bundle = self.bundle
+    
+        repo.bundle_dir = self.bundle.bundle_dir
 
         repo.delete_remote()
-    
+        import time
+        time.sleep(3)
         repo.init()
         repo.init_remote()
         
-        repo.push()
+        repo.push(repo.service.user, repo.service.password)
         
         
- 
- 
+    def testSync(self):
+        
+
+        for repo in self.rc.sourcerepo.list:
+            print repo.service.list()
+        
+
 
 def suite():
     suite = unittest.TestSuite()

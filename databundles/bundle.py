@@ -57,6 +57,14 @@ class Bundle(object):
         import logging
         self.logger.setLevel(logging.INFO) 
         
+        # This bit of wackiness allows the var(self.run_args) code
+        # to work when there have been no artgs parsed. 
+        class null_args(object):
+            none = None
+            multi = False
+
+        self.run_args = null_args()
+        
         
     @property
     def schema(self):
@@ -164,11 +172,16 @@ class Bundle(object):
         '''Log the messsage'''
         self.logger.info(message)
 
-
     def error(self, message, **kwargs):
         '''Log an error messsage'''
         self.logger.error(message)
-
+        
+    def fatal(self, message, **kwargs):
+        '''Log a fata messsage and exit'''
+        import sys 
+        self.logger.fatal(message)
+        sys.stderr.flush()
+        sys.exit(1)
     
 class DbBundle(Bundle):
 
@@ -198,8 +211,7 @@ class DbBundle(Bundle):
         
         self.partition = None # Set in Library.get() and Library.find() when the user requests a partition. 
         
-        self.run_args = None
-        
+
        
         
         
@@ -230,6 +242,8 @@ class BuildBundle(Bundle):
     identity configuration '''
 
     META_COMPLETE_MARKER = '.meta_complete'
+    SCHEMA_FILE = 'schema.csv'
+    SCHEMA_REVISED_FILE = 'schema-revised.csv'
 
     def __init__(self, bundle_dir=None):
         '''
@@ -270,9 +284,7 @@ class BuildBundle(Bundle):
 
         self._build_time = None
         self._update_time = None
-        self.run_args = None # set externally in parse_args
-        
-
+       
     @property
     def path(self):
         return self.filesystem.path(
@@ -459,6 +471,8 @@ class BuildBundle(Bundle):
             self.log("Meta information already generated")
             #raise ProcessError("Bundle has already been prepared")
             return False
+        
+
         return True
 
     def meta(self):
@@ -476,12 +490,19 @@ class BuildBundle(Bundle):
     ### Prepare is run before building, part of the devel process.  
 
     def pre_prepare(self):
-
+        from dbexceptions import NotFoundError
+        
         if self.database.exists() and not vars(self.run_args).get('rebuild',False) and  self.db_config.get_value('process','prepared'):
             self.log("Bundle has already been prepared")
             #raise ProcessError("Bundle has already been prepared")
      
             return False
+        
+        try:
+            self.library.check_dependencies()
+        except NotFoundError as e:
+            self.fatal(e)
+        
         return True
 
     def prepare(self):
@@ -493,7 +514,8 @@ class BuildBundle(Bundle):
             if self.run_args and vars(self.run_args).get('rebuild',False):
                 self.rebuild_schema()
             else:
-                sf  = self.filesystem.path(self.config.build.get('schema_file', 'meta/schema.csv'))
+                
+                sf  = self.filesystem.path(self.config.build.get('schema_file', 'meta/'+self.SCHEMA_FILE))
                 if os.path.exists(sf):
                     with open(sf, 'rbU') as f:
                         self.schema.clean()
@@ -513,7 +535,18 @@ class BuildBundle(Bundle):
                 self.partitions.new_db_partition(p)
 
     
+    def _revise_schema(self):
+        '''Write the schema from the database back to a file. If the schema template exists, overwrite the
+        main schema file. If it does not exist, use the revised file'''
+        
+        with self.session:
+            self.update_configuration()
+
+            sf_out = self.filesystem.path('meta',self.SCHEMA_REVISED_FILE)
     
+            with open(sf_out, 'w') as f:
+                self.schema.as_csv(f)    
+                
     def post_prepare(self):
         '''Set a marker in the database that it is already prepared. '''
         from datetime import datetime
@@ -521,13 +554,7 @@ class BuildBundle(Bundle):
         with self.session:
             self.db_config.set_value('process','prepared',datetime.now().isoformat())
             
-        with self.session:
-            self.update_configuration()
-    
-            sf  = self.filesystem.path('meta','schema-revised.csv')
-    
-            with open(sf, 'w') as f:
-                self.schema.as_csv(f)
+        self._revise_schema()
                     
         return True
    
@@ -559,8 +586,22 @@ class BuildBundle(Bundle):
             self.db_config.set_value('process', 'buildtime',time()-self._build_time)
             self.update_configuration()
             
+        self._revise_schema()
+         
+            
         return True
     
+    @property
+    def is_built(self):
+        '''Return True is the bundle has been built'''
+        
+        if not self.database.exists():
+            return False
+
+        v = self.db_config.get_value('process','built', False)
+        
+        return bool(v)
+        
         
     ### Update is like build, but calls into an earlier version of the package. 
 
@@ -603,6 +644,7 @@ class BuildBundle(Bundle):
 
         force = vars(self.run_args).get('force', False)
 
+            
         with self.session:
             library_name = vars(self.run_args).get('library', 'default') if library_name is None else 'default'
             library_name = library_name if library_name else 'default'
@@ -703,7 +745,7 @@ class BuildBundle(Bundle):
     def parse_args(self,argv):
 
         self.run_args = self.args_parser.parse_args(argv)
-            
+ 
         return self.run_args
     
     @property
@@ -846,7 +888,45 @@ class BuildBundle(Bundle):
 
         return parser
 
+    def run_build(self):
+        b = self
+        if b.pre_build():
+            b.log("---- Build ---")
+            if b.build():
+                b.post_build()
+                b.log("---- Done Building ---")
+            else:
+                b.log("---- Build exited with failure ---")
+                return False
+        else:
+            b.log("---- Skipping Build ---- ")
 
+
+    def run_prepare(self):
+        b = self
+        if b.pre_prepare():
+            b.log("---- Preparing ----")
+            if b.prepare():
+                b.post_prepare()
+                b.log("---- Done Preparing ----")
+            else:
+                b.log("---- Prepare exited with failure ----")
+                return False
+        else:
+            b.log("---- Skipping prepare ---- ")
+
+    def run_install(self):
+        b = self
+        if b.pre_install():
+            b.log("---- Install ---")
+            if b.install():
+                b.post_install()
+                b.log("---- Done Installing ---")
+            else:
+                b.log("---- Install exited with failure ---")
+        else:
+            b.log("---- Skipping Install ---- ")
+                
     def run(self, argv):
 
         b = self
@@ -941,18 +1021,8 @@ class BuildBundle(Bundle):
                    
             
         if 'prepare' in phases:
-            if b.pre_prepare():
-                b.log("---- Preparing ----")
-                if b.prepare():
-                    b.post_prepare()
-                    b.log("---- Done Preparing ----")
-                else:
-                    b.log("---- Prepare exited with failure ----")
-                    return False
-            else:
-                b.log("---- Skipping prepare ---- ")
+            b.run_prepare()
 
-            
         if 'build' in phases:
             
             if b.run_args.test:
@@ -962,16 +1032,8 @@ class BuildBundle(Bundle):
     
                 time.sleep(1)
                 
-            if b.pre_build():
-                b.log("---- Build ---")
-                if b.build():
-                    b.post_build()
-                    b.log("---- Done Building ---")
-                else:
-                    b.log("---- Build exited with failure ---")
-                    return False
-            else:
-                b.log("---- Skipping Build ---- ")
+            b.run_build()
+                
 
         if 'update' in phases:
                 
@@ -987,15 +1049,8 @@ class BuildBundle(Bundle):
                 b.log("---- Skipping Update ---- ")
 
         if 'install' in phases:
-            if b.pre_install():
-                b.log("---- Install ---")
-                if b.install():
-                    b.post_install()
-                    b.log("---- Done Installing ---")
-                else:
-                    b.log("---- Install exited with failure ---")
-            else:
-                b.log("---- Skipping Install ---- ")
+            self.run_install()
+
 
         if 'extract' in phases:
             if b.pre_extract():

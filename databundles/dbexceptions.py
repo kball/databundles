@@ -33,3 +33,7 @@ class NoLock(BundleError):
 
 class QueryError(Exception):
     """Error while executing a query"""
+    
+
+class ConflictError(Exception):
+    """COnflict with existing resource"""

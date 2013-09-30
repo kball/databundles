@@ -57,7 +57,6 @@ class RunConfig(object):
                           RunConfig.DIR_CONFIG, 
                           path]
 
-
         loaded = False
 
         for f in self.files:
@@ -72,6 +71,8 @@ class RunConfig(object):
 
         if not loaded:
             raise Exception("Failed to load any config from: {}".format(self.files))
+        
+        self.sourcerepo = self._sourcerepo(self)
 
     def __getattr__(self, group):
         '''Fetch a confiration group and return the contents as an 
@@ -209,20 +210,40 @@ class RunConfig(object):
         e['_name'] = name
      
         return e
-     
     
-    def sourcerepo(self,name):
-        e =  self.group_item('sourcerepo', name) 
+    #
+    # This object is attached to the sourcerepo property, to provide a variety of interfaces
+    # other than just being callable. 
+    class _sourcerepo(object):
+        def __init__(self,this):
+            self.this = this
+            
+        def __call__(self, name):
+            e =  self.this.group_item('sourcerepo', name) 
+            e =  self.this._sub_strings(e, {
+                                         'account': lambda k,v: self.this.account(v),
+                                         }  ) 
+            e['_name'] = name
+         
+            e['dir'] = self.dir
+         
+            return e   
+        
+        @property
+        def list(self):   
+            from source.repository import new_repository
+            
+            return [ new_repository(self.this.sourcerepo(r_name)) 
+                    for r_name in self.this.group('sourcerepo').keys()
+                    if r_name != 'dir'
+                    ]
 
-        e =  self._sub_strings(e, {
-                                     'account': lambda k,v: self.account(v),
-                                     }  )
-        
-        e['_name'] = name
-     
-        return e
-             
-        
+        @property
+        def dir(self):   
+            from source.repository import new_repository
+            
+            return self.this.group('sourcerepo')['dir']
+
     
     def warehouse(self,name):
         e =  self.group_item('warehouse', name) 

@@ -12,14 +12,15 @@ class GitHubService(ServiceInterface,GitServiceMarker):
         self.org = org
         self.user = user
         self.password = password
-    
-        ur = 'https://api.github.com/'
+        self.ident_url = 'https://github.com/'
+        self.url = ur = 'https://api.github.com/'
         
         self.urls ={ 
-                    'repos' : ur+'orgs/{}/repos'.format(self.org) if self.org else ur+'users/{}/repos'.format(self.user), 
+                    'repos' : ur+'orgs/{}/repos?page={{page}}'.format(self.org) if self.org else ur+'users/{}/repos'.format(self.user), 
                     'deleterepo' : ur+'repos/{}/{{name}}'.format(self.org if self.org else self.user),
                     'info' : ur+'repos/{}/{{name}}'.format(self.org),
                     'repogit' : ur+'{}/{{name}}.git'.format(self.org),
+                    'yaml' : "https://raw.github.com/{}/{{name}}/master/bundle.yaml".format(self.org)
                     }
         
         self.auth = (self.user, self.password)
@@ -62,13 +63,45 @@ class GitHubService(ServiceInterface,GitServiceMarker):
             return True
     
     
+    def list(self):
+        import requests, yaml
+        from databundles.util import OrderedDictYAMLLoader
+        import pprint
+        
+        out = []
+
+        for page in range(1,500):
+            url = self.urls['repos'].format(page=page)
+            r = requests.get(url, auth=self.auth)
+
+            for i,e in enumerate(r.json()): 
+                r = requests.get(e['url'].replace('api.github.com/repos', 'raw.github.com')+'/master/bundle.yaml')
+                config = yaml.load(r.content, OrderedDictYAMLLoader)
+                ident = dict(config['identity'])
+                ident['clone_url'] = e['clone_url']
+                out.append(ident)
+
+            if i < 29:
+                break
+            
+
+        return out
+  
     def repo_url(self, name):
         
         return self.urls['repogit'].format(name=name)
     
-    
+    @property
     def ident(self):
         '''Return an identifier for this service'''
+        from urlparse import urlparse, urlunparse
+        parts = list(urlparse(self.ident_url)[:]) # convert to normal tuple
+        
+        u = self.org if self.org else self.user
+        
+        parts[2] = parts[2]+u
+
+        return urlunparse(parts)
          
     def __str__(self):
         return "<GitHubService: user={} org={}>".format(self.user,self.org)
