@@ -31,17 +31,41 @@ class Test(unittest.TestCase):
         print part.vname
         print part.path
         print part.cache_key
-        print '---'
-        for p in self.bundle.partitions:
-            print p.name, p.path
-        
-        print '---'
-        print idnt.name, Identity.parse_name(idnt.name).vname
-        print idnt.vname, Identity.parse_name(idnt.vname).vname
-        print part.name, Identity.parse_name(part.name).vname
-        print part.vname, Identity.parse_name(part.vname).vname
-        
-        self.assertRaises(ValueError, Identity.parse_name, 'foobar')
+
+        names = [
+                 idnt.name, 
+                 idnt.vname, 
+                 part.name, 
+                 part.vname,
+                 'census.gov-geography-dim-orig-a7d9.polygons.ca.nonblocks',
+                 'census.gov-geography-dim-orig-a7d9-r1.polygons.ca.nonblocks',
+                 'census.gov-geography-dim-orig-a7d9.polygons.ca',
+                 'census.gov-geography-dim-orig-a7d9.polygons',
+                 'census.gov-geography-dim-orig-a7d9-r1',
+                 'census.gov-geography-orig-a7d9.polygons.ca.nonblocks',
+                 'census.gov-geography-orig-a7d9-r1.polygons.ca.nonblocks',
+                 'census.gov-geography-orig-a7d9.polygons.ca',
+                 'census.gov-geography-orig-a7d9.polygons',
+                 'census.gov-geography-orig-a7d9-r1'
+                 ]
+
+        for name in names:
+            print "{:70s} {}".format(name, Identity.parse_name(name).name)
+
+        names = [
+
+                 'census.gov-geography-dim-orig-a7d9-polygons.ca.nonblocks',
+                 'census.gov-orig-a7d9-r1.polygons.ca.nonblocks',
+                 'census.gov-geog.raphy-dim-orig-a7d9.polygons.ca',
+               
+                 ]
+
+        for name in names:
+            try:
+                print "{:70s} {}".format(name, Identity.parse_name(name).name)
+            except Exception as e:
+                print e.message
+
 
 
     def test_id(self):

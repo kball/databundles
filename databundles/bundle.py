@@ -139,7 +139,7 @@ class Bundle(object):
         if self._library:
             l = self._library
         else:
-            l =  library.new_library(self.config.config.library('default'))
+            l =  library.new_library(self.config.config.library('default'), reset = True)
             
         l.logger = self.logger
         l.database.logger = self.logger
@@ -248,7 +248,7 @@ class BuildBundle(Bundle):
     def __init__(self, bundle_dir=None):
         '''
         '''
-        
+
         super(BuildBundle, self).__init__()
         
 
@@ -269,7 +269,6 @@ class BuildBundle(Bundle):
         # to get configuration. 
         self.config = BundleFileConfig(self.bundle_dir)
 
-     
         self.filesystem = BundleFilesystem(self, self.bundle_dir)
         
 
@@ -649,7 +648,7 @@ class BuildBundle(Bundle):
             library_name = vars(self.run_args).get('library', 'default') if library_name is None else 'default'
             library_name = library_name if library_name else 'default'
     
-            library = databundles.library.new_library(self.config.config.library(library_name))
+            library = databundles.library.new_library(self.config.config.library(library_name), reset=True)
          
             self.log("{} Install to  library {}".format(self.identity.name, library_name))  
             dest = library.put(self, force=force)

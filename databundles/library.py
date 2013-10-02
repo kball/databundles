@@ -1277,8 +1277,8 @@ class Library(object):
         self.port = port
         self.dep_cb = None# Callback for dependency resolution
         self.require_upload = require_upload
+        self._dependencies = None
 
-        self.dependencies = None
 
         if not self.cache:
             raise ConfigurationError("Must specify library.cache for the library in bundles.yaml")
@@ -1615,20 +1615,21 @@ class Library(object):
         return self.cache.path(rel_path)
         
         
-    def add_dependency(self, key, name):
+    @property
+    def dependencies(self):
         
-        if not self.dependencies:
-            self.dependencies = {}
+        if not self._dependencies:
+            self ._dependencies = self._get_dependencies()
+            
+        return self._dependencies
         
-        self.dependencies[key] = name
-        
-    def _add_dependencies(self):
 
+    def _get_dependencies(self):
+        from databundles.identity import Identity
+        
         if not self.bundle:
             raise ConfigurationError("Can't use the dep() method for a library that is not attached to a bundle");
 
-        if not self.dependencies:
-            self.dependencies = {}
 
         group = self.bundle.config.group('build')
         
@@ -1638,16 +1639,21 @@ class Library(object):
             deps = None
             
         if not deps:
-            raise ConfigurationError("Configuration has no 'dependencies' group")
+            return {}
         
+        out = {}
         for k,v in deps.items():
-            self.dependencies[k] = v
+            
+            try: 
+                Identity.parse_name(v)
+                out[k] = v
+            except Exception as e:
+                self.bundle.error("Failed to parse dependency name '{}' for '{}': {}".format(v, self.bundle.identity.name, e.message))
+
+        return out
              
     def check_dependencies(self, throw=True):
-        
-        if not self.dependencies:
-            self._add_dependencies()
-            
+
         errors = {}
         for k,v in self.dependencies.items():
             b = self.get(v)
@@ -1658,13 +1664,10 @@ class Library(object):
                 else:
                     errors[k] = v
 
+
     def dep(self,name):
         """"Bundle version of get(), which uses a key in the 
         bundles configuration group 'dependencies' to resolve to a name"""
-        
-        if not self.dependencies:
-            self._add_dependencies()
-        
 
         bundle_name = self.dependencies.get(name, False)
         

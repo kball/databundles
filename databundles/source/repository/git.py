@@ -176,6 +176,8 @@ class GitRepository(RepositoryInterface):
         self._bundle_dir = None
         self._impl = None
         
+        self._dependencies = None
+        
     
     @property
     def dir(self):
@@ -342,6 +344,67 @@ class GitRepository(RepositoryInterface):
     def ignore(self, path):  
         '''Ignore a file'''
         raise NotImplemented()
+
+    @property
+    def dependencies(self):
+        '''Return a set of dependencies for the source packages'''
+        from collections import defaultdict
+        import os
+        from databundles.identity import Identity
+        from databundles.util import toposort
+        from databundles.run import import_file
+        
+        if not self._dependencies:
+            
+            depset = defaultdict(set)
+        
+            for root, dirs, files in os.walk(self.dir_):
+                if 'bundle.yaml' in files:
+
+                    rp = os.path.realpath(os.path.join(root, 'bundle.py'))
+                    mod = import_file(rp)
+  
+                    bundle = mod.Bundle(root)
+                    deps =  bundle.library.dependencies
+
+                    for k,v in deps.items():
+                        ident = Identity.parse_name(v) # Remove revision 
+                        #print "XXX {:50s} {:30s} {}".format(v, ident.name, ident.to_dict())
+                        depset[bundle.identity.name].add(ident.name)            
+                    
+            self._dependencies = depset
+            
+        return self._dependencies
+        
+    def bundle_deps(self,name):
+        '''Dependencies for a particular bundle'''
+        from databundles.identity import Identity
+        
+        ident = Identity.parse_name(name)
+        out = []
+        all_deps = self.dependencies
+
+        deps = all_deps[ident.name]
+        while len(deps) > 0:
+            out += deps
+            next_deps = []
+            for d in deps:
+                if d in all_deps:
+                    next_deps += all_deps[d]
+                    
+            deps = next_deps
+        final = []
+        for n in reversed(out):
+            if not n in final:
+                final.append(n) 
+                
+        return final
+        
+    @property
+    def topo_deps(self):
+        '''Return the dependencies in topologically sorted groups '''
+        
+
 
     def __str__(self):
         return "<GitRepository: account={}, dir={}".format(self.service, self.dir_)

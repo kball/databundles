@@ -276,21 +276,20 @@ class RunConfig(object):
         return e
 
 
-def run(argv, bundle_class):
 
-    raise Exception("Deprecated. Remove __main__ section from end of bundle.py")
 
 def import_file(filename):
     ''' '''
     import imp
     (path, name) = os.path.split(filename)
     (name, ext) = os.path.splitext(name)
+    (_, modname) = os.path.split(path)
 
     (file, filename, data) = imp.find_module(name, [path])
-    return imp.load_module(name, file, filename, data)
-       
 
-                
+    return imp.load_module(modname, file, filename, data)
+       
+            
 if __name__ == '__main__':
     '''When dbundle is run, this routine will load the bundle module from a file
     wire it into the namespace and run it with the arguments passed into dbundle. '''
@@ -300,6 +299,10 @@ if __name__ == '__main__':
 
     bundle_file = sys.argv[1]
     
+    if not os.path.exists(os.path.join(os.getcwd(), 'bundle.yaml')):
+        print >> sys.stderr, "ERROR: Current directory '{}' does not have a bundle.yaml file".format(os.getcwd())
+        sys.exit(1)
+
     # Import the bundle file from the 
     rp = os.path.realpath(os.path.join(os.getcwd(), bundle_file))
     mod = import_file(rp)
@@ -307,7 +310,8 @@ if __name__ == '__main__':
     dir_ = os.path.dirname(rp)
     b = mod.Bundle(dir_)
 
-    b.run(args[2:])
+    b.run(args[2:])     
+
     
    
     

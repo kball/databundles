@@ -75,44 +75,6 @@ class Progressor(object):
             
 
 
-def bundle_command(args, rc, src):
-  
-    from databundles.identity import new_identity
-    from databundles.identity import DatasetNumber
-    
-    if args.subcommand == 'new':
-        
-        ident = new_identity(vars(args))
-
-        if not os.path.exists(ident.source_path):
-            os.makedirs(ident.source_path)
-        elif not os.path.isdir(ident.source_path):
-            raise IOError("Directory already exists: "+ident.source_path)
-    
-        config ={'identity':{
-             'id': str(DatasetNumber()),
-             'source': args.source,
-             'creator': args.creator,
-             'dataset':args.dataset,
-             'subset': args.subset,
-             'variation': args.variation,
-             'revision': args.revision
-             }}
-        
-        file_ = os.path.join(ident.source_path, 'bundle.yaml')
-        yaml.dump(config, file(file_, 'w'), indent=4, default_flow_style=False)
-    
-        bundle_file =  os.path.join(os.path.dirname(__file__),'support','bundle.py')
-    
-        shutil.copy(bundle_file, ident.source_path  )
-
-        os.makedirs(os.path.join(ident.source_path, 'meta'))
-
-        schema_file =  os.path.join(os.path.dirname(__file__),'support','schema.csv')
-        
-        shutil.copy(schema_file, os.path.join(ident.source_path, 'meta')  )
-
-        print("CREATED: {}".format(ident.source_path))
 
 def install_command(args, rc, src):
     import yaml, pkgutil
@@ -858,13 +820,52 @@ def source_clone(args,rc, src):
         for f in get_by_group(repo.ident):
             try:
                 ident = new_identity(f.data)
-                d = repo.clone(f.path, ident.path_no_rev,repo.dir) 
+                d = repo.clone(f.path, ident.source_path,repo.dir) 
                 prt("Cloned {} to {}",f.path, d)
             except ConflictError as e :
                 warn("Clone failed for {}: {}".format(f.path, e.message))
                 
-        l.database.add_file(e['clone_url'], repo.service.ident, ident.name, state='synced', type_='source', data=e)
-            
+def source_new(args,rc, src):   
+    '''Clone one or more registered source packages ( via sync ) into the source directory '''
+    from source.repository import new_repository
+    from identity import new_identity, DatasetNumber
+    
+    repo = new_repository(rc.sourcerepo(args.name))  
+
+    ident = new_identity(vars(args))
+
+    bundle_dir =  os.path.join(repo.dir, ident.source_path)
+
+    if not os.path.exists(bundle_dir):
+        os.makedirs(bundle_dir)
+    elif not os.path.isdir(bundle_dir):
+        raise IOError("Directory already exists: "+bundle_dir)
+
+    config ={'identity':{
+         'id': str(DatasetNumber()),
+         'source': args.source,
+         'creator': args.creator,
+         'dataset':args.dataset,
+         'subset': args.subset,
+         'variation': args.variation,
+         'revision': args.revision
+         }}
+    
+    file_ = os.path.join(bundle_dir, 'bundle.yaml')
+    yaml.dump(config, file(file_, 'w'), indent=4, default_flow_style=False)
+
+    bundle_file =  os.path.join(os.path.dirname(__file__),'support','bundle.py')
+
+    shutil.copy(bundle_file, bundle_dir  )
+
+    os.makedirs(os.path.join(bundle_dir, 'meta'))
+
+    schema_file =  os.path.join(os.path.dirname(__file__),'support','schema.csv')
+    
+    shutil.copy(schema_file, os.path.join(bundle_dir, 'meta')  )
+
+    prt("CREATED: {}",bundle_dir)
+
 def load_bundle(bundle_dir):
     from databundles.run import import_file
     
@@ -876,20 +877,31 @@ def load_bundle(bundle_dir):
 def source_make(args,rc, src):
     from os import walk
     from os.path import basename
+    from databundles.identity import Identity
     
-    dir = args.dir
-    
+    if args.dir:
+        if os.path.exists(args.dir):
+            dir = args.dir
+            name = None
+        else:
+            try: 
+                Identity.parse_name(args.dir)
+                dir = None
+                name = args.dir
+            except:  
+                err("Argument '{}' must be either a bundle name or a directory")
+            
+        
     if not dir:
         dir = rc.sourcerepo.dir
         
+    
         
     def build(bundle_dir):
         # Import the bundle file from the directory
-        
-        import imp, os
 
         bundle_class = load_bundle(bundle_dir)
-        bundle = bundle_class(root)
+        bundle = bundle_class(bundle_dir)
 
         if bundle.is_built: # and not args.clean:
             bundle.log("Bundle {} is already built".format(bundle.identity.name))
@@ -899,7 +911,7 @@ def source_make(args,rc, src):
             bundle.log("-------------")
 
             bundle.clean()
-            bundle = bundle_class(root)
+            bundle = bundle_class(bundle_dir)
     
             bundle.run_prepare()
             
@@ -908,12 +920,33 @@ def source_make(args,rc, src):
         if args.install:
             bundle.install()
             
-        
+       
+    if name:
+        from source.repository import new_repository
+        repo = new_repository(rc.sourcerepo(args.name))        
+
+        deps = repo.bundle_deps(name)
+        deps.append(name)
+
+        build_dirs = {}
+        for root, dirs, files in os.walk(dir):
+            if 'bundle.yaml' in files:
+                bundle_class = load_bundle(root)
+                bundle = bundle_class(root)      
+                build_dirs[bundle.identity.name] = root 
+                
+        for n in deps:
+            dir_ = build_dirs[n]
+            prt("{:50s} {}".format(n, dir_))
+            build(dir_)
     
-    for root, dirs, files in os.walk(dir):
-        if 'bundle.yaml' in files:
-            build(root)
-            
+        
+    else:
+        for root, dirs, files in os.walk(dir):
+            if 'bundle.yaml' in files:
+                build(root)
+
+
 def source_run(args,rc, src):
     from os.path import basename
 
@@ -998,8 +1031,27 @@ def test_command(args,rc, src):
         prt(args)
 
 def source_deps(args,rc, src):
-    pass
+    """Produce a list of dependencies for all of the source bundles"""
 
+    from util import toposort
+    from source.repository import new_repository
+    from databundles.identity import Identity
+
+    repo = new_repository(rc.sourcerepo(args.name))        
+
+    if args.ref:
+
+        for b in repo.bundle_deps(args.ref):
+            prt(b)
+        
+    else:
+        import pprint
+        graph = toposort(repo.dependencies)
+    
+        for v in graph:
+            pprint.pprint(v)
+            
+        
 def main():
     import argparse
     
@@ -1015,23 +1067,7 @@ def main():
   
     cmd = parser.add_subparsers(title='commands', help='command help')
     
-    #
-    # Bundle Command
-    #
-    bundle_p = cmd.add_parser('bundle', help='Create a new bundle')
-    bundle_p.set_defaults(command='bundle')   
-    asp = bundle_p.add_subparsers(title='Bundle commands', help='Commands for maniplulating bundles')
-    
-    sp = asp.add_parser('new', help='Create a new bundle')
-    sp.set_defaults(subcommand='new')
-    sp.set_defaults(revision='1') # Needed in Identity.name_parts
-    sp.add_argument('-s','--source', required=True, help='Source, usually a domain name') 
-    sp.add_argument('-d','--dataset',  required=True, help='Name of the dataset') 
-    sp.add_argument('-b','--subset', nargs='?', default=None, help='Name of the subset') 
-    sp.add_argument('-v','--variation', default='orig', help='Name of the variation') 
-    sp.add_argument('-c','--creator',  required=True, help='Id of the creator') 
-    sp.add_argument('-n','--dry-run', default=False, help='Dry run') 
-    sp.add_argument('args', nargs=argparse.REMAINDER) # Get everything else. 
+
 
     #
     # Library Command
@@ -1208,11 +1244,27 @@ def main():
     #
     src_p = cmd.add_parser('source', help='Manage bundle source files')
     src_p.set_defaults(command='source')
+    src_p.add_argument('-n','--name',  default='default',  help='Select the name for the repository. Defaults to "default" ')
     asp = src_p.add_subparsers(title='source commands', help='command help')  
+
+
+    sp = asp.add_parser('new', help='Create a new bundle')
+    sp.set_defaults(subcommand='new')
+    sp.set_defaults(revision=1) # Needed in Identity.name_parts
+    sp.add_argument('-s','--source', required=True, help='Source, usually a domain name') 
+    sp.add_argument('-d','--dataset',  required=True, help='Name of the dataset') 
+    sp.add_argument('-b','--subset', nargs='?', default=None, help='Name of the subset') 
+    sp.add_argument('-v','--variation', default='orig', help='Name of the variation') 
+    sp.add_argument('-c','--creator',  required=True, help='Id of the creator') 
+    sp.add_argument('-n','--dry-run', default=False, help='Dry run') 
+    sp.add_argument('args', nargs=argparse.REMAINDER) # Get everything else. 
 
     sp = asp.add_parser('info', help='Information about the source configuration')
     sp.set_defaults(subcommand='info')
 
+    sp = asp.add_parser('deps', help='Print the depenencies for all source bundles')
+    sp.set_defaults(subcommand='deps')
+    sp.add_argument('ref', type=str,nargs='?',help='Name or id of a bundle to generate a sorted dependency list for.')      
     
     sp = asp.add_parser('find', help='Find source bundle source directories')
     sp.set_defaults(subcommand='find')
@@ -1222,7 +1274,7 @@ def main():
       
     sp = asp.add_parser('init', help='Intialize the local and remote git repositories')
     sp.set_defaults(subcommand='init')
-    sp.add_argument('-n','--name',  default='default',  help='Select the name for the repository. Defaults to "default" ')
+
     sp.add_argument('dir', type=str,nargs='?',help='Directory')
 
     sp = asp.add_parser('sync', help='Load references from the confiurged source remotes')
@@ -1324,7 +1376,6 @@ def main():
         
    
     funcs = {
-        'bundle': bundle_command,
         'library':library_command,
         'warehouse':warehouse_command,
         'remote':remote_command,

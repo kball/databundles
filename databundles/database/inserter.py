@@ -101,7 +101,7 @@ class ValueWriter(InserterInterface):
         self.session.rollback()
         
     def commit_continue(self):
-        self.session.rollback()
+        self.session.commit()
  
         
     def close(self):
@@ -155,7 +155,7 @@ class ValueInserter(ValueWriter):
             self.statement = self.statement.prefix_with('OR REPLACE')
 
     def insert(self, values):
-      
+
         try:
             if isinstance(values, dict):
                 if self.caster:
@@ -188,7 +188,7 @@ class ValueInserter(ValueWriter):
             if len(self.cache) >= self.cache_size: 
                 self.session.execute(self.statement, self.cache)
                 self.cache = []
-                
+
                 self.commit_continue()
 
         except (KeyboardInterrupt, SystemExit):

@@ -222,13 +222,15 @@ class Identity(object):
         
         return os.path.join(source, '-'.join(parts) )
   
+
     @property
-    def path_no_rev(self):
-        '''The name is a form suitable for use in a filesystem'''
+    def source_path(self):
+        '''The path of the bundle source. '''
         parts = self._name_parts(use_revision=False)
         source = parts.pop(0)
         
         return os.path.join(source, '-'.join(parts) ) 
+  
   
     @property
     def cache_key(self):
@@ -236,13 +238,7 @@ class Identity(object):
         return self.path+self.PATH_EXTENSION
  
  
-    @property
-    def source_path(self):
-        '''The path of the bundle source. '''
-        import os
-        return os.path.join(self.source,
-                            '-'.join( [ x for x in [self.source,self.dataset, self.subset, self.variation] if x])
-                            )
+
  
  
     @classmethod
@@ -250,33 +246,49 @@ class Identity(object):
         '''Parse a name to return the Identity. Will discard the Partition parts. '''
         
         import re
-        
-        p = r'([^-]+)-(.*?)(?:-r(\d+))?(?:\.(.*))?$'
-        
-        reo = re.compile(p)
 
-        m = reo.match(input)
-        if not m:
+        rep = re.compile(r'([\w\.]+-[^\.]+)(\.[\.\w\d]+)?')
+        g = rep.match(input)
+        if not g:
+            raise ValueError('Could not parse name (initial regex failed): {}'.format(input))
+
+        bundle = g.groups()[0]
+        partition = g.groups()[1]
+
+        parts = bundle.split('-')
+        
+        try:
+            source = parts.pop(0)
+            dataset = parts.pop(0)
+        except IndexError:
             raise ValueError('Could not parse name: {}'.format(input))
-
-        (source, rest, revision, partition) = m.groups()   
-    
-        parts = rest.split('-')
-    
-        dataset = parts.pop(0)
-        creator = parts.pop()
-        
-        # The last two parts are optional, and indistinguishable. 
-        
-        subset = None
+            
+        revision = None
+        partition = None
+        creator = None
         variation = None
+        subset = None
+            
+        reo = re.compile(r'r(\d+)')
+
+        for i,p in enumerate(parts): # Get the revision, which must be r + numbers
+            if  reo.match(p):
+                revision = parts.pop(i)
+
+        # Getting into hackery...
+        # If the last part is four digits and has numbers, it must be the creator code. 
+        if re.search(r'[\dabcdef]{4}', parts[-1]) and len(parts[-1]) == 4:
+            creator = parts.pop()
+
         if parts:
             subset = parts.pop(0)
             
         if parts:
             variation = parts.pop(0)            
         
-    
+        if len(parts):
+            raise ValueError('Could not parse name (Parts left over): {}'.format(input))
+        
         return Identity( source = source, dataset = dataset, subset = subset, 
                          variation =  variation, creator =  creator, revision =  revision);
 

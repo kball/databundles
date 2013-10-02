@@ -41,7 +41,7 @@ class ValueInserter(InserterInterface):
 
 
     def insert(self, values):
-      
+
         if self._writer is None:
             self._init_writer(values)
       
