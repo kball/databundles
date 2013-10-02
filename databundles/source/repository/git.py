@@ -308,8 +308,8 @@ class GitRepository(RepositoryInterface):
         '''Add a file to the repository'''
         return self.impl.add(path)
     
-    def commit(self):
-        return self.impl.commit()
+    def commit(self, message):
+        return self.impl.commit(message=message)
     
     def needs_commit(self):
         return self.impl.needs_commit()
@@ -344,6 +344,7 @@ class GitRepository(RepositoryInterface):
     def ignore(self, path):  
         '''Ignore a file'''
         raise NotImplemented()
+    
 
     @property
     def dependencies(self):
@@ -374,26 +375,56 @@ class GitRepository(RepositoryInterface):
                     
             self._dependencies = depset
             
-        return self._dependencies
+        return dict(self._dependencies.items())
         
-    def bundle_deps(self,name):
+    def bundle_deps(self,name, reverse=False):
         '''Dependencies for a particular bundle'''
         from databundles.identity import Identity
         
         ident = Identity.parse_name(name)
+        name = ident.name
         out = []
         all_deps = self.dependencies
 
-        deps = all_deps[ident.name]
-        while len(deps) > 0:
-            out += deps
-            next_deps = []
-            for d in deps:
-                if d in all_deps:
-                    next_deps += all_deps[d]
-                    
-            deps = next_deps
+        if reverse:
+
+            first = True
+            out = set()
+            
+            def reverse_set(name):
+                o = set()
+                for k,v in all_deps.items():
+                    if name in v:
+                        o.add(k)
+                return o
+            
+            deps = reverse_set(name)
+            while len(deps):
+
+                out.update(deps)
+                
+                next_deps = set()
+                for name in deps:
+                    next_deps.update(reverse_set(name))
+
+                deps = next_deps
+
+            out = list(out)
+
+                               
+        else:
+            deps = all_deps[ident.name]
+            while len(deps) > 0:
+                out += deps
+                next_deps = []
+                for d in deps:
+                    if d in all_deps:
+                        next_deps += all_deps[d]
+                        
+                deps = next_deps
+                
         final = []
+        
         for n in reversed(out):
             if not n in final:
                 final.append(n) 

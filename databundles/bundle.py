@@ -139,7 +139,7 @@ class Bundle(object):
         if self._library:
             l = self._library
         else:
-            l =  library.new_library(self.config.config.library('default'), reset = True)
+            l =  library.new_library(self.config.config.library('default'))
             
         l.logger = self.logger
         l.database.logger = self.logger
@@ -899,6 +899,8 @@ class BuildBundle(Bundle):
                 return False
         else:
             b.log("---- Skipping Build ---- ")
+            
+        return True 
 
 
     def run_prepare(self):
@@ -914,6 +916,8 @@ class BuildBundle(Bundle):
         else:
             b.log("---- Skipping prepare ---- ")
 
+        return True
+
     def run_install(self):
         b = self
         if b.pre_install():
@@ -923,8 +927,11 @@ class BuildBundle(Bundle):
                 b.log("---- Done Installing ---")
             else:
                 b.log("---- Install exited with failure ---")
+                return False
         else:
             b.log("---- Skipping Install ---- ")
+                
+        return True
                 
     def run(self, argv):
 
@@ -1020,7 +1027,8 @@ class BuildBundle(Bundle):
                    
             
         if 'prepare' in phases:
-            b.run_prepare()
+            if not b.run_prepare():
+                return False
 
         if 'build' in phases:
             
@@ -1031,7 +1039,8 @@ class BuildBundle(Bundle):
     
                 time.sleep(1)
                 
-            b.run_build()
+            if not b.run_build():
+                return False
                 
 
         if 'update' in phases:
@@ -1307,9 +1316,9 @@ class BundleDbConfig(BundleConfig):
         return  (self.database.session.query(Partition).first())
    
    
-if __name__ == '__main__':
-    import databundles.run
-    import sys
-    databundles.run.run(sys.argv[1:], Bundle)  
+#if __name__ == '__main__':
+#    import databundles.run
+#    import sys
+#    databundles.run.run(sys.argv[1:], Bundle)  
 
     

@@ -142,10 +142,12 @@ def new_library(config, reset=False):
         name = 'default'
 
     if name not in libraries:
-  
         libraries[name] = _new_library(config)
 
-    return libraries[name]
+    l =  libraries[name]
+    l.clear_dependencies()
+    
+    return l
 
 
     
@@ -212,12 +214,13 @@ class LibraryDb(object):
         '''return the SqlAlchemy engine for this database'''
         from sqlalchemy import create_engine  
         from database.sqlite import _on_connect_update_schema
+        from sqlalchemy.pool import AssertionPool
         
         if not self._engine:
             self.dsn = self.dsn_template.format(user=self.username, password=self.password, 
                             server=self.server, name=self.dbname, colon_port=self.colon_port)
 
-            self._engine = create_engine(self.dsn, echo=False) 
+            self._engine = create_engine(self.dsn,echo=False, poolclass=AssertionPool) 
             
             from sqlalchemy import event
             
@@ -353,7 +356,7 @@ class LibraryDb(object):
         
     def exists(self):
         from databundles.orm import Dataset
-        from sqlalchemy.exc import  ProgrammingError
+        from sqlalchemy.exc import  ProgrammingError, OperationalError
         self.engine
         
         if self.driver == 'sqlite' and not os.path.exists(self.dbname):
@@ -362,7 +365,9 @@ class LibraryDb(object):
         
         try: 
             try: rows = self.engine.execute("SELECT * FROM datasets WHERE d_vid = '{}' ".format(ROOT_CONFIG_NAME_V)).fetchone()
-            except: 
+            except OperationalError: # Sometimes: run out of postgres connection slots. 
+                raise
+            except Exception as e:
                 rows = False
 
             if not rows:
@@ -1623,6 +1628,8 @@ class Library(object):
             
         return self._dependencies
         
+    def clear_dependencies(self):
+        self._dependencies = None
 
     def _get_dependencies(self):
         from databundles.identity import Identity
@@ -1707,10 +1714,13 @@ class Library(object):
         if self.remote and self.sync:
             self.remote.put(identity, file_path)
 
-        self.database.add_file(dst, self.cache.repo_id, identity.vid,  state)
+        
 
         if identity.is_bundle:
             self.database.install_bundle_file(identity, file_path)
+            self.database.add_file(dst, self.cache.repo_id, identity.vid,  state, type_ ='bundle')
+        else:
+            self.database.add_file(dst, self.cache.repo_id, identity.vid,  state, type_ = 'partition')
 
         return dst, identity.cache_key, self.cache.last_upstream().path(identity.cache_key)
      

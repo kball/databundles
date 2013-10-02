@@ -145,7 +145,6 @@ class PartitionDb(SqliteDatabase, RelationalPartitionDatabaseMixin):
         
         q = """ATTACH DATABASE '{}' AS '{}' """.format(path, name)
 
-
         self.connection.execute(q)
            
         self._last_attach_name = name

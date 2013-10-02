@@ -804,8 +804,46 @@ def source_sync(args,rc, src):
             
             prt("Added {:50s} {}",ident.name,e['clone_url'] )
             
-            
+  
+def source_list(args,rc, src):
+    '''Synchronize all of the repositories with the local library'''
+    from collections import defaultdict
+    import library
+    
+    dir = rc.sourcerepo.dir
 
+    def ddstruct():
+        return {
+             'source_dir' : None,
+             'flags': [' ']*3
+             }
+
+    lst = defaultdict(ddstruct)
+
+    l = library.new_library(rc.library(args.library))
+
+    for r in l.list():
+        lst[r['name']]['flags'][2] = 'L'
+        
+        
+    for root, dirs, files in os.walk(dir):
+        if 'bundle.yaml' in files:
+            bundle_class = load_bundle(root)
+            bundle = bundle_class(root)
+            
+            ident = bundle.identity
+
+            lst[ident.name]['source_dir'] = root
+            lst[ident.name]['flags'][0] = 'S'
+            
+            if bundle.is_built:
+                lst[ident.name]['flags'][1] = 'B'
+            
+    for k,v in sorted(lst.items(), key=lambda x: x[0]):
+        prt("{} {:35s}",''.join(v['flags']), k, v['source_dir'])
+        
+        
+        
 def source_clone(args,rc, src):   
     '''Clone one or more registered source packages ( via sync ) into the source directory '''
     import library
@@ -899,12 +937,19 @@ def source_make(args,rc, src):
     
         
     def build(bundle_dir):
+        from library import new_library
         # Import the bundle file from the directory
 
         bundle_class = load_bundle(bundle_dir)
         bundle = bundle_class(bundle_dir)
 
-        if bundle.is_built: # and not args.clean:
+        l = new_library(rc.library(args.library))
+
+    
+        if l.get(bundle.identity.vid):
+            bundle.log("Bundle {} is already in library".format(bundle.identity.name))
+
+        elif bundle.is_built: # and not args.clean:
             bundle.log("Bundle {} is already built".format(bundle.identity.name))
         else:
             bundle.log("-------------")
@@ -914,9 +959,14 @@ def source_make(args,rc, src):
             bundle.clean()
             bundle = bundle_class(bundle_dir)
     
-            bundle.run_prepare()
+            if not bundle.run_prepare():
+                err("Prepare failed")
             
-            bundle.run_build()
+            if not bundle.run_build():
+                err("Build failed")
+            
+            if not bundle.run_install():
+                err('Install failed')
             
         if args.install:
             bundle.install()
@@ -950,24 +1000,41 @@ def source_make(args,rc, src):
 
 def source_run(args,rc, src):
     from os.path import basename
+    from source.repository.git import GitRepository
 
     dir = args.dir
-
-    cmd = ' '.join(args.cmd)
 
     if not dir:
         dir = rc.sourcerepo.dir
 
     for root, dirs, files in os.walk(dir):
         if 'bundle.yaml' in files:
-            saved_path = os.getcwd()
-            os.chdir(root)   
-            prt('----- {}', root)
-            prt('----- {}', cmd)
-
-            os.system(cmd)
-            prt('')
-            os.chdir(saved_path)         
+            repo = GitRepository(None, root)
+            repo.bundle_dir = root
+            
+            if args.repo_command == 'commit' and repo.needs_commit():
+                prt("--- {} {}",args.repo_command, root)
+                repo.commit(args.message)
+                
+            elif args.repo_command == 'push' and repo.needs_push():
+                prt("--- {} {}",args.repo_command, root)
+                repo.push()
+                
+            elif args.repo_command == 'pull':
+                prt(args.repo_command, root)
+            
+            elif args.shell_command:
+                
+                cmd = ' '.join(args.shell_command)
+                
+                saved_path = os.getcwd()
+                os.chdir(root)   
+                prt('----- {}', root)
+                prt('----- {}', cmd)
+        
+                os.system(cmd)
+                prt('')
+                os.chdir(saved_path)         
        
 def source_find(args,rc, src):
     from source.repository.git import GitRepository
@@ -1040,16 +1107,23 @@ def source_deps(args,rc, src):
 
     repo = new_repository(rc.sourcerepo(args.name))        
 
+
     if args.ref:
 
-        for b in repo.bundle_deps(args.ref):
-            prt(b)
+        if args.direction == 'f':
+            for b in repo.bundle_deps(args.ref):
+                prt(b)            
+        else:
+            for b in repo.bundle_deps(args.ref, reverse=True):
+                prt(b)    
+
         
     else:
         import pprint
         graph = toposort(repo.dependencies)
     
         for v in graph:
+            
             pprint.pprint(v)
             
         
@@ -1246,8 +1320,9 @@ def main():
     src_p = cmd.add_parser('source', help='Manage bundle source files')
     src_p.set_defaults(command='source')
     src_p.add_argument('-n','--name',  default='default',  help='Select the name for the repository. Defaults to "default" ')
+    src_p.add_argument('-l','--library',  default='default',  help='Select a different name for the library')
     asp = src_p.add_subparsers(title='source commands', help='command help')  
-
+   
 
     sp = asp.add_parser('new', help='Create a new bundle')
     sp.set_defaults(subcommand='new')
@@ -1266,17 +1341,21 @@ def main():
     sp = asp.add_parser('deps', help='Print the depenencies for all source bundles')
     sp.set_defaults(subcommand='deps')
     sp.add_argument('ref', type=str,nargs='?',help='Name or id of a bundle to generate a sorted dependency list for.')      
+    group = sp.add_mutually_exclusive_group()
+    group.add_argument('-f', '--forward',  default='f', dest='direction',   action='store_const', const='f', help='Display bundles that this one depends on')
+    group.add_argument('-r', '--reverse',  default='f', dest='direction',   action='store_const', const='r', help='Display bundles that depend on this one')
     
     sp = asp.add_parser('find', help='Find source bundle source directories')
     sp.set_defaults(subcommand='find')
     sp.add_argument('term', type=str,help='Query term')
     sp.add_argument('-r','--register',  default=False,action="store_true",  help='Register directories in the library. ')
-    sp.add_argument('-l','--library',  default='default',  help='Select a different name for the library')
-      
+
     sp = asp.add_parser('init', help='Intialize the local and remote git repositories')
     sp.set_defaults(subcommand='init')
-
     sp.add_argument('dir', type=str,nargs='?',help='Directory')
+
+    sp = asp.add_parser('list', help='List the source dirctories')
+    sp.set_defaults(subcommand='list')
 
     sp = asp.add_parser('sync', help='Load references from the confiurged source remotes')
     sp.set_defaults(subcommand='sync')
@@ -1297,9 +1376,14 @@ def main():
  
     sp = asp.add_parser('run', help='Run a shell command in source directories')
     sp.set_defaults(subcommand='run')
-    sp.add_argument('-l','--library',  default='default',  help='Select a library to take references from')
     sp.add_argument('-d','--dir',  help='Directory to start recursing from ')
-    sp.add_argument('cmd',nargs=argparse.REMAINDER, type=str,help='Shell command to run')        
+    sp.add_argument('-m','--message', default='.', help='Directory to start recursing from ')
+    sp.add_argument('shell_command',nargs=argparse.REMAINDER, type=str,help='Shell command to run')  
+    group = sp.add_mutually_exclusive_group()
+    group.add_argument('-c', '--commit',  default=False, dest='repo_command',   action='store_const', const='commit', help='Commit')
+    group.add_argument('-p', '--push',  default=False, dest='repo_command',   action='store_const', const='push', help='Push to origin/master')    
+    group.add_argument('-l', '--pull',  default=False, dest='repo_command',   action='store_const', const='pull', help='Pull from upstream')  
+      
       
     sp = asp.add_parser('find', help='Find source packages that meet a vareity of conditions')
     sp.set_defaults(subcommand='find')
