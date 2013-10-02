@@ -19,3 +19,4 @@ gdal
 h5py
 unicodecsv
 lockfile
+sh
