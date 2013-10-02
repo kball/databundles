@@ -118,7 +118,8 @@ class GitShellService(object):
                     line_proc(sio.getvalue(),stdin)
                     sio.truncate(0)
         return _rcv
-                
+         
+            
     def push(self, username="Noone", password="None"):
         '''Push to  remote'''
         import sys, os
@@ -142,6 +143,37 @@ class GitShellService(object):
             # This is a super hack. See http://amoffat.github.io/sh/tutorials/2-interacting_with_processes.html
             # for some explaination. 
             p =  git.push('-u','origin','master',  _out=rcv,  _out_bufsize=0, _tty_in=True)
+            p.exit_code
+        except ErrorReturnCode_128:
+            raise Exception("""Push to repository repository failed. You will need to store or cache credentials. 
+            You can do this by using ssh, .netrc, or a credential maanger. 
+            See: https://www.kernel.org/pub/software/scm/git/docs/gitcredentials.html""")
+            
+        return True
+
+    def pull(self, username="Noone", password="None"):
+        '''pull to  remote'''
+        import sys, os
+        from sh import ErrorReturnCode_128 #@UnresolvedImport
+
+        def line_proc(line,stdin):
+
+            if "Username for" in line:
+                stdin.put(username+ "\n")
+                
+            elif "Password for" in line:
+                stdin.put(password+ "\n")
+
+            else:
+                print "git-push: ", line.strip()
+
+        rcv = self.char_to_line(line_proc)
+
+        
+        try:
+            # This is a super hack. See http://amoffat.github.io/sh/tutorials/2-interacting_with_processes.html
+            # for some explaination. 
+            p =  git.pull(  _out=rcv,  _out_bufsize=0, _tty_in=True)
             p.exit_code
         except ErrorReturnCode_128:
             raise Exception("""Push to repository repository failed. You will need to store or cache credentials. 
@@ -335,6 +367,11 @@ class GitRepository(RepositoryInterface):
         '''Push any changes to the repository to the origin server'''
         self.bundle.log("Push to remote: {}".format(self.name))
         return self.impl.push(username=username, password=password)
+    
+    def pull(self, username="Noone", password="None"):
+        '''Push any changes to the repository to the origin server'''
+        self.bundle.log("Pull from remote: {}".format(self.name))
+        return self.impl.pull(username=username, password=password)
     
     def register(self, library): 
         '''Register the source location with the library, and the library

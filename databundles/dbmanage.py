@@ -1021,7 +1021,7 @@ def source_run(args,rc, src):
                 repo.push()
                 
             elif args.repo_command == 'pull':
-                prt(args.repo_command, root)
+                prt("--- {} {}",args.repo_command, root)
             
             elif args.shell_command:
                 
