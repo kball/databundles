@@ -308,6 +308,7 @@ def library_server(args, l, config):
 def library_drop(args, l, config):   
 
     prt("Drop tables")
+    l.database.enable_delete = True
     l.database.drop()
 
 def library_clean(args, l, config):
