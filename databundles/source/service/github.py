@@ -67,6 +67,7 @@ class GitHubService(ServiceInterface,GitServiceMarker):
         import requests, yaml
         from databundles.util import OrderedDictYAMLLoader
         import pprint
+        from yaml.scanner import ScannerError
         
         out = []
 
@@ -76,7 +77,11 @@ class GitHubService(ServiceInterface,GitServiceMarker):
 
             for i,e in enumerate(r.json()): 
                 r = requests.get(e['url'].replace('api.github.com/repos', 'raw.github.com')+'/master/bundle.yaml')
-                config = yaml.load(r.content, OrderedDictYAMLLoader)
+                try:
+                    config = yaml.load(r.content, OrderedDictYAMLLoader)
+                except ScannerError:
+                    print r.content
+                    raise 
                 ident = dict(config['identity'])
                 ident['clone_url'] = e['clone_url']
                 out.append(ident)
