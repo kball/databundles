@@ -840,7 +840,7 @@ class File(Base, SavableMixin):
     group = SAColumn('f_group',Text)
     type_ = SAColumn('f_type',Text)
     ref = SAColumn('f_ref',Text)
-    data = SAColumn('p_data',MutationDict.as_mutable(JSONEncodedObj))
+    data = SAColumn('f_data',MutationDict.as_mutable(JSONEncodedObj))
 
     def __init__(self,**kwargs):
         self.oid = kwargs.get("oid",None) 
