@@ -214,10 +214,11 @@ class SqlitePartition(PartitionBase):
         self.record.count = s.execute("SELECT COUNT(*) FROM {}".format(t.name)).scalar()
         self.record.min_key = s.execute("SELECT MIN({}) FROM {}".format(t.primary_key.name,t.name)).scalar()
         self.record.max_key = s.execute("SELECT MAX({}) FROM {}".format(t.primary_key.name,t.name)).scalar()
- 
-        s = self.bundle.database.session
-        s.merge(self.record)
         s.commit()
+        
+        with self.bundle.session as s:
+            s.merge(self.record)
+
 
 
 

@@ -1014,7 +1014,7 @@ def source_run(args,rc, src):
             
             if args.repo_command == 'commit' and repo.needs_commit():
                 prt("--- {} {}",args.repo_command, root)
-                repo.commit(args.message)
+                repo.commit(''.join(args.message))
                 
             elif args.repo_command == 'push' and repo.needs_push():
                 prt("--- {} {}",args.repo_command, root)
@@ -1377,7 +1377,7 @@ def main():
     sp = asp.add_parser('run', help='Run a shell command in source directories')
     sp.set_defaults(subcommand='run')
     sp.add_argument('-d','--dir',  help='Directory to start recursing from ')
-    sp.add_argument('-m','--message', default='.', help='Directory to start recursing from ')
+    sp.add_argument('-m','--message', nargs='+', default='.', help='Directory to start recursing from ')
     sp.add_argument('shell_command',nargs=argparse.REMAINDER, type=str,help='Shell command to run')  
     group = sp.add_mutually_exclusive_group()
     group.add_argument('-c', '--commit',  default=False, dest='repo_command',   action='store_const', const='commit', help='Commit')
