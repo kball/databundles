@@ -19,6 +19,8 @@ def get_identity(path):
     '''Get an identity from a database, either a bundle or partition'''
     from .database.sqlite import SqliteBundleDatabase #@UnresolvedImport
     
+    raise Exception("Function deprecated")
+    
     db = SqliteBundleDatabase(path)
     
     bdc = BundleDbConfig(db)
@@ -207,7 +209,7 @@ class DbBundle(Bundle):
         
         self.database.use_unmanaged_session = True # Don't require using "with self.session" everywhere. 
         
-        self.db_config = self.config = BundleDbConfig(self.database)
+        self.db_config = self.config = BundleDbConfig(self)
         
         self.partition = None # Set in Library.get() and Library.find() when the user requests a partition. 
         
@@ -317,7 +319,7 @@ class BuildBundle(Bundle):
 
     @property
     def db_config(self):
-        return BundleDbConfig(self.database)
+        return BundleDbConfig(self, self.database)
 
     def update_configuration(self):
 
@@ -506,8 +508,12 @@ class BuildBundle(Bundle):
 
     def prepare(self):
 
-        if not self.database.exists():
-            self.database.create()
+        with self.session: # This will create the database if it doesn't exist, but it will be empty
+            if not self.database.exists():
+                self.log("Creating bundle database")
+                self.database.create()
+            else:
+                self.log("Bundle database already exists")
 
         with self.session:
             if self.run_args and vars(self.run_args).get('rebuild',False):
@@ -549,10 +555,11 @@ class BuildBundle(Bundle):
     def post_prepare(self):
         '''Set a marker in the database that it is already prepared. '''
         from datetime import datetime
-        
+
         with self.session:
             self.db_config.set_value('process','prepared',datetime.now().isoformat())
-            
+
+    
         self._revise_schema()
                     
         return True
@@ -579,12 +586,12 @@ class BuildBundle(Bundle):
     def post_build(self):
         from datetime import datetime
         from time import time
-        
+          
         with self.session:
             self.db_config.set_value('process', 'built', datetime.now().isoformat())
             self.db_config.set_value('process', 'buildtime',time()-self._build_time)
             self.update_configuration()
-            
+
         self._revise_schema()
          
             
@@ -1226,7 +1233,7 @@ class BundleDbConfig(BundleConfig):
     database = None
     dataset = None
 
-    def __init__(self, database):
+    def __init__(self, bundle, database):
         '''Maintain link between bundle.yam file and Config record in database'''
         
         super(BundleDbConfig, self).__init__()
@@ -1234,11 +1241,12 @@ class BundleDbConfig(BundleConfig):
         if not database:
             raise Exception("Didn't get database")
         
+        self.bundle = bundle
         self.database = database
 
         from databundles.orm import Dataset
 
-        self.dataset = (self.database._unmanaged_session.query(Dataset).one())
+        self.dataset = (self.database.session.query(Dataset).one())
        
     @property
     def dict(self): #@ReservedAssignment
@@ -1248,7 +1256,7 @@ class BundleDbConfig(BundleConfig):
         
         d = defaultdict(dict)
       
-        for cfg in self.database._unmanaged_session.query(Config).all():
+        for cfg in self.database.session.query(Config).all():
            
             d[cfg.group][cfg.key] = cfg.value
       
@@ -1289,7 +1297,6 @@ class BundleDbConfig(BundleConfig):
  
         o = SAConfig(group=group, key=key,d_vid=self.dataset.vid,value = value)
         self.database.session.add(o)
-
 
     def get_value(self, group, key, default=None):
         

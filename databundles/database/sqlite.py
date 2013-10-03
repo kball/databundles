@@ -7,7 +7,14 @@ Revised BSD License, included in this distribution as LICENSE.txt
 from __future__ import absolute_import
 from .relational import RelationalBundleDatabaseMixin, RelationalDatabase #@UnresolvedImport
 import os
+from databundles.util import get_logger
 
+import logging
+
+logger = get_logger(__name__)
+#logger.setLevel(logging.DEBUG)
+logger.debug("Init database logger")
+                       
 class SqliteDatabase(RelationalDatabase):
 
     EXTENSION = '.db'
@@ -69,6 +76,8 @@ class SqliteDatabase(RelationalDatabase):
                                          native_datetime=True,
                                          echo=False) 
             
+            logger.debug("_get_engine: {}".format(self.dsn))
+            
             from sqlalchemy import event
             
             event.listen(self._engine, 'connect',connect_listener)
@@ -105,13 +114,6 @@ class SqliteDatabase(RelationalDatabase):
             self._dbapi_connection.close();
             self._dbapi_connection = None    
 
-    
-    def exists(self):
-        return os.path.exists( self.path)
-    
-    def is_empty(self):
-        
-        return not self.exists()
         
     def delete(self):
         
@@ -209,7 +211,7 @@ select 'Loading CSV file','{path}';
 class BundleLockContext(object):
     
     def __init__( self, bundle):
-
+        import traceback
         from lockfile import FileLock
 
         self._bundle = bundle
@@ -217,43 +219,49 @@ class BundleLockContext(object):
 
         self._lock = FileLock(self._lock_path)
 
+        
+        tb = traceback.extract_stack()[-4:-3][0]
+
+        logger.debug("Using Lock Context, from {} in {}:{}".format(tb[2], tb[0], tb[1]))
+        
             
     def __enter__( self ):
         from sqlalchemy.orm import sessionmaker
+        from databundles.dbexceptions import Locked
         
         if self._bundle._session:
-            raise Exception("Bundle already has a session")
+            raise Locked("Bundle already has a session")
         
         Session = sessionmaker(bind=self._bundle.engine,autocommit=False)
         self._session =  Session()
 
-        #print " #### LOCKING ", self._lock_path
+        logger.debug("Acquiring lock on {}".format(self._bundle.dsn))
         self._lock.acquire()
 
         self._bundle._session = self._session
         return self._session
+
     
     def __exit__( self, exc_type, exc_val, exc_tb ):
 
         if  exc_type is not None:
+            logger.debug("Release lock and rollback on exception: {}".format(exc_val))
             self._session.rollback()
             self._lock.release()
             self._bundle._session.close()
             self._bundle._session = None
-            #print " #### UNLOCKED w/Exception", self._lock_path
+                    
             return False
         else:
-            #print " #### UNLOCKING ", self._lock_path
+            logger.debug("Release lock and commit session {}".format(repr(self._session)))
             self._session.commit()
             self._lock.release()
             self._bundle._session.close()
             self._bundle._session = None
-            #print " #### UNLOCKED ", self._lock_path
+            
             return True
             
-
 class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
-
 
     def __init__(self, bundle, dbname, use_unmanaged_session = False, **kwargs):   
         '''
@@ -274,12 +282,10 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
             
             RelationalBundleDatabaseMixin._create(self)
 
-            self._unmanaged_session.execute("PRAGMA user_version = {}".format(self.SCHEMA_VERSION))
+            self.session.execute("PRAGMA user_version = {}".format(self.SCHEMA_VERSION))
 
             self.post_create()
-            
-            self._unmanaged_commit()
-
+          
         
     @property
     def engine(self):
@@ -292,10 +298,12 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
         if not self._session:
 
             if self.use_unmanaged_session:
-                return self._unmanaged_session
+                logger.debug("Using an unmanaged session {} for {}".format(repr(self.unmanaged_session),self.dsn))
+                return self.unmanaged_session
             
             raise NoLock("For multi-process,  use bundle.session to acquire a session lock, or set bundle.use_unmanaged_session, on {}".format(self.dsn))
         
+        logger.debug("Using a managed session {} for {}".format(repr(self._session),self.dsn))
         return self._session
         
     
@@ -303,6 +311,7 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
     @property
     def has_session(self):
         return self._session is not None
+
                 
     @property
     def lock(self):

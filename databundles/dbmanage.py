@@ -335,7 +335,7 @@ def library_list(args, l, config):
     if not args.term:
 
         for ident in l.list():
-            prt("{} {:10s} {}", ident['location'], ident['vid'], ident['vname'])
+            prt("{:2s} {:10s} {}", ''.join(ident['location']), ident['vid'], ident['vname'])
     else:
         library_info(args, l, config, list_all=False)    
  

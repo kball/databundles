@@ -64,7 +64,7 @@ class RelationalDatabase(DatabaseInterface):
         self.logger = get_logger(__name__)
         self.logger.setLevel(logging.INFO) 
         
-        self._unmanaged_session_ = None
+        self._unmanaged_session = None
 
     def log(self,message):
         self.logger.info(message)
@@ -78,9 +78,20 @@ class RelationalDatabase(DatabaseInterface):
         return True
     
     def exists(self):
-        self.connection
+        if not  os.path.exists( self.path):
+            return False
+        
+        if self.is_empty():
+            return False
         
         return True
+    
+    def is_empty(self):
+        
+        if not 'config' in self.inspector.get_table_names():
+            return True
+        else:
+            return False
 
     def _create(self):
         """Create the database from the base SQL"""
@@ -152,18 +163,21 @@ class RelationalDatabase(DatabaseInterface):
         return self._engine
 
     @property
-    def _unmanaged_session(self):
+    def unmanaged_session(self):
         
-        if not self._unmanaged_session_:
+        def abort_flush():
+            from databundles.dbexceptions import ConflictError
+            raise ConflictError('Unmanaged sessions are read-only. Use a managed session to write to the database')
+        
+        if not self._unmanaged_session:
             from sqlalchemy.orm import sessionmaker
-            Session = sessionmaker(bind=self.engine,autocommit=False)
-            self._unmanaged_session_ =  Session()
-        
-        return self._unmanaged_session_
+            Session = sessionmaker(bind=self.engine,autocommit=False, autoflush=False)
+            self._unmanaged_session =  Session()
+            
+            self._unmanaged_session.flush = abort_flush # Monkeypatch to make read-only
 
-    def _unmanaged_commit(self):
-        self._unmanaged_session_.commit()
-        self._unmanaged_session_ = None
+        return self._unmanaged_session
+
 
     @property
     def metadata(self):
@@ -286,10 +300,8 @@ class RelationalDatabase(DatabaseInterface):
       
         key = key.strip('_')
   
-        try:
-            s = self._session or self._unmanaged_session
-        except:
-            s = self._unmanaged_session
+
+        s = self.session
   
         s.query(SAConfig).filter(SAConfig.group == group,
                                  SAConfig.key == key,
@@ -341,9 +353,8 @@ class RelationalBundleDatabaseMixin(object):
         ds.name = ident.name
         ds.vname = ident.vname
 
-        session = self._unmanaged_session
-        session.add(ds)
-        session.commit()
+        self.session.add(ds)
+        self.session.commit()
 
     def rewrite_dataset(self):
         from ..orm import Dataset

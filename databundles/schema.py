@@ -40,16 +40,13 @@ class Schema(object):
             raise Exception("Can only construct schema on a Bundle")
 
         self.d_id=self.bundle.identity.id_
-
-        
+ 
         self._seen_tables = {}
 
         self.table_sequence = len(self.tables)+1
         self.col_sequence = 1 
 
         self.auto_col_numbering = False
-
-
 
     @property
     def dataset(self,):

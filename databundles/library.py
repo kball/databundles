@@ -15,12 +15,8 @@ from databundles.dbexceptions import ConfigurationError, NotFoundError
 from databundles.identity import new_identity
 from databundles.bundle import DbBundle
 
-        
-
 from collections import namedtuple
 from sqlalchemy.exc import IntegrityError, ProgrammingError, OperationalError
-
-
 
 import Queue
 
@@ -220,7 +216,7 @@ class LibraryDb(object):
             self.dsn = self.dsn_template.format(user=self.username, password=self.password, 
                             server=self.server, name=self.dbname, colon_port=self.colon_port)
 
-            self._engine = create_engine(self.dsn,echo=False, poolclass=AssertionPool) 
+            self._engine = create_engine(self.dsn,echo=False) 
             
             from sqlalchemy import event
             
@@ -365,8 +361,6 @@ class LibraryDb(object):
         
         try: 
             try: rows = self.engine.execute("SELECT * FROM datasets WHERE d_vid = '{}' ".format(ROOT_CONFIG_NAME_V)).fetchone()
-            except OperationalError: # Sometimes: run out of postgres connection slots. 
-                raise
             except Exception as e:
                 rows = False
 
@@ -1309,14 +1303,19 @@ class Library(object):
         if self.remote:
             for k,v in self.remote.list(with_metadata=with_meta).items():
                 if v and v['identity']['id'] != 'a0':
-                    v['identity']['location'] = 'R'
+                    v['identity']['location'] = ['R','']
                     datasets[k] =  v['identity']
 
 
         for r in self.database.session.query(Dataset).filter(Dataset.id_ != 'a0').all():
-            v = r.identity.to_dict()
-            v['location'] = 'L'
-            datasets[r.identity.cache_key] = v
+            
+            if r.identity.cache_key not in datasets:
+                v = r.identity.to_dict()
+                v['location'] = ['','L']
+                datasets[r.identity.cache_key] = v
+            else:
+                datasets[r.identity.cache_key]['location'][1] = 'L'
+                
 
         return sorted(datasets.values(), key=lambda x: x['vname'])
     

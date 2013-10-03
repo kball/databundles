@@ -31,6 +31,9 @@ class DependencyError(Exception):
 class NoLock(BundleError):
     '''Error in the configuration files'''
 
+class Locked(BundleError):
+    '''Error in the configuration files'''
+
 class QueryError(Exception):
     """Error while executing a query"""
     

@@ -52,10 +52,6 @@ class Partitions(object):
         else:
             raise ValueError("Arg must be a Partition or PartitionNumber")
 
-        if session.dirty:
-            session.merge(orm_partition)
-
-
         return new_partition(self.bundle, orm_partition, **kwargs)
 
 
@@ -264,11 +260,12 @@ class Partitions(object):
                     
                     q = q.filter(OrmPartition.t_id==tr.id_)
  
+
         q = q.order_by(OrmPartition.vid.asc()).order_by(OrmPartition.segment.asc())
  
         return q
 
-    def new_orm_partition(self, pid,  **kwargs):
+    def _new_orm_partition(self, pid,  **kwargs):
         '''Create a new ORM Partrition object, or return one if
         it already exists '''
         from databundles.orm import Partition as OrmPartition, Table
@@ -316,8 +313,12 @@ class Partitions(object):
                 **d
              )  
         
-        self.bundle.database.session.commit()
+        session.add(op)   
         
+        if not op.format:
+            raise Exception("Must have a format!")
+            
+
         return op
 
     def clean(self, session):
@@ -328,21 +329,20 @@ class Partitions(object):
     def _new_partition(self, pid=None, session = None,**kwargs):
         '''Creates a new OrmPartition record'''
         
-        pid, _ = self._pid_or_args_to_pid(self.bundle, pid, kwargs)
-
-        extant = self._find_orm(pid, **kwargs).all()
-        
-        for p in extant:
-            if p.name == pid.name:
-                return self.partition(p)
-       
-        op = self.new_orm_partition(pid, **kwargs)
-        
-        self.bundle.database.session.add(op)   
-        self.bundle.database.session.commit()
-
-        p = self.partition(op,  **kwargs)
-        return p
+        with self.bundle.session:
+            pid, _ = self._pid_or_args_to_pid(self.bundle, pid, kwargs)
+    
+            extant = self._find_orm(pid, **kwargs).all()
+            
+            for p in extant:
+                if p.name == pid.name:
+                    return self.partition(p)
+           
+            op = self._new_orm_partition(pid, **kwargs)
+            
+        # Return the partition from the managed session, which prevents the
+        #  partition from being tied to a session that is closed.   
+        return self.find(pid)
 
 
     def new_partition(self, pid=None, **kwargs):

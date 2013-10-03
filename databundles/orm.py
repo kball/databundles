@@ -9,7 +9,7 @@ from sqlalchemy import orm
 from sqlalchemy import event
 from sqlalchemy import Column as SAColumn, Integer, BigInteger, Boolean, UniqueConstraint
 from sqlalchemy import Float as Real,  Text, String, ForeignKey
-from sqlalchemy.orm import relationship, deferred
+from sqlalchemy.orm import relationship
 from sqlalchemy.types import TypeDecorator, TEXT, PickleType
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.ext.mutable import Mutable
@@ -302,11 +302,8 @@ class Column(Base):
 
     is_primary_key = SAColumn('c_is_primary_key',Boolean, default = False)
     
-    
-    # Deferred because it is a new column. can remove deferral after
-    # all old files are updated. 
-    _is_foreign_key = deferred(SAColumn('c_is_foreign_key',Boolean, default = False))
-    _foreign_key = deferred(SAColumn('c_foreign_key',String(16), nullable=True))
+    _is_foreign_key = SAColumn('c_is_foreign_key',Boolean, default = False)
+    _foreign_key = SAColumn('c_foreign_key',String(16), nullable=True)
     
     unique_constraints = SAColumn('c_unique_constraints',Text)
     indexes = SAColumn('c_indexes',Text)
@@ -892,7 +889,7 @@ class Partition(Base):
     __table_args__ = (UniqueConstraint('p_sequence_id', 'p_t_vid', name='_uc_partitions_1'),
                      )
 
-    table = relationship('Table', backref='partitions')
+    table = relationship('Table', backref='partitions', lazy='subquery')
     # Already have a 'partitions' replationship on Dataset
     #dataset = relationship('Dataset', backref='partitions')
     
@@ -1000,6 +997,7 @@ class Partition(Base):
                 del target.data['db_type']
             else:
                 target.format = 'db'
+
         
 event.listen(Partition, 'before_insert', Partition.before_insert)
 event.listen(Partition, 'before_update', Partition.before_update)
