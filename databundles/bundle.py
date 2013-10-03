@@ -206,16 +206,11 @@ class DbBundle(Bundle):
         self.database_file = database_file
 
         self.database = SqliteBundleDatabase(self, database_file)
-        
-        self.database.use_unmanaged_session = True # Don't require using "with self.session" everywhere. 
-        
+
         self.db_config = self.config = BundleDbConfig(self)
         
         self.partition = None # Set in Library.get() and Library.find() when the user requests a partition. 
-        
 
-       
-        
         
     @property
     def path(self):
@@ -301,11 +296,7 @@ class BuildBundle(Bundle):
         from .database.sqlite import BuildBundleDb #@UnresolvedImport
 
         if self._database is None:
-            
-            use_unmanaged = not self.run_args or not self.run_args.multi or self.run_args.multi < 2
-
-            self._database  = BuildBundleDb(self, self.path, use_unmanaged_session=use_unmanaged)
-
+            self._database  = BuildBundleDb(self, self.path)
 
         return self._database
 
