@@ -125,7 +125,7 @@ class SqlitePartition(PartitionBase):
 
         pk = self.table.primary_key.name
 
-        def store_library(p):
+        def _store_library(p):
             if store_library:
                 if logger:
                     logger.always("Storing {} to Library".format(p.identity.name), now=True)
@@ -149,7 +149,7 @@ class SqlitePartition(PartitionBase):
                     min_key = row[pk]
                     ins.close()
 
-                    store_library(p)
+                    _store_library(p)
 
                 seg += 1
                 ident = self.identity
@@ -168,7 +168,7 @@ class SqlitePartition(PartitionBase):
 
         p.write_stats(min_key, max_key, count)
         ins.close()
-        store_library(p)
+        _store_library(p)
 
     def get_csv_parts(self):
         ident = self.identity.clone()   

@@ -207,7 +207,7 @@ class DbBundle(Bundle):
 
         self.database = SqliteBundleDatabase(self, database_file)
 
-        self.db_config = self.config = BundleDbConfig(self)
+        self.db_config = self.config = BundleDbConfig(self, self.database)
         
         self.partition = None # Set in Library.get() and Library.find() when the user requests a partition. 
 
