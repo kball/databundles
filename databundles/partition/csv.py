@@ -68,10 +68,9 @@ class CsvPartition(PartitionBase):
             if count:
                 self.record.count = count           
             
-     
-        s = self.bundle.database.session
-        s.merge(self.record)
-        s.commit()
+        with self.bundle.session as s:
+            s.merge(self.record)
+
 
     def __repr__(self):
         return "<csv partition: {}>".format(self.name)

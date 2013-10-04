@@ -111,6 +111,7 @@ class SqlitePartition(PartitionBase):
             raise Exception("Must run stats before cvsize")
         
         rows_per_seg = self.optimal_rows_per_segment()
+  
         
         if logger:
             logger.always("Csvize: {} rows per segment".format(rows_per_seg))
