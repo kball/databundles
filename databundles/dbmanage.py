@@ -665,7 +665,7 @@ def remote_info(args, l, rc):
         _print_info(l,d,p)
 
     else:
-        prt(l.remote.connection_info)
+        prt(str(l.remote))
 
 def remote_list(args, l, rc):
         
