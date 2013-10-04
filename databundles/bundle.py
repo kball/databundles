@@ -316,20 +316,20 @@ class BuildBundle(Bundle):
 
         # Re-writes the undle.yaml file, with updates to the identity and partitions
         # sections. 
-        self.config.rewrite(
-                         identity=self.identity.to_dict(),
-                         partitions=[p.identity.name for p in self.partitions]
-                         )
-        
-        # Reload some of the values from bundle.yaml into the database configuration
-
-        if self.config.build.get('dependencies'):
-            dbc = self.db_config
-            for k,v in self.config.build.get('dependencies').items():
-                dbc.set_value('odep', k, v)
-
-        self.database.session.commit()
-                
+        with self.session:
+            self.config.rewrite(
+                             identity=self.identity.to_dict(),
+                             partitions=[p.identity.name for p in self.partitions]
+                             )
+            
+            # Reload some of the values from bundle.yaml into the database configuration
+    
+            if self.config.build.get('dependencies'):
+                dbc = self.db_config
+                for k,v in self.config.build.get('dependencies').items():
+                    dbc.set_value('odep', k, v)
+    
+           
         self.database.rewrite_dataset()
                 
         
