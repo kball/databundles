@@ -316,19 +316,19 @@ class BuildBundle(Bundle):
 
         # Re-writes the undle.yaml file, with updates to the identity and partitions
         # sections. 
-        with self.session:
-            self.config.rewrite(
-                             identity=self.identity.to_dict(),
-                             partitions=[p.identity.name for p in self.partitions]
-                             )
-            
-            # Reload some of the values from bundle.yaml into the database configuration
-    
-            if self.config.build.get('dependencies'):
-                dbc = self.db_config
-                for k,v in self.config.build.get('dependencies').items():
-                    dbc.set_value('odep', k, v)
-    
+
+        self.config.rewrite(
+                         identity=self.identity.to_dict(),
+                         partitions=[p.identity.name for p in self.partitions]
+                         )
+        
+        # Reload some of the values from bundle.yaml into the database configuration
+
+        if self.config.build.get('dependencies'):
+            dbc = self.db_config
+            for k,v in self.config.build.get('dependencies').items():
+                dbc.set_value('odep', k, v)
+
            
         self.database.rewrite_dataset()
                 
@@ -533,15 +533,18 @@ class BuildBundle(Bundle):
     
     def _revise_schema(self):
         '''Write the schema from the database back to a file. If the schema template exists, overwrite the
-        main schema file. If it does not exist, use the revised file'''
+        main schema file. If it does not exist, use the revised file
         
-        with self.session:
-            self.update_configuration()
+        MUST BE RUN IN A SESSION BLOCK
+        
+        '''
 
-            sf_out = self.filesystem.path('meta',self.SCHEMA_REVISED_FILE)
-    
-            with open(sf_out, 'w') as f:
-                self.schema.as_csv(f)    
+        self.update_configuration()
+
+        sf_out = self.filesystem.path('meta',self.SCHEMA_REVISED_FILE)
+
+        with open(sf_out, 'w') as f:
+            self.schema.as_csv(f)    
                 
     def post_prepare(self):
         '''Set a marker in the database that it is already prepared. '''
@@ -550,8 +553,7 @@ class BuildBundle(Bundle):
         with self.session:
             self.db_config.set_value('process','prepared',datetime.now().isoformat())
 
-    
-        self._revise_schema()
+            self._revise_schema()
                     
         return True
    
@@ -583,7 +585,7 @@ class BuildBundle(Bundle):
             self.db_config.set_value('process', 'buildtime',time()-self._build_time)
             self.update_configuration()
 
-        self._revise_schema()
+            self._revise_schema()
          
             
         return True
@@ -620,9 +622,10 @@ class BuildBundle(Bundle):
     def post_update(self):
         from datetime import datetime
         from time import time
-        self.db_config.set_value('process', 'updated', datetime.now().isoformat())
-        self.db_config.set_value('process', 'updatetime',time()-self._update_time)
-        self.update_configuration()
+        with self.session:
+            self.db_config.set_value('process', 'updated', datetime.now().isoformat())
+            self.db_config.set_value('process', 'updatetime',time()-self._update_time)
+            self.update_configuration()
         return True
         
     ### Submit the package to the library
@@ -681,7 +684,8 @@ class BuildBundle(Bundle):
     ### Submit the package to the repository
  
     def pre_submit(self):
-        self.update_configuration()
+        with self.session:
+            self.update_configuration()
         return True
     
     ### Submit the package to the repository
@@ -939,7 +943,8 @@ class BuildBundle(Bundle):
         if args.command == 'config':
             if args.subcommand == 'rewrite':
                 b.log("Rewriting the config file")
-                b.update_configuration()
+                with self.session:
+                    b.update_configuration()
             return
     
         if args.command == 'repopulate':

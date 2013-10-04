@@ -219,7 +219,6 @@ class BundleLockContext(object):
 
         self._lock = FileLock(self._lock_path)
 
-        
         tb = traceback.extract_stack()[-4:-3][0]
 
         logger.debug("Using Lock Context, from {} in {}:{}".format(tb[2], tb[0], tb[1]))
@@ -230,7 +229,8 @@ class BundleLockContext(object):
         from databundles.dbexceptions import Locked
         
         if self._bundle._session:
-            raise Locked("Bundle already has a session")
+            logger.debug("Failing to acquire lock on {}, bundle already has session".format(self._bundle.dsn))
+            raise Locked("Bundle already has a session, {}".format(repr(self._bundle._session)))
         
         Session = sessionmaker(bind=self._bundle.engine,autocommit=False)
         self._session =  Session()
@@ -297,7 +297,7 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
         if not self._session:
             return self.unmanaged_session
 
-        logger.debug("Using a managed session {} for {}".format(repr(self._session),self.dsn))
+        logger.debug("    Using a managed session {} for {}".format(repr(self._session),self.dsn))
         return self._session
         
     
