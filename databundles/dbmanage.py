@@ -399,7 +399,7 @@ def library_push(args, l, config):
                 
 def library_files(args, l, config):
 
-    files_ = l.database.get_file_by_state(args.file_state, type_='bundle')
+    files_ = l.database.get_file_by_state(args.file_state)
     if len(files_):
         prt("-- Display {} files",args.file_state)
         for f in files_:

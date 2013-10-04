@@ -891,7 +891,7 @@ class LibraryDb(object):
         else:
             q =  s.query(File).filter(File.state == state).order_by(File.ref)
             
-        if type:
+        if type_:
             q = q.filter(File.type_ == type_)
             
         return q.all()
