@@ -127,9 +127,9 @@ class Bundle(object):
         else:
             ident = resolved_bundle.identity
     
-            
-        self.db_config.set_value('rdep', key, ident.to_dict())
-        self.database.session.commit()
+        with self.session:
+            self.db_config.set_value('rdep', key, ident.to_dict())
+
         
     @property
     def library(self):

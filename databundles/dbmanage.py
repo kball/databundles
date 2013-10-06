@@ -334,7 +334,7 @@ def library_list(args, l, config):
 
     if not args.term:
 
-        for ident in l.list():
+        for ident in sorted(l.list(), key=lambda x: x['vname']):
             prt("{:2s} {:10s} {}", ''.join(ident['location']), ident['vid'], ident['vname'])
     else:
         library_info(args, l, config, list_all=False)    
@@ -343,17 +343,33 @@ def library_delete(args, l, config):
     
     name = args.term
     
-    d,p = l.get_ref(name)
+    b = l.get(name)
     
-    if p:
-        prt("Deleting partition {}", p.cache_key)
-        key =  p.cache_key
+    if not b:
+        err("Didn't find")
+    
+    if b.partition:
+        k =  b.partition.identity.cache_key
+        prt("Deleting partition {}",k)
+ 
+        l.cache.remove(k, propagate = True)
+        
     else:
-        prt("Deleting bundle {}", d.cache_key)
-        key = d.cache_key
+        
+        for p in b.partitions:
+            k =  p.identity.cache_key
+            prt("Deleting partition {}",k)
+            l.cache.remove(k, propagate = True)            
+        
+        k = b.identity.cache_key
+        prt("Deleting bundle {}", k)
+        l.remove(b)  
+    
+    
+    
     
 
-    l.cache.remove(key, propagate = True)
+    
 
 def library_info(args, l, config, list_all=False):    
 
@@ -1002,6 +1018,7 @@ def source_run(args,rc, src):
     from os.path import basename
     from source.repository.git import GitRepository
 
+    print(args)
     dir = args.dir
 
     if not dir:
@@ -1022,7 +1039,15 @@ def source_run(args,rc, src):
                 
             elif args.repo_command == 'pull':
                 prt("--- {} {}",args.repo_command, root)
-            
+                
+            elif args.repo_command == 'install':
+                prt("--- {} {}",args.repo_command, root)    
+                bundle_class = load_bundle(root)
+                bundle = bundle_class(root)
+        
+                bundle.run_install()
+        
+        
             elif args.shell_command:
                 
                 cmd = ' '.join(args.shell_command)
@@ -1376,14 +1401,16 @@ def main():
  
     sp = asp.add_parser('run', help='Run a shell command in source directories')
     sp.set_defaults(subcommand='run')
-    sp.add_argument('-d','--dir',  help='Directory to start recursing from ')
+    sp.add_argument('-d','--dir', nargs='?', help='Directory to start recursing from ')
     sp.add_argument('-m','--message', nargs='+', default='.', help='Directory to start recursing from ')
     sp.add_argument('shell_command',nargs=argparse.REMAINDER, type=str,help='Shell command to run')  
     group = sp.add_mutually_exclusive_group()
     group.add_argument('-c', '--commit',  default=False, dest='repo_command',   action='store_const', const='commit', help='Commit')
     group.add_argument('-p', '--push',  default=False, dest='repo_command',   action='store_const', const='push', help='Push to origin/master')    
     group.add_argument('-l', '--pull',  default=False, dest='repo_command',   action='store_const', const='pull', help='Pull from upstream')  
+    group.add_argument('-i', '--install',  default=False, dest='repo_command',   action='store_const', const='install', help='Install the bundle')  
       
+            
       
     sp = asp.add_parser('find', help='Find source packages that meet a vareity of conditions')
     sp.set_defaults(subcommand='find')

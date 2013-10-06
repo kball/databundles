@@ -567,20 +567,16 @@ class LibraryDb(object):
         from databundles.orm import Dataset
         
         s = self.session
-        
-        try:
-            dataset, partition = self.get_id(bundle.identity.vid) #@UnusedVariable
-        except AttributeError:
-            dataset, partition = self.get_id(bundle.identity.vid) #@UnusedVariable
-            
-            
+
+        dataset, partition = self.get_id(bundle.identity.vid) #@UnusedVariable
+
         if not dataset:
             return False
 
         dataset = s.query(Dataset).filter(Dataset.vid==dataset.vid).one()
 
         # Can't use delete() on the query -- bulk delete queries do not 
-        # trigger in-ython cascades!
+        # trigger in-python cascades!
         s.delete(dataset)
   
         s.commit()
@@ -1749,7 +1745,7 @@ class Library(object):
         
         self.database.remove_bundle(bundle)
         
-        self.cache.remove(bundle.identity.cache_key)
+        self.cache.remove(bundle.identity.cache_key, propagate = True)
         
     def clean(self, add_config_root=True):
         self.database.clean(add_config_root=add_config_root)

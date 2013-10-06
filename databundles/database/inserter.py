@@ -98,7 +98,7 @@ class ValueWriter(InserterInterface):
         self.session.rollback()
     
     def commit_end(self):
-        self.session.rollback()
+        self.session.commit()
         
     def commit_continue(self):
         self.session.commit()
