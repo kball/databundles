@@ -215,6 +215,16 @@ class GitRepository(RepositoryInterface):
     def dir(self):
         return self.dir_
     
+    def source_path(self, ident):
+        '''Return the absolute directory for a bundle based on its identity'''
+        import os
+        return os.path.join(self.dir, ident.source_path)
+    
+    
+    def get_bundle(self, ident):
+        '''Return a build bundle from the identity'''
+        
+    
     @property
     def bundle(self):
         if not self._bundle:
@@ -260,7 +270,18 @@ class GitRepository(RepositoryInterface):
         dir_ = os.path.dirname(rp)
         self.bundle = mod.Bundle(dir_)
         
+
+    @property
+    def bundle_ident(self):
+        if not self._bundle:
+            from databundles.dbexceptions import ConfigurationError
+            raise ConfigurationError("Must assign bundle or bundle_dir to repostitory before this operation")             
+    
+        return self._bundle.identity
         
+    @bundle_ident.setter
+    def bundle_ident(self, ident):
+        self.bundle_dir = self.source_path(ident)
 
     @property
     def impl(self):

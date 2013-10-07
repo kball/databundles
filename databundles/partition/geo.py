@@ -226,13 +226,16 @@ class GeoPartition(SqlitePartition):
     
         output = subprocess.check_output(cmd, shell=True)
 
-        for row in self.database.connection.execute("pragma table_info('{}')".format(self.table.name)):
-            parts = row[2].lower().strip(')').split('(')
-            datatype = parts[0]
-            size = int(parts[1]) if len(parts) > 1 else None
-
-            self.bundle.schema.add_column(self.table,row[1],datatype = datatype, size=size,
-                                           is_primary_key=True if row[1].lower()=='ogc_fid' else False)
+        with self.bundle.session:
+            for row in self.database.connection.execute("pragma table_info('{}')".format(self.table.name)):
+                parts = row[2].lower().strip(')').split('(')
+                datatype = parts[0]
+                size = int(parts[1]) if len(parts) > 1 else None
+    
+                self.bundle.schema.add_column(self.table,row[1],datatype = datatype, size=size,
+                                               is_primary_key=True if row[1].lower()=='ogc_fid' else False, commit = False)
+                
+        self.database.post_create()
 
     def __repr__(self):
         return "<geo partition: {}>".format(self.name)

@@ -44,27 +44,25 @@ class Bundle(BuildBundle):
   
     def build(self):
 
-        with self.session:
-            
-            self.log("Build geo")
-            self.build_geo()
-            
-            self.log("Build missing")
-            self.build_with_missing()
-            
+        self.log("Build geo")
+        self.build_geo()
+        
+        self.log("Build missing")
+        self.build_with_missing()
+        
 
-            self.log("Build csvsegments")
-            self.build_csvsegments()
+        self.log("Build csvsegments")
+        self.build_csvsegments()
 
-            self.log("Build csv")
-            self.build_csv()
+        self.log("Build csv")
+        self.build_csv()
 
-            self.log("Build db")
-            self.build_db()
+        self.log("Build db")
+        self.build_db()
 
 
-            self.log("Build hdf")
-            self.build_hdf()
+        self.log("Build hdf")
+        self.build_hdf()
 
         return True
 
@@ -112,7 +110,6 @@ class Bundle(BuildBundle):
         # Create other types of partitions. 
         geot1 = self.partitions.find_or_new_geo(table='geot1')
         
-
         with geot1.database.inserter() as ins:
             for lat in range(10):
                 for lon in range(10):
@@ -121,7 +118,6 @@ class Bundle(BuildBundle):
         # Create other types of partitions. 
         geot2 = self.partitions.find_or_new_geo(table='geot2')
      
-        
         with geot2.database.inserter() as ins:
             for lat in range(10):
                 for lon in range(10):

@@ -637,14 +637,13 @@ class BuildBundle(Bundle):
         
         return True
     
-    def install(self, library_name=None, delete=False):  
+    def install(self, library_name=None, delete=False,  force=False):  
         '''Install the bundle and all partitions in the default library'''
      
         import databundles.library
 
-        force = vars(self.run_args).get('force', False)
+        force = vars(self.run_args).get('force', force)
 
-            
         with self.session:
             library_name = vars(self.run_args).get('library', 'default') if library_name is None else 'default'
             library_name = library_name if library_name else 'default'
@@ -920,11 +919,11 @@ class BuildBundle(Bundle):
 
         return True
 
-    def run_install(self):
+    def run_install(self, force=False):
         b = self
         if b.pre_install():
             b.log("---- Install ---")
-            if b.install():
+            if b.install(force=force):
                 b.post_install()
                 b.log("---- Done Installing ---")
             else:

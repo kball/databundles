@@ -337,7 +337,7 @@ def library_list(args, l, config):
         for ident in sorted(l.list(), key=lambda x: x['vname']):
             prt("{:2s} {:10s} {}", ''.join(ident['location']), ident['vid'], ident['vname'])
     else:
-        library_info(args, l, config, list_all=False)    
+        library_info(args, l, config, list_all=True)    
  
 def library_delete(args, l, config):   
     
@@ -384,7 +384,7 @@ def library_info(args, l, config, list_all=False):
         _print_info(l,d,p, list_partitions=list_all)
          
         config = l.config(args.term)
-        print(config)
+
         
     else:
 
@@ -585,10 +585,11 @@ def _print_info(l,d,p, list_partitions=False):
     if l.cache.has(d.cache_key):
         b = l.get(d.vid)
         prt("D Partitions: {}",b.partitions.count)
-        
         if not p and (list_partitions or b.partitions.count < 12):
+            
             for partition in  b.partitions.all:
                 prt("P {:15s} {}", partition.identity.vid, partition.identity.vname)
+        
     else:
         print(remote_d)
 
@@ -777,11 +778,47 @@ def source_command(args, rc, src):
 
 def source_info(args,rc, src):
     
-    prt("Source dir: {}", rc.sourcerepo.dir)
-    for repo in  rc.sourcerepo.list:
-        prt("Repo      : {}", repo.ident)
+    if not args.term:
+        prt("Source dir: {}", rc.sourcerepo.dir)
+        for repo in  rc.sourcerepo.list:
+            prt("Repo      : {}", repo.ident)
+    else:
+        import library
+        from identity import new_identity
+        l = library.new_library(rc.library(args.library))  
+        found = False      
+        for r in l.database.get_file_by_type('source'):
+            ident = new_identity(r.data)
+            if args.term == ident.name or args.term == ident.vname:
+                found = r
+                break
+                
+        if not found:
+            err("Didn't find source for term '{}'. (Maybe need to run 'source sync')", args.term)
+        else:
+            from source.repository import new_repository
+            repo = new_repository(rc.sourcerepo(args.name))
+            ident = new_identity(r.data)
+            repo.bundle_ident = ident
+            
+            prt('Name      : {}', ident.vname)
+            prt('Id        : {}', ident.vid)
+            prt('Dir       : {}', repo.bundle_dir)
+            
+            if not repo.bundle.database.exists():
+                prt('Exists    : Database does not exist or is empty')
+            else:   
+                
+                d = dict(repo.bundle.db_config.dict)
+                process = d['process']
 
+                prt('Created   : {}', process['dbcreated'] if process['dbcreated'] else '')
+                prt('Prepared  : {}', process['prepared'] if process['prepared'] else '')
+                prt('Built     : {}', process['built'] if process['built'] else '')
+                prt('Build time: {} s', round(float(process['buildtime']),2) if process['buildtime'] else '')
 
+                
+             
 def source_init(args,rc, src):
     from source.repository import new_repository
 
@@ -791,7 +828,6 @@ def source_init(args,rc, src):
         dir = os.getcwd()
     
     repo = new_repository(rc.sourcerepo(args.name))
-
     repo.bundle_dir = dir
 
     repo.delete_remote()
@@ -819,46 +855,77 @@ def source_sync(args,rc, src):
             l.database.add_file(e['clone_url'], repo.service.ident, ident.name, state='synced', type_='source', data=e)
             
             prt("Added {:50s} {}",ident.name,e['clone_url'] )
-            
+
   
-def source_list(args,rc, src):
-    '''Synchronize all of the repositories with the local library'''
-    from collections import defaultdict
-    import library
-    
-    dir = rc.sourcerepo.dir
-
-    def ddstruct():
-        return {
-             'source_dir' : None,
-             'flags': [' ']*3
-             }
-
-    lst = defaultdict(ddstruct)
-
-    l = library.new_library(rc.library(args.library))
-
-    for r in l.list():
-        lst[r['name']]['flags'][2] = 'L'
-        
-        
-    for root, dirs, files in os.walk(dir):
+def _source_list(dir_):
+    lst = {}
+    for root, dirs, files in os.walk(dir_):
         if 'bundle.yaml' in files:
             bundle_class = load_bundle(root)
             bundle = bundle_class(root)
             
-            ident = bundle.identity
+            ident = bundle.identity.to_dict()
+            ident['in_source'] = True
+            ident['source_dir'] = root
+            ident['source_built'] = True if bundle.is_built else False
+            lst[ident['name']] = ident
 
-            lst[ident.name]['source_dir'] = root
-            lst[ident.name]['flags'][0] = 'S'
-            
-            if bundle.is_built:
-                lst[ident.name]['flags'][1] = 'B'
-            
-    for k,v in sorted(lst.items(), key=lambda x: x[0]):
-        prt("{} {:35s}",''.join(v['flags']), k, v['source_dir'])
+    return lst
+
+def _library_list(l):
+    
+    lst = {}
+    for r in l.list():
+        r['in_library'] = True
         
+        lst[r['name']] = r
         
+    return lst
+        
+         
+def _print_bundle_list(*args):
+    '''Create a nice display of a list of source packages'''
+    from collections import defaultdict
+    
+    lists = []
+    names = set()
+    for lst in args:
+        lists.append(defaultdict(dict,lst))
+        names.update(lst.keys())
+  
+    f_lst = defaultdict(dict)
+    
+    for name in names:
+        f_lst[name] = {}
+        for lst in lists:
+            f_lst[name].update(lst[name])
+
+    for k,v in sorted(f_lst.items(), key=lambda x: x[0]):
+        flags = [ 'S' if v.get('in_source', False) else ' ',
+                  'B' if v.get('source_built', False) else ' ',
+                  'L' if v.get('in_library', False) else ' ',
+                 ]
+        
+        prt("{} {:35s}",''.join(flags), k, v['source_dir'])
+          
+def source_list(args,rc, src, names=None):
+    '''List all of the source packages'''
+    from collections import defaultdict
+    import library
+    
+    dir = rc.sourcerepo.dir
+    l = library.new_library(rc.library(args.library))
+
+    if not names:
+        l_lst = defaultdict(dict, _library_list(l))
+        s_lst = defaultdict(dict, _source_list(dir))
+    else:
+        l_lst = defaultdict(dict, { k:v for k,v in _library_list(l).items() if k in names})
+        s_lst = defaultdict(dict, { k:v for k,v in _source_list(dir).items() if k in names})
+
+    _print_bundle_list(s_lst, l_lst)
+
+            
         
 def source_clone(args,rc, src):   
     '''Clone one or more registered source packages ( via sync ) into the source directory '''
@@ -962,10 +1029,10 @@ def source_make(args,rc, src):
         l = new_library(rc.library(args.library))
 
     
-        if l.get(bundle.identity.vid):
+        if l.get(bundle.identity.vid)  and not args.force:
             bundle.log("Bundle {} is already in library".format(bundle.identity.name))
 
-        elif bundle.is_built: # and not args.clean:
+        elif bundle.is_built and not args.force and not args.clean:
             bundle.log("Bundle {} is already built".format(bundle.identity.name))
         else:
             bundle.log("-------------")
@@ -981,11 +1048,11 @@ def source_make(args,rc, src):
             if not bundle.run_build():
                 err("Build failed")
             
-            if not bundle.run_install():
-                err('Install failed')
+
             
         if args.install:
-            bundle.install()
+            if not bundle.run_install(force=True):
+                err('Install failed')
             
        
     if name:
@@ -1136,11 +1203,22 @@ def source_deps(args,rc, src):
     if args.ref:
 
         if args.direction == 'f':
-            for b in repo.bundle_deps(args.ref):
-                prt(b)            
+            deps = repo.bundle_deps(args.ref)
+            
+            if args.detail:
+                source_list(args,rc, src, names=deps)    
+            else:
+                for b in deps:
+                    prt(b)                   
+            
         else:
-            for b in repo.bundle_deps(args.ref, reverse=True):
-                prt(b)    
+            deps = repo.bundle_deps(args.ref, reverse=True)
+
+            if args.detail:
+                source_list(args,rc, src, names=deps)    
+            else:
+                for b in deps:
+                    prt(b)    
 
         
     else:
@@ -1148,7 +1226,6 @@ def source_deps(args,rc, src):
         graph = toposort(repo.dependencies)
     
         for v in graph:
-            
             pprint.pprint(v)
             
         
@@ -1362,10 +1439,13 @@ def main():
 
     sp = asp.add_parser('info', help='Information about the source configuration')
     sp.set_defaults(subcommand='info')
-
+    sp.add_argument('term',  nargs='?', type=str,help='Name or ID of the bundle or partition to print information for')
+    
+    
     sp = asp.add_parser('deps', help='Print the depenencies for all source bundles')
     sp.set_defaults(subcommand='deps')
-    sp.add_argument('ref', type=str,nargs='?',help='Name or id of a bundle to generate a sorted dependency list for.')      
+    sp.add_argument('ref', type=str,nargs='?',help='Name or id of a bundle to generate a sorted dependency list for.')   
+    sp.add_argument('-d','--detail',  default=False,action="store_true",  help='Display details of locations for each bundle')   
     group = sp.add_mutually_exclusive_group()
     group.add_argument('-f', '--forward',  default='f', dest='direction',   action='store_const', const='f', help='Display bundles that this one depends on')
     group.add_argument('-r', '--reverse',  default='f', dest='direction',   action='store_const', const='r', help='Display bundles that depend on this one')
@@ -1393,6 +1473,7 @@ def main():
   
     sp = asp.add_parser('make', help='Build sources')
     sp.set_defaults(subcommand='make')
+    sp.add_argument('-f','--force', default=False,action="store_true", help='Build even if built or in library')
     sp.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')
     sp.add_argument('-i','--install', default=False,action="store_true", help='Install after build')
 

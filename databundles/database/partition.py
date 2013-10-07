@@ -66,7 +66,7 @@ class PartitionDb(SqliteDatabase, RelationalPartitionDatabaseMixin):
             table_name = table_or_name
             if not table_name in self.inspector.get_table_names():
                 t_meta, table = self.bundle.schema.get_table_meta(table_name) #@UnusedVariable
-                t_meta.create(bind=self.engine)
+                table.create(bind=self.engine)
                 
                 if not table_name in self.inspector.get_table_names():
                     raise Exception("Don't have table "+table_name)
@@ -87,7 +87,6 @@ class PartitionDb(SqliteDatabase, RelationalPartitionDatabaseMixin):
         self.require_path()
         
         if RelationalDatabase._create(self):
-
             self.post_create()
                   
     # DEPRECATED! Should use the session_context instead

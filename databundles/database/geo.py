@@ -11,7 +11,9 @@ class FeatureInserter(InserterInterface):
     
     def __init__(self, partition, table, dest_srs=4326, source_srs=None, layer_name = None):
 
+        self.partition = partition
         self.bundle = partition.bundle
+        
         
         self.sf = TableShapefile(self.bundle, partition.database.path, table, dest_srs, source_srs, name=layer_name)
         
@@ -26,6 +28,8 @@ class FeatureInserter(InserterInterface):
         if type_ is not None:
             self.bundle.error("Got Exception: "+str(value))
             return False
+                
+        self.partition.database.post_create()
                 
         return self
     

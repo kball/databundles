@@ -114,6 +114,9 @@ class RelationalDatabase(DatabaseInterface):
         from ..orm import Config
         from datetime import datetime
         
+        if not 'config' in self.inspector.get_table_names():
+            Config.__table__.create(bind=self.engine) #@UndefinedVariable
+        
         self.set_config_value(Config.ROOT_CONFIG_NAME_V, 'process','dbcreated', datetime.now().isoformat() )
         
     def post_create(self):
@@ -144,7 +147,7 @@ class RelationalDatabase(DatabaseInterface):
             try:
                 self._connection = self.engine.connect()
             except Exception as e:
-                self.error("Failed to open: '{}' ".format(self.path))
+                self.error("Failed to open: '{}': {} ".format(self.path, e))
                 raise
             
         return self._connection
@@ -278,8 +281,7 @@ class RelationalDatabase(DatabaseInterface):
             if self.bundle.has_session:
                 p = self.db.bundle.partitions.find_or_new_csv(ident)  
             else:
-                with self.bundle.session:
-                    p = self.db.bundle.partitions.find_or_new_csv(ident)  
+                p = self.db.bundle.partitions.find_or_new_csv(ident)  
             return p.inserter(self.table)
 
     def csvinserter(self, table_or_name=None,segment_rows=200000,  **kwargs):
@@ -386,11 +388,15 @@ class RelationalPartitionDatabaseMixin(object):
     def _post_create(self):
         from ..orm import Config
 
+        if not 'config' in self.inspector.get_table_names():
+            Config.__table__.create(bind=self.engine) #@UndefinedVariable
+            
         self.set_config_value(self.bundle.identity.vid, 'info','type', 'partition' )
         self.set_config_value(Config.ROOT_CONFIG_NAME_V, 'bundle','vname', self.bundle.identity.vname )
         self.set_config_value(Config.ROOT_CONFIG_NAME_V, 'bundle','vid', self.bundle.identity.vid )
         self.set_config_value(Config.ROOT_CONFIG_NAME_V, 'partition','vname', self.partition.identity.vname )
         self.set_config_value(Config.ROOT_CONFIG_NAME_V, 'partition','vid', self.partition.identity.vid )
+        self.session.commit()
 
 
 

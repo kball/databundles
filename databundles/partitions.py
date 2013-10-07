@@ -472,10 +472,12 @@ class Partitions(object):
 
         partition = self.new_geo_partition(pid, **kwargs)
 
+
         if tables:   
             partition.create_with_tables(tables)  
         else:
             partition.create()
+
 
         return partition;
     

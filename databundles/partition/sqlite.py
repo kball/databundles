@@ -59,7 +59,6 @@ class SqlitePartition(PartitionBase):
 
         self.database.create()
 
-
         self.add_tables(tables)
         
         

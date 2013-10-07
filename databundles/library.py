@@ -296,9 +296,7 @@ class LibraryDb(object):
             o.value = value           
             s.merge(o)
             s.commit()  
-                                 
-            
-   
+
     def get_config_value(self, group, key):
         
         from databundles.orm import Config as SAConfig
@@ -1299,7 +1297,7 @@ class Library(object):
         if self.remote:
             for k,v in self.remote.list(with_metadata=with_meta).items():
                 if v and v['identity']['id'] != 'a0':
-                    v['identity']['location'] = ['R','']
+                    v['identity']['location'] = ['R',' ']
                     datasets[k] =  v['identity']
 
 
@@ -1307,7 +1305,7 @@ class Library(object):
             
             if r.identity.cache_key not in datasets:
                 v = r.identity.to_dict()
-                v['location'] = ['','L']
+                v['location'] = [' ','L']
                 datasets[r.identity.cache_key] = v
             else:
                 datasets[r.identity.cache_key]['location'][1] = 'L'
@@ -1453,7 +1451,8 @@ class Library(object):
                                 .format(identity.name, bundle.identity.name))
 
         if os.path.exists(p.database.path):
-            os.remove(p.database.path)
+            from databundles.dbexceptions import ConflictError
+            raise ConflictError("Trying to get {}, but file {} already exists".format(identity.vname, p.database.path))
 
         # Now actually get it from the remote. 
 
@@ -1534,9 +1533,7 @@ class Library(object):
     
     def _get_partition(self,  dataset, partition, force = False, cb=None):
         from databundles.dbexceptions import NotFoundError
-
-        if partition.vid == 'b1DxuZ00d/001':
-            pass
+        from databundles.client.exceptions import NotFound as RemoteNotFound
 
         r = self._get_dataset(dataset, cb=cb)
 
@@ -1546,22 +1543,22 @@ class Library(object):
         try:
             p =  r.partitions.partition(partition)
         except:
-            p = None
-            
-        if not p:
-            raise NotFoundError(" Partition '{}' not in bundle  '{}' "
-                                .format(partition, r.identity.name ))
+            raise NotFoundError("Partition '{}' not in bundle  '{}' ".format(partition, r.identity.name ))
         
         rp = self.cache.get(p.identity.cache_key, cb=cb)
 
         if not os.path.exists(p.database.path) or p.database.is_empty() or force:
+
             if self.remote:
-                self._get_remote_partition(r,partition, cb=cb)
+                try:
+                    self._get_remote_partition(r,partition, cb=cb)
+                except RemoteNotFound:
+                    raise NotFoundError("""Didn't find partition {} in bundle {}. Partition found in bundle, but path {} ({}?) not in local library and doesn't have it either. """
+                                   .format(p.identity.name,r.identity.name,p.database.path, rp))
+             
             else:
-                raise NotFoundError("""Didn't get partition in {} for id {} {}. 
-                                    Partition found, but path {} ({}?) not in local library and remote not set. """
-                               .format(r.identity.name, p.identity.id_,p.identity.name,
-                                       p.database.path, rp))
+                raise NotFoundError("""Didn't find partition {} in bundle {}. Partition found in bundle, but path {} ({}?) not in local library and remote not set. """
+                               .format(p.identity.name, r.identity.name,p.database.path, rp))
         
         
             # Ensure the file is in the local library. 
@@ -1662,7 +1659,7 @@ class Library(object):
              
             if not b:
                 if throw:
-                    raise NotFoundError("Failed to get dependency, key={}, id={}".format(k, v))
+                    raise NotFoundError("Dependency check failed for key={}, id={}".format(k, v))
                 else:
                     errors[k] = v
 
