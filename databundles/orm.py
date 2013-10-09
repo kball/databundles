@@ -577,6 +577,7 @@ class Table(Base):
         size = kwargs.get('size', None)
         default = kwargs.get('default', None)
         datatype =  kwargs.get('datatype', None)
+        
         # MySql requires that text columns that have a default also have a size. 
         if datatype in ('text','varchar') and bool(default):
             if not size and not width:

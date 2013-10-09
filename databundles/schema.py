@@ -42,10 +42,7 @@ class Schema(object):
         self.d_id=self.bundle.identity.id_
  
         self._seen_tables = {}
-
-        self.table_sequence = len(self.tables)+1
-        self.col_sequence = 1 
-
+        self.table_sequence = None
         self.auto_col_numbering = False
 
     @property
@@ -117,6 +114,9 @@ class Schema(object):
         '''Add a table to the schema'''
         from orm import Table
         from identity import TableNumber, ObjectNumber
+           
+        if not self.table_sequence:
+            self.table_sequence = len(self.tables)+1
            
         name = Table.mangle_name(name)
      
@@ -559,7 +559,8 @@ class Schema(object):
   
              
     def as_csv(self, f = None):
-        import csv, sys
+        import unicodecsv as csv
+        import sys
         
         if f is None:
             f = sys.stdout
@@ -769,6 +770,8 @@ class {name}(Base):
             
         return  "SELECT " + ',\n'.join(lines) + " FROM {} ".format(st.name)
      
+
+
 
 
      

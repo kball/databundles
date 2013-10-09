@@ -88,6 +88,10 @@ class PartitionDb(SqliteDatabase, RelationalPartitionDatabaseMixin):
         
         if RelationalDatabase._create(self):
             self.post_create()
+              
+    @property
+    def engine(self):
+        return self._get_engine(_on_connect_partition)
                   
     # DEPRECATED! Should use the session_context instead
     @property
@@ -216,3 +220,14 @@ class PartitionDb(SqliteDatabase, RelationalPartitionDatabaseMixin):
             q = q + " " + where.format(**f)
     
         self.connection.execute(q)
+   
+def _on_connect_partition(dbapi_con, con_record):
+    '''ISSUE some Sqlite pragmas when the connection is created'''
+
+    dbapi_con.execute('PRAGMA page_size = 8192')
+    dbapi_con.execute('PRAGMA temp_store = MEMORY')
+    dbapi_con.execute('PRAGMA cache_size = 500000')
+    dbapi_con.execute('PRAGMA foreign_keys = ON')
+    dbapi_con.execute('PRAGMA journal_mode = WAL')
+    #dbapi_con.execute('PRAGMA synchronous = OFF')
+    #dbapi_con.enable_load_extension(True)

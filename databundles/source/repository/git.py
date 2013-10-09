@@ -7,7 +7,15 @@ Revised BSD License, included in this distribution as LICENSE.txt
 from . import RepositoryInterface, RepositoryException  #@UnresolvedImport
 from databundles.dbexceptions import ConfigurationError
 
-from sh import git,ErrorReturnCode_1 #@UnresolvedImport
+from sh import git,ErrorReturnCode_1, ErrorReturnCode_128 #@UnresolvedImport
+
+
+from databundles.util import get_logger
+
+import logging
+
+logger = get_logger(__name__)
+logger.setLevel(logging.DEBUG)
 
 class GitShellService(object):
     '''Interact with GIT services using the shell commands'''
@@ -75,19 +83,32 @@ class GitShellService(object):
         return True  
      
     def needs_commit(self):
-        for line in git.status(porcelain=True):
-            if line.strip():
-                return True
-  
-        return False
+        import os
+        
+        try:
+            for line in git.status(porcelain=True):
+                if line.strip():
+                    return True
+      
+            return False
+        except ErrorReturnCode_128 as e:
+            logger.error("Needs_commit failed in {}".format(os.getcwd()))
+            return False
     
     def needs_push(self):
-        for line in git.push('origin','master',n=True, porcelain=True):
-            if '[up to date]' in line:
-                return False
-
-        return True
+        import os
+        
+        try:
+            for line in git.push('origin','master',n=True, porcelain=True):
+                if '[up to date]' in line:
+                    return False
     
+            return True
+            
+        except ErrorReturnCode_128 as e:
+            logger.error("Needs_push failed in {}".format(os.getcwd()))
+            return False
+           
     def ignore(self, pattern):
         import os
         
@@ -321,7 +342,7 @@ class GitRepository(RepositoryInterface):
             
         self.add('.gitignore')
         
-        self.commit()
+        self.commit('Initial commit')
             
         
     def init_remote(self):

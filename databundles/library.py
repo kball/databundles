@@ -1298,6 +1298,8 @@ class Library(object):
             for k,v in self.remote.list(with_metadata=with_meta).items():
                 if v and v['identity']['id'] != 'a0':
                     v['identity']['location'] = ['R',' ']
+                    v['identity']['remote_version'] = int(v['identity']['revision']) # b/c 'revision' can be overwriten by library entry
+                    v['identity']['library_version'] = 0
                     datasets[k] =  v['identity']
 
 
@@ -1306,9 +1308,12 @@ class Library(object):
             if r.identity.cache_key not in datasets:
                 v = r.identity.to_dict()
                 v['location'] = [' ','L']
+                v['library_version'] = v['revision']
+                v['remote_version'] = 0
                 datasets[r.identity.cache_key] = v
             else:
                 datasets[r.identity.cache_key]['location'][1] = 'L'
+                datasets[r.identity.cache_key]['library_version'] = int(datasets[r.identity.cache_key]['revision']) 
                 
 
         return sorted(datasets.values(), key=lambda x: x['vname'])
@@ -1494,14 +1499,18 @@ class Library(object):
         # Get a reference to the dataset, partition and relative path
         # from the local database. 
 
-        dataset, partition = self.get_ref(bp_id)
-
-        if partition:
-            return self._get_partition(dataset, partition, force, cb=cb)
-        elif dataset:
-            return self._get_dataset(dataset, force, cb=cb)
-        else:
-            return False
+        try:
+            dataset, partition = self.get_ref(bp_id)
+    
+            if partition:
+                return self._get_partition(dataset, partition, force, cb=cb)
+            elif dataset:
+                return self._get_dataset(dataset, force, cb=cb)
+            else:
+                return False
+        except Exception as e:
+            print 'ERROR: Failed to get bundle for id {} '.format(bp_id)
+            raise
 
     def _get_dataset(self, dataset, force = False, cb=None):
 

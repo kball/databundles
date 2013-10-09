@@ -373,10 +373,10 @@ class BundleFilesystem(Filesystem):
                     self.bundle.log("  --> "+file_path)
                     
                     resp = urllib2.urlopen(url)
-                    headers = resp.headers #@UnusedVariable
-                    
-                    if resp.code != 200:
-                        raise DownloadFailedError("Failed to download {}: code: "+format(url, resp.code))
+                    headers = resp.info() #@UnusedVariable
+    
+                    if resp.getcode() is not None  and resp.getcode() != 200:
+                        raise DownloadFailedError("Failed to download {}: code: {} ".format(url, resp.getcode()))
                     
                     try:
                         out_file = cache.put(resp, file_path)

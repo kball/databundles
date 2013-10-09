@@ -868,6 +868,7 @@ def _source_list(dir_):
             ident['in_source'] = True
             ident['source_dir'] = root
             ident['source_built'] = True if bundle.is_built else False
+            ident['source_version'] = ident['revision']
             lst[ident['name']] = ident
 
     return lst
@@ -876,8 +877,8 @@ def _library_list(l):
     
     lst = {}
     for r in l.list():
-        r['in_library'] = True
-        
+        r['in_library'] = 'L' in r['location']
+        r['in_remote'] = 'R' in r['location']
         lst[r['name']] = r
         
     return lst
@@ -900,10 +901,38 @@ def _print_bundle_list(*args):
         for lst in lists:
             f_lst[name].update(lst[name])
 
+    def rev_flag(v, flag):
+        
+        flag_map = {'L':'library', 'R':'remote'}
+        
+        suffix = flag_map[flag]
+        
+        loc = v.get('in_'+suffix, False)
+        
+        if not loc:
+            return '  '
+        
+        if not v.get('in_source', False):
+            return flag+' '
+        
+        s_rev = int(v.get('source_version'))
+    
+        rdiff = int(v.get(suffix+'_version')) - s_rev
+        
+        if rdiff > 0:
+            vf = '+'
+        elif rdiff < 0:
+            vf = '-'
+        else: 
+            vf = '='
+        
+        return flag+vf
+
     for k,v in sorted(f_lst.items(), key=lambda x: x[0]):
         flags = [ 'S' if v.get('in_source', False) else ' ',
                   'B' if v.get('source_built', False) else ' ',
-                  'L' if v.get('in_library', False) else ' ',
+                  rev_flag(v,'L'),
+                  rev_flag(v,'R')
                  ]
         
         prt("{} {:35s}",''.join(flags), k, v['source_dir'])
@@ -1085,7 +1114,6 @@ def source_run(args,rc, src):
     from os.path import basename
     from source.repository.git import GitRepository
 
-    print(args)
     dir = args.dir
 
     if not dir:
@@ -1098,7 +1126,7 @@ def source_run(args,rc, src):
             
             if args.repo_command == 'commit' and repo.needs_commit():
                 prt("--- {} {}",args.repo_command, root)
-                repo.commit(''.join(args.message))
+                repo.commit(' '.join(args.message))
                 
             elif args.repo_command == 'push' and repo.needs_push():
                 prt("--- {} {}",args.repo_command, root)

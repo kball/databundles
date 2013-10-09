@@ -7,6 +7,11 @@ Created on Sep 7, 2013
 Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
+from databundles.util import get_logger
+import logging
+
+logger = get_logger(__name__)
+#logger.setLevel(logging.DEBUG)
 
 class InserterInterface(object):
     
@@ -83,6 +88,8 @@ class ValueWriter(InserterInterface):
         self.bundle = bundle
         self.db = db
         self.session = self.db.session
+        self.session.commit()
+        self.session.flush()
 
         self.cache_size = cache_size
         self.statement = None
@@ -95,15 +102,17 @@ class ValueWriter(InserterInterface):
         return self
         
     def rollback(self):
+        logger.debug("rollback {}".format(repr(self.session)))
         self.session.rollback()
     
     def commit_end(self):
+        logger.debug("commit end {}".format(repr(self.session)))
         self.session.commit()
         
     def commit_continue(self):
+        logger.debug("commit continue {}".format(repr(self.session)))
         self.session.commit()
  
-        
     def close(self):
 
         if len(self.cache) > 0 :       
@@ -201,7 +210,7 @@ class ValueInserter(ValueWriter):
             raise
         except Exception as e:
             if self.bundle:
-                self.bundle.error("Exception during ValueInserter.insert: {}".format(e))
+                self.bundle.error("Exception during ValueInserter.insert: {} for session {}".format(e, repr(self.session)))
             else:
                 print "ERROR: Exception during ValueInserter.insert: {}".format(e)
             self.rollback()

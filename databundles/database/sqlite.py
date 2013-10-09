@@ -60,9 +60,6 @@ class SqliteDatabase(RelationalDatabase):
             if not os.path.exists(os.path.dirname(self.base_path)):
                 os.makedirs(os.path.dirname(self.base_path))
             
-    @property
-    def engine(self):
-        return self._get_engine(_on_connect)
     
     def _get_engine(self, connect_listener):
         '''return the SqlAlchemy engine for this database'''
@@ -346,16 +343,7 @@ class SqliteWarehouseDatabase(SqliteDatabase):
         super(SqliteWarehouseDatabase, self).__init__(dbname,  **kwargs)
 
 
-def _on_connect(dbapi_con, con_record):
-    '''ISSUE some Sqlite pragmas when the connection is created'''
 
-    dbapi_con.execute('PRAGMA page_size = 8192')
-    dbapi_con.execute('PRAGMA temp_store = MEMORY')
-    dbapi_con.execute('PRAGMA cache_size = 500000')
-    dbapi_con.execute('PRAGMA foreign_keys = ON')
-    dbapi_con.execute('PRAGMA journal_mode = OFF')
-    #dbapi_con.execute('PRAGMA synchronous = OFF')
-    #dbapi_con.enable_load_extension(True)
 
 def _on_connect_bundle(dbapi_con, con_record):
     '''ISSUE some Sqlite pragmas when the connection is created
