@@ -16,7 +16,7 @@ ogr_type_map = {
         Column.DATATYPE_NUMERIC: ogr.OFTReal,       
         Column.DATATYPE_REAL: ogr.OFTReal,       
         Column.DATATYPE_FLOAT: ogr.OFTReal,       
-        Column.DATATYPE_DATE:ogr.OFTDate, 
+        Column.DATATYPE_DATE: ogr.OFTDate, 
         Column.DATATYPE_TIME: ogr.OFTTime, 
         Column.DATATYPE_TIMESTAMP: ogr.OFTDateTime, 
         Column.DATATYPE_DATETIME: ogr.OFTDateTime, 
@@ -192,6 +192,7 @@ class TableShapefile(object):
         return geometry
             
     def add_feature(self, row, source_srs=None):
+        import datetime
         
         geometry = self.get_geometry(row)
         
@@ -216,16 +217,21 @@ class TableShapefile(object):
                 if i not in self.geo_col_pos or c.name in ['x','y','lat','lon']:
                     v = row.get(c.name, False)
                   
-                    if v is not False and  not isinstance(v, (int, float)):
+                    if v is not False and  isinstance(v, basestring):
                         try:
                             v = str(v.decode('latin1').encode('utf_8') if v else None)
                         except Exception :
-                            print '!!!', type(v), v.decode('latin1')
                             print row
                             raise
-                    
+   
                     if v is not False:
-                        feature.SetField(str(c.name), v)
+                        if isinstance(v, datetime.date):         
+                            feature.SetField(str(c.name), v.year, v.month, v.day, 0, 0, 0, 0)
+                        elif isinstance(v, datetime.datetime):
+                            feature.SetField(str(c.name), v.year, v.month, v.day, v.hour, v.minute, v.second, 0)
+                          
+                        else:
+                            feature.SetField(str(c.name), str(v))
                     elif c.default:
                         try: feature.SetField(str(c.name), c.python_type(c.default))
                         except:
@@ -243,7 +249,7 @@ class TableShapefile(object):
         feature.SetGeometryDirectly(geometry)
         self.layer.CreateFeature(feature)
         feature.Destroy()
-        
+   
 
     def _get_srs(self, srs_spec=None, default=4326):
         

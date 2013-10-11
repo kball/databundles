@@ -78,7 +78,10 @@ class RelationalDatabase(DatabaseInterface):
         return True
     
     def exists(self):
-        if not  os.path.exists( self.path):
+        
+        try:
+            self.connection
+        except:
             return False
         
         if self.is_empty():
@@ -128,7 +131,7 @@ class RelationalDatabase(DatabaseInterface):
                 if n == '_post_create':
                     f(self)
 
-    def _drop(self, s):
+    def _drop(self):
         
         if not self.enable_delete:
             raise Exception("Deleting not enabled")
@@ -138,7 +141,7 @@ class RelationalDatabase(DatabaseInterface):
 
     def drop(self):
 
-        self._drop(self.session)
+        self._drop()
 
     @property
     def connection(self):

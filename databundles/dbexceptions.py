@@ -6,9 +6,9 @@ Revised BSD License, included in this distribution as LICENSE.txt
 class BundleError(Exception):
     
     def __init__(self, value):
-        self.value = value
+        self.message = value
     def __str__(self):
-        return repr(self.value)
+        return repr(self.message)
 
 class ProcessError(BundleError):
     '''Error in the configuration files'''

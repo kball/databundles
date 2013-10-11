@@ -107,8 +107,8 @@ class SqlitePartition(PartitionBase):
         '''Convert this partition to CSV files that are linked to the partition'''
         
         if not self.record.count:
-            raise Exception("Must run stats before cvsize")
-        
+            self.write_stats()
+
         rows_per_seg = self.optimal_rows_per_segment()
   
         

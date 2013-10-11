@@ -174,6 +174,21 @@ class GeoPartition(SqlitePartition):
                 progress_f(i)
 
 
+    def convert_dates(self, table_name):
+        '''Remove the 'T' at the end of dates that OGR adds erroneously'''
+        from databundles.orm import Column
+    
+        table = self.bundle.schema.table(table_name)
+    
+        clauses = []
+        
+        for column in table.columns:
+            if column.datatype == Column.DATATYPE_DATE:
+                clauses.append("{col} = REPLACE({col},'T','')".format(col=column.name))
+        
+        if clauses:
+            print 'convert_dates HERE', self.database.dsn
+            self.database.connection.execute( "UPDATE {} SET {}".format(table.name, ','.join(clauses)))
 
     def load_shapefile(self, path,  **kwargs):
         """Load a shape file into a partition as a spatialite database. 

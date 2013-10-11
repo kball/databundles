@@ -13,6 +13,7 @@ class FeatureInserter(InserterInterface):
 
         self.partition = partition
         self.bundle = partition.bundle
+        self.table = table
         
         
         self.sf = TableShapefile(self.bundle, partition.database.path, table, dest_srs, source_srs, name=layer_name)
@@ -23,14 +24,13 @@ class FeatureInserter(InserterInterface):
     
     def __exit__(self, type_, value, traceback):
         
-        self.close()
-               
+        
         if type_ is not None:
             self.bundle.error("Got Exception: "+str(value))
             return False
-                
-        self.partition.database.post_create()
-                
+                    
+        self.close()
+                    
         return self
     
     def insert(self, row, source_srs=None):
@@ -44,7 +44,9 @@ class FeatureInserter(InserterInterface):
     def close(self):
         self.sf.close()
     
-
+        self.partition.database.post_create()
+    
+        self.partition.convert_dates(self.table)
     
     @property
     def extents(self, where=None):
@@ -90,8 +92,7 @@ def _on_connect_geo(dbapi_con, con_record):
     
     try:
         from ..util import RedirectStdStreams
-        with RedirectStdStreams():
-            # Spatialite prints its version header always, this supresses it. 
+        with RedirectStdStreams():  # Spatialite prints its version header always, this supresses it. 
             dbapi_con.enable_load_extension(True)
             dbapi_con.execute("select load_extension('/usr/lib/libspatialite.so')")
     except:

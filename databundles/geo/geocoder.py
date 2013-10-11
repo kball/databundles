@@ -148,9 +148,9 @@ class Geocoder(object):
         #ps.number = segment['number']
         
         ps.city = segment['city']
-        ps.street_name = segment['street']
-        ps.street_type = segment['street_type']
-        ps.street_direction = segment['street_dir']
+        ps.street_name = segment['name']
+        ps.street_type = segment['type']
+        ps.street_direction = segment['dir']
 
         r['x'] = x
         r['y'] = y
@@ -160,7 +160,7 @@ class Geocoder(object):
         else:
             r['codedaddress'] = None
 
-        r = { k:v.strip() if v.strip() != '-' else None for k,v in r.items() }
+        r = { k:v.strip() if isinstance(v, basestring) and v.strip() != '-' else v for k,v in r.items() }
 
         return r
         

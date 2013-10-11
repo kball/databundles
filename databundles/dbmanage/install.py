@@ -1,0 +1,32 @@
+"""
+Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
+Revised BSD License, included in this distribution as LICENSE.txt
+"""
+
+from ..dbmanage import prt
+
+def install_command(args, rc, src):
+    import yaml, pkgutil
+    import os
+    from databundles.run import RunConfig as rc
+
+    if args.subcommand == 'config':
+
+        if not args.force and  os.path.exists(rc.ROOT_CONFIG):
+            with open(rc.ROOT_CONFIG) as f:
+                contents = f.read()
+        else:
+            contents = pkgutil.get_data("databundles.support", 'databundles.yaml')
+            
+        d = yaml.load(contents)
+
+        if args.root:
+            d['filesystem']['root_dir'] = args.root
+        
+        s =  yaml.dump(d, indent=4, default_flow_style=False)
+        
+        if args.prt:
+            prt(s)
+        else:
+            with open(rc.ROOT_CONFIG,'w') as f:
+                f.write(s)

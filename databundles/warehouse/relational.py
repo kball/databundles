@@ -89,10 +89,7 @@ class RelationalWarehouse(WarehouseInterface):
             self._install_hdf_partition(bundle,  partition)
         else:
             self._install_partition(bundle, partition)
-                
-    
 
-        
     def _install_bundle(self, bundle):
         
         self.progress_cb('install_bundle',bundle.identity.vname,None)
@@ -106,7 +103,7 @@ class RelationalWarehouse(WarehouseInterface):
         
         from ..schema import Schema
 
-        meta, table = Schema.get_table_meta_from_db(self.library, table_name, d_vid = d_vid,  use_id=use_id)
+        meta, table = Schema.get_table_meta_from_db(self.library, table_name, d_vid = d_vid,  use_id=use_id, session=self.library.session)
 
         if not self.has_table(table.name):
             table.create(bind=self.database.engine)

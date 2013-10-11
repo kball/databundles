@@ -362,7 +362,18 @@ class Schema(object):
                     t_meta, table = self.bundle.schema.get_table_meta(t.name) #@UnusedVariable
                     table.create(bind=self.bundle.database.engine)
         
+        
     def schema_from_file(self, file_, progress_cb=None):
+        from dbexceptions import ConfigurationError
+        try:
+            self._schema_from_file(file_, progress_cb)
+            return True
+        except ConfigurationError as e:
+            self.bundle.error("Error in schema file {} ".format(file_))
+            self.bundle.error("   {}".format(e.message))
+            return False
+        
+    def _schema_from_file(self, file_, progress_cb=None):
         '''Read a CSV file, in a particular format, to generate the schema'''
         from orm import Column
         import csv, re
@@ -458,7 +469,7 @@ class Schema(object):
 
             
             progress_cb("Column: {}".format(row['column']))
-            
+
             self.add_column(t,row['column'],
                                    sequence_id = row.get('seq',None),
                                    is_primary_key= True if row.get('is_pk', False) else False,

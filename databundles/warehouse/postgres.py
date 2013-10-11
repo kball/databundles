@@ -31,14 +31,10 @@ WITH ( DELIMITER '|', NULL '' ) ;"""
      
         tables = partition.data.get('tables',[])
 
-        s = self.database.session
-        # Create the tables
-        
         for table_name in tables:
             table, meta = self.create_table(partition.identity.as_dataset.vid, table_name, use_id = True)
             break; # This code actually only allows one table. 
-        
-        self.database.session.commit()
+
             
         # Look for the segmented CSV files coresponding to the Sqlite partition
         ident = partition.identity    

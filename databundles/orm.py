@@ -578,14 +578,18 @@ class Table(Base):
         default = kwargs.get('default', None)
         datatype =  kwargs.get('datatype', None)
         
+        # Postgres doesn't allow size modifiers on Text fields.
+        if datatype == 'text' and size:
+            raise ConfigurationError("Error for {}.{}: Postgres doesn't allow a Text field to have a size".format(self.name, name))
+        
         # MySql requires that text columns that have a default also have a size. 
         if datatype in ('text','varchar') and bool(default):
             if not size and not width:
-                raise ConfigurationError("Error for {}.{}: Text or Varchar field with a default must have a size".format(self.name, name))
+                raise ConfigurationError(("Error for {}.{}: Text or Varchar field with a default must have a size."+
+                                         " Also, Text fields should be changed to Varchar, since Text can't have a size. ").format(self.name, name))
             elif isinstance(default, basestring) and len(default) > max(width, size):
                 raise ConfigurationError("Error for {}.{}: Default value is longer than the size or width".format(self.name, name))
 
-         
         for key, value in kwargs.items():
             
             if key[0] != '_' and key not in ['d_id','t_id','name']:

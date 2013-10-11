@@ -14,7 +14,127 @@ import logging
 logger = get_logger(__name__)
 #logger.setLevel(logging.DEBUG)
 logger.debug("Init database logger")
-                 
+  
+class SqliteAttachmentMixin(object):
+    
+    
+    def attach(self,id_, name=None):
+        """Attach another sqlite database to this one
+        
+        Args:
+            id_ Itentifies the other database. May be a:
+                Path to a database
+                Identitfier object, for a undle or partition
+                Datbase or PartitionDb object
+                
+            name. Name by which to attach the database. Uses a random
+            name if None
+        
+        The method iwll also store the name of the attached database, which 
+        will be used in copy_to() and copy_from() if a name is not provided
+          
+        Returns:
+            name by whih the database was attached
+                
+        """
+        from ..identity import Identity
+        from ..partition import PartitionInterface
+        from ..bundle import Bundle
+        from .partition import PartitionDb
+    
+        if isinstance(id_,basestring):
+            #  Strings are path names
+            path = id_
+        elif isinstance(id_, Identity):
+            path = id_.path
+        elif isinstance(id_,PartitionDb):
+            path = id_.path
+        elif isinstance(id_,PartitionInterface):
+            path = id_.database.path
+        elif isinstance(id_,Bundle):
+            path = id_.database.path
+        else:
+            raise Exception("Can't attach: Don't understand id_: {}".format(repr(id_)))
+        
+        if name is None:
+            import random, string
+            name =  ''.join(random.choice(string.letters) for i in xrange(10)) #@UnusedVariable
+        
+        q = """ATTACH DATABASE '{}' AS '{}' """.format(path, name)
+        
+        self.connection.execute(q)
+           
+        self._last_attach_name = name
+        
+        self._attachments.add(name)
+        
+        return name
+        
+    def detach(self, name=None):
+        """Detach databases
+        
+        Args:
+            name. Name of database to detach. If None, detatch all
+            
+        
+        """
+    
+        if name is None:
+            name = self._last_attach_name
+    
+        self.connection.execute("""DETACH DATABASE {} """.format(name))
+    
+        self._attachments.remove(name)
+    
+    
+    def copy_from_attached(self, table, columns=None, name=None, 
+                           on_conflict= 'ABORT', where=None):
+        """ Copy from this database to an attached database
+        
+        Args:
+            map_. a dict of k:v pairs for the values in this database to
+            copy to the remote database. If None, copy all values
+        
+            name. The attach name of the other datbase, from self.attach()
+        
+            on_conflict. How conflicts should be handled
+            
+            where. An additional where clause for the copy. 
+            
+        """
+        
+        if name is None:
+            name = self._last_attach_name
+        
+        f = {'db':name, 'on_conflict': on_conflict, 'from_columns':'*', 'to_columns':''}
+        
+        if isinstance(table,basestring):
+            # Copy all fields between tables with the same name
+            f['from_table']  = table
+            f['to_table'] = table
+    
+        elif isinstance(table, tuple):
+            # Copy all ields between two tables with different names
+            f['from_table'] = table[0]
+            f['to_table'] = table[1]
+        else:
+            raise Exception("Unknown table type "+str(type(table)))
+
+        if columns is None:
+            pass
+        elif isinstance(columns, dict):
+            f['from_columns'] = ','.join([ k for k,v in columns.items() ])
+            f['to_columns'] =  '('+','.join([ v for k,v in columns.items() ])+')'
+            
+        q = """INSERT OR {on_conflict} INTO {to_table} {to_columns} 
+               SELECT {from_columns} FROM {db}.{from_table}""".format(**f)
+    
+        if where is not None:
+            q = q + " " + where.format(**f)
+    
+        self.connection.execute(q)
+           
+                   
 class SqliteDatabase(RelationalDatabase):
 
     EXTENSION = '.db'
@@ -24,12 +144,15 @@ class SqliteDatabase(RelationalDatabase):
         ''' '''
     
         # For database bundles, where we have to pass in the whole file path
-        base_path, ext = os.path.splitext(dbname)
-        
-        if ext and ext != self.EXTENSION:
-            raise Exception("Bad extension to file: {}: {}".format(base_path, ext))
-        
-        self.base_path = base_path
+        if memory:
+            base_path = ':memory:'
+        else:
+            base_path, ext = os.path.splitext(dbname)
+            
+            if ext and ext != self.EXTENSION:
+                raise Exception("Bad extension to file: {}: {}".format(base_path, ext))
+            
+            self.base_path = base_path
 
         self._last_attach_name = None
         self._attachments = set()
@@ -343,6 +466,30 @@ class SqliteWarehouseDatabase(SqliteDatabase):
         super(SqliteWarehouseDatabase, self).__init__(dbname,  **kwargs)
 
 
+class SqliteMemoryDatabase(SqliteDatabase, SqliteAttachmentMixin):
+
+    def __init__(self):   
+        '''
+        '''
+
+        super(SqliteMemoryDatabase,self).__init__( None, memory = True)  
+
+    def query(self,*args, **kwargs):
+        """Convience function for self.connection.execute()"""
+        from sqlalchemy.exc import OperationalError
+        from ..dbexceptions import QueryError
+
+        if isinstance(args[0], basestring):
+            fd = { x:x for x in self._attachments }
+            args = list(args)
+            first = args.pop(0)
+            args = [first.format(**fd),] + args
+            
+        try:
+            return self.connection.execute(*args, **kwargs)
+        except OperationalError as e:
+            raise QueryError("Error while executing {} in database {} ({}): {}".format(args, self.dsn, type(self), e.message))
+        
 
 
 def _on_connect_bundle(dbapi_con, con_record):

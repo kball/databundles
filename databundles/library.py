@@ -551,7 +551,6 @@ class LibraryDb(object):
             s.merge(partition)
             
         try:
-
             s.commit()
         except IntegrityError as e:
             self.logger.error("Failed to merge")
@@ -1925,7 +1924,7 @@ class Library(object):
                         f = os.path.splitext(file_)[0]
     
                         if b.db_config.get_value('info','type') == 'bundle':
-                            self.logger.info("Queing: {} from {}".format(b.identity.name, file_))
+                            self.logger.info("Queing: {} from {}".format(b.identity.vname, file_))
                             bundles.append(b)
                             
                     except Exception as e:
@@ -1934,14 +1933,19 @@ class Library(object):
 
         
         for bundle in bundles:
-            self.logger.info('Installing: {} '.format(bundle.identity.name))
-            self.database.install_bundle(bundle)
+            self.logger.info('Installing: {} '.format(bundle.identity.vname))
+             
+            try:
+                self.database.install_bundle(bundle)
+            except Exception as e:
+                self.logger.error('Failed to install bundle {}'.format(bundle.identity.vname))
+                continue
+
             self.database.add_file(bundle.database.path, self.cache.repo_id, bundle.identity.vid,  'rebuilt', type_='bundle')
 
             for p in bundle.partitions:
-                
                 if self.cache.has(p.identity.cache_key, use_upstream=False):
-                    self.logger.info('            {} '.format(p.identity.name))
+                    self.logger.info('            {} '.format(p.identity.vname))
                     self.database.add_file(p.database.path, self.cache.repo_id, p.identity.vid,  'rebuilt', type_='partition')
     
 

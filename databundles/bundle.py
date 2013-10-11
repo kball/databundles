@@ -515,7 +515,8 @@ class BuildBundle(Bundle):
                 if os.path.exists(sf):
                     with open(sf, 'rbU') as f:
                         self.schema.clean()
-                        self.schema.schema_from_file(f)      
+                        if not self.schema.schema_from_file(f):
+                            self.fatal("Schema load filed. Exiting")    
 
         return True
     

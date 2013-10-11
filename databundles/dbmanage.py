@@ -129,6 +129,7 @@ def warehouse_info(args, w,config):
 def warehouse_drop(args, w,config):
     
     w.database.enable_delete = True
+    w.library.clean()
     w.drop()
    
 from warehouse import ResolverInterface
@@ -846,17 +847,18 @@ def source_sync(args,rc, src):
 
     l = library.new_library(rc.library(args.library))
 
-
+   
     for repo in rc.sourcerepo.list:
+        
+        prt('--- Sync with upstream source repository {}', repo.service.ident)
         for e in repo.service.list():
 
             ident = new_identity(e)
 
-            l.database.add_file(e['clone_url'], repo.service.ident, ident.name, state='synced', type_='source', data=e)
+            l.database.add_file(e['clone_url'], repo.service.ident, ident.id_, state='synced', type_='source', data=e)
             
-            prt("Added {:50s} {}",ident.name,e['clone_url'] )
+            prt("Added {:15s} {}",ident.id_,e['clone_url'] )
 
-  
 def _source_list(dir_):
     lst = {}
     for root, dirs, files in os.walk(dir_):
@@ -1306,7 +1308,8 @@ def main():
     sp.add_argument('-n','--new',  default=False,action="store_const", const='new',  dest='file_state', help='Print new files')
     sp.add_argument('-p','--pushed',  default=False,action="store_const", const='pushed', dest='file_state',  help='Print pushed files')
     sp.add_argument('-u','--pulled',  default=False,action="store_const", const='pulled', dest='file_state',  help='Print pulled files')
- 
+    sp.add_argument('-s','--synced',  default=False,action="store_const", const='synced', dest='file_state',  help='Print synced source packages')
+  
     sp = asp.add_parser('new', help='Create a new library')
     sp.set_defaults(subcommand='new')
     
@@ -1625,9 +1628,6 @@ def main():
             prt('\nExiting...')
             pass
         
-
-       
-
 
 
 if __name__ == '__main__':
