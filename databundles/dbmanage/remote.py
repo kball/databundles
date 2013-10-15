@@ -3,25 +3,24 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from ..dbmanage import prt, err, _print_info, _find
-
+from . import prt, err, _print_info, _find #@UnresolvedImport
 
 def remote_command(args, rc, src):
-    import library
+    from databundles.library import new_library
 
     if args.is_server:
         config  = src
     else:
         config = rc
     
-    l = library.new_library(config.library(args.name))
+    l = new_library(config.library(args.name))
 
     globals()['remote_'+args.subcommand](args, l,config)
 
 
 
 def remote_info(args, l, rc):
-    from identity import new_identity
+    from ..identity import new_identity
     
     if args.term:
 

@@ -143,6 +143,12 @@ class RelationalDatabase(DatabaseInterface):
 
         self._drop()
 
+    def drop_table(self, table_name):
+        table = self.table(table_name)
+        
+        table.drop(self.engine)
+        
+
     @property
     def connection(self):
         '''Return an SqlAlchemy connection'''

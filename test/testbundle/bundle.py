@@ -23,7 +23,7 @@ class Bundle(BuildBundle):
         from functools import partial
         import random
         return   [
-                  ('tone_id', lambda: None),
+                  ('id', lambda: None),
                   ('text',partial(random.choice, ['chocolate', 'strawberry', 'vanilla'])),
                   ('integer', partial(random.randint, 0, 500)),
                   ('float', random.random),
@@ -34,7 +34,7 @@ class Bundle(BuildBundle):
         from functools import partial
         import random
         return   [
-                  ('tone_id', lambda: None),
+                  ('id', lambda: None),
                   ('text',partial(random.choice, ['chocolate', 'strawberry', 'vanilla'])),
                   ('integer', partial(random.randint, 0, 500)),
                   ('float', random.random),
@@ -42,8 +42,29 @@ class Bundle(BuildBundle):
                   ('extra2', lambda: None),
                   ]
   
+    @property
+    def fields3(self):
+        from functools import partial
+        import random
+        import datetime
+        return   [
+                  ('id', lambda: None),
+                  ('text',partial(random.choice, ['chocolate', 'strawberry', 'vanilla'])),
+                  ('integer', partial(random.randint, 0, 500)),
+                  ('float', random.random),
+                  ('date', lambda: "20{:02d}-{:02d}-{:02d}".format(random.randint(0, 10), random.randint(1,12), random.randint(1,25))),
+                  ('datetime', lambda: "20{:02d}-{:02d}-{:02d}T{:02d}:{:02d}".format(random.randint(0, 10), random.randint(1,12), 
+                                                                                     random.randint(1,25), random.randint(0, 23), random.randint(0, 59))),
+                  ('time', lambda: "{:02d}:{:02d}".format(random.randint(0, 23), random.randint(0, 59)))
+                  ]
+  
     def build(self):
 
+        self.log("Build db, using an inserter")
+        self.build_db_inserter()
+
+        return
+    
         self.log("Build geo")
         self.build_geo()
         
@@ -57,9 +78,8 @@ class Bundle(BuildBundle):
         self.log("Build csv")
         self.build_csv()
 
-        self.log("Build db")
+        self.log("Build db, using petl")
         self.build_db()
-
 
         self.log("Build hdf")
         self.build_hdf()
@@ -85,9 +105,38 @@ class Bundle(BuildBundle):
                              'text':"str"+str(i),
                              'integer':i,
                              'float':i})
+      
+      
+    def build_db_inserter(self):  
+        
+        p = self.partitions.find_or_new_db(table='tthree')
+        table = p.table
+        
+        field_gen =  self.fields3
+      
+        lr = self.init_log_rate(5000)
+        with p.inserter() as ins:
+            for i in range(10000):
+                row = { f[0]:f[1]() for f in field_gen }
+                ins.insert(row)
+                lr()
+        
+            # SHould be case insensitive
+            for i in range(10000):
+                row = { f[0].title():f[1]() for f in field_gen }
+                ins.insert(row)
+                lr()
+        
+            # The caster should be idempotent
+            caster = table.caster
+            for i in range(10000):
+                row = { f[0]:f[1]() for f in field_gen }
+                ins.insert(caster(row))
+                lr()
+        
         
 
-    def build_db(self):
+    def build_db_petl(self):
 
         # Now write random data to each of the pable partitions. 
         
@@ -95,14 +144,13 @@ class Bundle(BuildBundle):
             p = self.partitions.find_or_new_db(table=table_name)
             petl.dummytable(30000,self.fields2).tosqlite3(p.database.path, table_name, create=False) #@UndefinedVariable
 
-        
         for table_name in  ('ttwo',):
             p = self.partitions.find_or_new_db(table=table_name)
             petl.dummytable(30000,self.fields).tosqlite3(p.database.path, table_name, create=False) #@UndefinedVariable
 
         for seg in range(1,5):
             p = self.partitions.find_or_new_db(table='tthree', segment=seg)
-            petl.dummytable(30000,self.fields).tosqlite3(p.database.path, 'tthree', create=False) #@UndefinedVariable
+            petl.dummytable(30000,self.fields3).tosqlite3(p.database.path, 'tthree', create=False) #@UndefinedVariable
             p.write_stats()
 
     def build_geo(self):

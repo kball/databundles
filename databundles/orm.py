@@ -4,6 +4,7 @@ dataset, partitions, configuration, tables and columns.
 Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
+import datetime
 import sqlalchemy
 from sqlalchemy import orm
 from sqlalchemy import event
@@ -332,6 +333,7 @@ class Column(Base):
     DATATYPE_VARCHAR = 'varchar'
     DATATYPE_BLOB = 'blob'
 
+
     types  = {
         DATATYPE_TEXT:(sqlalchemy.types.Text,str,'TEXT'),
         DATATYPE_VARCHAR:(sqlalchemy.types.String,str,'VARCHAR'),
@@ -341,16 +343,25 @@ class Column(Base):
         DATATYPE_REAL:(sqlalchemy.types.Float,float,'REAL'),
         DATATYPE_FLOAT:(sqlalchemy.types.Float,float,'REAL'),
         DATATYPE_NUMERIC:(sqlalchemy.types.Float,float,'REAL'),
-        DATATYPE_DATE:(sqlalchemy.types.Date,str,'DATE'),
-        DATATYPE_TIME:(sqlalchemy.types.Time,str,'TIME'),
-        DATATYPE_TIMESTAMP:(sqlalchemy.types.DateTime,str,'TIMESTAMP'),
-        DATATYPE_DATETIME:(sqlalchemy.types.DateTime,str,'DATETIME'),
+        DATATYPE_DATE:(sqlalchemy.types.Date,datetime.date,'DATE'),
+        DATATYPE_TIME:(sqlalchemy.types.Time,datetime.time,'TIME'),
+        DATATYPE_TIMESTAMP:(sqlalchemy.types.DateTime,datetime.datetime,'TIMESTAMP'),
+        DATATYPE_DATETIME:(sqlalchemy.types.DateTime,datetime.datetime,'DATETIME'),
         DATATYPE_POINT:(sqlalchemy.types.LargeBinary,buffer,'POINT'),
         DATATYPE_LINESTRING:(sqlalchemy.types.LargeBinary,buffer,'LINESTRING'),
         DATATYPE_POLYGON:(sqlalchemy.types.LargeBinary,buffer,'POLYGON'),
         DATATYPE_MULTIPOLYGON:(sqlalchemy.types.LargeBinary,buffer,'MULTIPOLYGON'),
         DATATYPE_BLOB:(sqlalchemy.types.LargeBinary,buffer,'BLOB')
         }
+
+   
+    def type_is_text(self):
+        return self.datatype in (Column.DATATYPE_TEXT, Column.DATATYPE_CHAR, Column.DATATYPE_VARCHAR)
+
+    def type_is_time(self):
+        return self.datatype in (Column.DATATYPE_TIME, Column.DATATYPE_TIMESTAMP, Column.DATATYPE_DATETIME, Column.DATATYPE_DATE)
+
+
 
     @property
     def sqlalchemy_type(self):
@@ -360,6 +371,20 @@ class Column(Base):
     def python_type(self):
         return self.types[self.datatype][1]
  
+    def python_cast(self,v):
+       if self.type_is_time():
+           import dateutil.parser
+           dt = dateutil.parser.parse(v)
+           
+           if self.datatype == Column.DATATYPE_TIME:
+               dt = dt.time()
+           
+           if not isinstance(dt, self.python_type):
+               raise TypeError('{} was parsed to {}, expected {}'.format(v, type(dt), self.python_type))
+               
+       else:
+           return self.python_type(v)
+
     @property
     def schema_type(self):
         return self.types[self.datatype][2]
@@ -509,7 +534,8 @@ class Table(Base):
         self.init_on_load()
     
     def to_dict(self):
-        return {k:v for k,v in self.__dict__.items() if k in ['id','vid', 'sequence_id', 'name', 'vname', 'description', 'keywords', 'data']}
+        return {k:v for k,v in self.__dict__.items() if k in ['id','vid', 'sequence_id', 'name', 
+                                                              'vname', 'description', 'keywords', 'data']}
     
     @orm.reconstructor
     def init_on_load(self):
@@ -578,18 +604,6 @@ class Table(Base):
         default = kwargs.get('default', None)
         datatype =  kwargs.get('datatype', None)
         
-        # Postgres doesn't allow size modifiers on Text fields.
-        if datatype == 'text' and size:
-            raise ConfigurationError("Error for {}.{}: Postgres doesn't allow a Text field to have a size".format(self.name, name))
-        
-        # MySql requires that text columns that have a default also have a size. 
-        if datatype in ('text','varchar') and bool(default):
-            if not size and not width:
-                raise ConfigurationError(("Error for {}.{}: Text or Varchar field with a default must have a size."+
-                                         " Also, Text fields should be changed to Varchar, since Text can't have a size. ").format(self.name, name))
-            elif isinstance(default, basestring) and len(default) > max(width, size):
-                raise ConfigurationError("Error for {}.{}: Default value is longer than the size or width".format(self.name, name))
-
         for key, value in kwargs.items():
             
             if key[0] != '_' and key not in ['d_id','t_id','name']:
@@ -786,12 +800,13 @@ class Table(Base):
             
         return self._row_hasher(values)
          
+    @property
     def caster(self):
         '''Returns a function that takes a row that can be indexed by positions which returns a new
         row with all of the values cast to schema types. '''
-        from databundles.transform import RowTypeTransformBuilder
+        from databundles.transform import CasterTransformBuilder
         
-        bdr = RowTypeTransformBuilder()
+        bdr = CasterTransformBuilder()
         
         for c in self.columns:
             bdr.append(c.name, c.python_type)

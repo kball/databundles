@@ -177,6 +177,82 @@ class Schema(object):
     def get_table_meta(self, name_or_id, use_id=False, driver=None):
         return self.get_table_meta_from_db(self.bundle.database, name_or_id, use_id, driver, session = self.bundle.database.session)
         
+    @classmethod        
+    def validate_column(cls, table, column, warnings, errors):  
+  
+        # Postgres doesn't allow size modifiers on Text fields.
+        if column.datatype == Column.DATATYPE_TEXT and column.size:
+            warnings.append((table,column,"Postgres doesn't allow a TEXT field to have a size. Use a VARCHAR instead."))
+        
+        # MySql requires that text columns that have a default also have a size. 
+        if column.type_is_text() and  bool(column.default):
+            if not column.size and not column.width:
+                warnings.append((table,column, "MySql requires a Text or Varchar field with a default to have a size."))
+                
+            if isinstance(column.default, basestring) and column.width and len(column.default) > column.width :
+                warnings.append((table,column,"Default value is longer than the width"))
+                
+            if isinstance(column.default, basestring) and column.size and len(column.default) > column.size:
+                warnings.append((table,column,"Default value is longer than the size"))
+        
+        if column.default:
+            try:
+                column.python_cast(column.default)
+            except TypeError as e:
+                errors.append((table,column,"Bad default value '{}' for type '{}' (T); {}".format(column.default, column.datatype, e)))
+            except ValueError:
+                errors.append((table,column,"Bad default value '{}' for type '{}' (V)".format(column.default, column.datatype)))
+
+        
+    @classmethod        
+    def translate_type(cls,driver, table, column):
+        '''Translate types for particular driver, and perform some cvalidity checks'''
+        # Creates a lot of unnecessary objects, but speed is not important here.  
+        
+        if driver == 'mysql':
+            
+            if (column.datatype in (Column.DATATYPE_TEXT, column.datatype == Column.DATATYPE_VARCHAR) and
+                bool(column.default) and not bool(column.size) and not bool(column.width) ):
+                raise ConfigurationError("Bad column {}.{}: For MySql, text columns with default must also have size or width"
+                                         .format(table.name, column.name))
+
+            if (column.datatype in (Column.DATATYPE_TEXT, column.datatype == Column.DATATYPE_VARCHAR) and bool(column.default) 
+                and not bool(column.size) and bool(column.width)):
+                    column.size = column.width
+           
+                
+            # Mysql, when running on Windows, does not allow default
+            # values for TEXT columns
+            if (column.datatype == Column.DATATYPE_TEXT  and bool(column.default)):
+                column.datatype = Column.DATATYPE_VARCHAR
+              
+            # VARCHAR requires a size
+            if (column.datatype == Column.DATATYPE_VARCHAR and not bool(column.size)):
+                column.datatype = Column.DATATYPE_TEXT                 
+                
+        # Postgres doesn't allows size specifiers in TEXT columns. 
+        if driver == 'postgres':
+            if (column.datatype == Column.DATATYPE_TEXT  and bool(column.size)):
+                column.datatype = Column.DATATYPE_VARCHAR            
+              
+        if driver == 'sqlite' or driver is None:
+            if column.is_primary_key and column.datatype == Column.DATATYPE_INTEGER64:
+                column.datatype = Column.DATATYPE_INTEGER # Required to trigger autoincrement
+              
+              
+        #print driver, column.name, column.size, column.default
+                
+        type_ =  Column.types[column.datatype][0]
+    
+    
+        if column.datatype == Column.DATATYPE_NUMERIC:
+            return type_(column.precision, column._scale)
+        elif column.size:
+            return type_(column.size)
+        else:
+            return type_
+
+        
     @classmethod
     def get_table_meta_from_db(self,db,  name_or_id,  use_id=False, driver=None, d_vid = None, session=None ):
         '''
@@ -193,51 +269,6 @@ class Schema(object):
         metadata = MetaData()
         
         table = self.get_table_from_database(db, name_or_id, d_vid = d_vid, session=session)
-
-        def translate_type(column):
-            # Creates a lot of unnecessary objects, but speed is not important here.  
-            
-            if driver == 'mysql':
-                
-                if (column.datatype in (Column.DATATYPE_TEXT, column.datatype == Column.DATATYPE_VARCHAR) and
-                    bool(column.default) and not bool(column.size) and not bool(column.width) ):
-                    raise ConfigurationError("Bad column {}.{}: For MySql, text columns with default must also have size or width"
-                                             .format(table.name, column.name))
-
-                if (column.datatype in (Column.DATATYPE_TEXT, column.datatype == Column.DATATYPE_VARCHAR) and bool(column.default) 
-                    and not bool(column.size) and bool(column.width)):
-                        column.size = column.width
-               
-                    
-                # Mysql, when running on Windows, does not allow default
-                # values for TEXT columns
-                if (column.datatype == Column.DATATYPE_TEXT  and bool(column.default)):
-                    column.datatype = Column.DATATYPE_VARCHAR
-                  
-                # VARCHAR requires a size
-                if (column.datatype == Column.DATATYPE_VARCHAR and not bool(column.size)):
-                    column.datatype = Column.DATATYPE_TEXT                 
-                    
-            # Postgres doesn't allows size specifiers in TEXT columns. 
-            if driver == 'postgres':
-                if (column.datatype == Column.DATATYPE_TEXT  and bool(column.size)):
-                    column.datatype = Column.DATATYPE_VARCHAR            
-                  
-            if driver == 'sqlite' or driver is None:
-                if column.is_primary_key and column.datatype == Column.DATATYPE_INTEGER64:
-                    column.datatype = Column.DATATYPE_INTEGER # Required to trigger autoincrement
-                  
-            #print driver, column.name, column.size, column.default
-                    
-            type_ =  Column.types[column.datatype][0]
-        
-        
-            if column.datatype == Column.DATATYPE_NUMERIC:
-                return type_(column.precision, column._scale)
-            elif column.size:
-                return type_(column.size)
-            else:
-                return type_
 
         
         at = SATable(table.dataset.id_+'_'+table.name if  use_id else table.name, metadata)
@@ -271,7 +302,7 @@ class Schema(object):
           
           
             ac = SAColumn(column.name, 
-                          translate_type(column), 
+                          self.translate_type(driver, table, column), 
                           primary_key = ( column.is_primary_key == 1),
                           **kwargs
                           )
@@ -364,14 +395,8 @@ class Schema(object):
         
         
     def schema_from_file(self, file_, progress_cb=None):
-        from dbexceptions import ConfigurationError
-        try:
-            self._schema_from_file(file_, progress_cb)
-            return True
-        except ConfigurationError as e:
-            self.bundle.error("Error in schema file {} ".format(file_))
-            self.bundle.error("   {}".format(e.message))
-            return False
+        return self._schema_from_file(file_, progress_cb)
+
         
     def _schema_from_file(self, file_, progress_cb=None):
         '''Read a CSV file, in a particular format, to generate the schema'''
@@ -398,6 +423,9 @@ class Schema(object):
         line_no = 1; # Accounts for file header. Data starts on line 2
         s = self.bundle.database.session
     
+        errors = []
+        warnings = []
+    
         for row in reader:
             line_no += 1
             
@@ -418,18 +446,15 @@ class Schema(object):
                 except: table = None 
                 
                 if table:
-                    self.bundle.log("schema_from_file found existing table, exiting. "+row['table'])
-                    return
+                    errors.append((table,None,"Table already exists"))
+                    return warnings, errors 
    
                 try:
                     t = self.add_table(row['table'], **row)
                 except Exception as e:
-                    self.bundle.error("schema_from_file Failed to add table: "+row['table'])
-                    self.bundle.error(str(row))
-                    self.bundle.error(str(e))
-                    
-                    raise
-                    return 
+                    errors.append((None,None," Failed to add table: {}. Row={}. Exceptoin={}".format(row['table'], row, e)))
+                    return warnings, errors
+                
                 new_table = False
               
             # Ensure that the default doesnt get quotes if it is a number. 
@@ -470,7 +495,7 @@ class Schema(object):
             
             progress_cb("Column: {}".format(row['column']))
 
-            self.add_column(t,row['column'],
+            col = self.add_column(t,row['column'],
                                    sequence_id = row.get('seq',None),
                                    is_primary_key= True if row.get('is_pk', False) else False,
                                    foreign_key= row['is_fk'] if row.get('is_fk', False) else None,
@@ -493,6 +518,14 @@ class Schema(object):
                                    units=row.get('units',None),
                                    universe=row.get('universe',None)
                                    )
+            
+            
+            self.validate_column(t, col, warnings, errors)
+            
+            
+        return warnings, errors
+
+            
 
     def _dump_gen(self):
         """Return the current schema as a CSV file

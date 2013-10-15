@@ -73,14 +73,11 @@ class DumperThread (threading.Thread):
 def _new_library(config):
 
     import copy
-    
-    config = copy.deepcopy(config)
-    
-   
-
     from cache import new_cache
     from cache import RemoteMarker
-
+        
+    config = copy.deepcopy(config)
+    
     #import pprint; pprint.pprint(config.to_dict())
 
     cache = new_cache(config['filesystem'])
@@ -251,6 +248,27 @@ class LibraryDb(object):
         from sqlalchemy.engine.reflection import Inspector
 
         return Inspector.from_engine(self.engine)
+
+    def list(self, datasets=None):
+        from orm import Dataset
+        
+        if datasets is None:
+            datasets = {}
+        
+        for r in self.session.query(Dataset).filter(Dataset.id_ != 'a0').all():
+            
+            if r.identity.cache_key not in datasets:
+                v = r.identity.to_dict()
+                v['location'] = [' ','L']
+                v['library_version'] = v['revision']
+                v['remote_version'] = 0
+                datasets[r.identity.cache_key] = v
+            else:
+                datasets[r.identity.cache_key]['location'][1] = 'L'
+                datasets[r.identity.cache_key]['library_version'] = int(datasets[r.identity.cache_key]['revision']) 
+        
+        return sorted(datasets.values(), key=lambda x: x['vname'])
+
 
     def inserter(self,table_name, **kwargs):
         from database.inserter import ValueInserter
@@ -560,15 +578,26 @@ class LibraryDb(object):
         
     def remove_bundle(self, bundle):
         '''remove a bundle from the database'''
-        
+        from identity import Identity
         from databundles.orm import Dataset
+        from bundle import LibraryDbBundle
         
         s = self.session
 
-        dataset, partition = self.get_id(bundle.identity.vid) #@UnusedVariable
-
+        try:
+            dataset, partition = self.get_id(bundle.identity.vid) #@UnusedVariable
+        except AttributeError:
+            dataset, partition = bundle, None
+            
         if not dataset:
             return False
+
+        if partition:
+            self.remove_partition(partition)
+        else:
+            b = LibraryDbBundle(self, dataset.vid)
+            for p in b.partitions:
+                self.remove_partition(p)
 
         dataset = s.query(Dataset).filter(Dataset.vid==dataset.vid).one()
 
@@ -578,6 +607,23 @@ class LibraryDb(object):
   
         s.commit()
         
+      
+    def remove_partition(self, partition):
+        from bundle import LibraryDbBundle
+        try:
+            dataset, partition = self.get_id(partition.identity.vid) #@UnusedVariable
+        except AttributeError:
+            # It is actually an identity, we hope
+            dataset = partition.as_dataset
+            
+        b = LibraryDbBundle(self, dataset.vid)
+      
+        s = self.session
+        for p in b.partitions:
+            if p.identity.vid == partition.vid:
+                s.delete(p.record)
+        s.commit()
+                
       
     def get_id(self, id_):
         
@@ -1289,7 +1335,7 @@ class Library(object):
     
     
     def list(self, with_meta = True):
-        from orm import Dataset
+        
         
         datasets = {}
 
@@ -1302,19 +1348,8 @@ class Library(object):
                     datasets[k] =  v['identity']
 
 
-        for r in self.database.session.query(Dataset).filter(Dataset.id_ != 'a0').all():
+        self.database.list(datasets=datasets)
             
-            if r.identity.cache_key not in datasets:
-                v = r.identity.to_dict()
-                v['location'] = [' ','L']
-                v['library_version'] = v['revision']
-                v['remote_version'] = 0
-                datasets[r.identity.cache_key] = v
-            else:
-                datasets[r.identity.cache_key]['location'][1] = 'L'
-                datasets[r.identity.cache_key]['library_version'] = int(datasets[r.identity.cache_key]['revision']) 
-                
-
         return sorted(datasets.values(), key=lambda x: x['vname'])
     
     

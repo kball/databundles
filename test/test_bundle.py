@@ -133,7 +133,8 @@ class Test(TestBase):
         self.assertEquals('source-dataset-subset-variation-ca0d', b.identity.name)
         self.assertEquals('source-dataset-subset-variation-ca0d-r1', b.identity.vname)
         
-        b.database.create()
+        with b.session:
+            b.database.create()
         
         db_path =  b.database.path
         
@@ -169,54 +170,52 @@ class Test(TestBase):
         # If we don't explicitly set the id_, it will change for every run. 
         self.bundle.config.identity.id_ = 'aTest'
 
-    
-        s = self.bundle.schema
-        s.add_table('table 1', altname='alt name a')
-        s.add_table('table 2', altname='alt name b')
+        with self.bundle.session:
+            s = self.bundle.schema
+            s.add_table('table 1', altname='alt name a')
+            s.add_table('table 2', altname='alt name b')
+            
+            self.assertRaises(Exception,  s.add_table, ('table 1', ))
+          
+            self.assertIn('c1DxuZ01', [t.id_ for t in self.bundle.schema.tables])
+            self.assertIn('c1DxuZ02', [t.id_ for t in self.bundle.schema.tables])
+            self.assertNotIn('cTest03', [t.id_ for t in self.bundle.schema.tables])
+            
+            t = s.add_table('table 3', altname='alt name')
         
-        self.assertRaises(Exception,  s.add_table, ('table 1', ))
-      
-        self.assertIn('c1DxuZ01', [t.id_ for t in self.bundle.schema.tables])
-        self.assertIn('c1DxuZ02', [t.id_ for t in self.bundle.schema.tables])
-        self.assertNotIn('cTest03', [t.id_ for t in self.bundle.schema.tables])
+            s.add_column(t,'col 1',altname='altname1')
+            s.add_column(t,'col 2',altname='altname2')
+            s.add_column(t,'col 3',altname='altname3')
+
         
-        t = s.add_table('table 3', altname='alt name')
-        
-        s.add_column(t,'col 1',altname='altname1')
-        s.add_column(t,'col 2',altname='altname2')
-        s.add_column(t,'col 3',altname='altname3')
-      
-        self.bundle.database.session.commit()
-        
-        self.assertIn('d1DxuZ0b001', [c.id_ for c in t.columns])
-        self.assertIn('d1DxuZ0b002', [c.id_ for c in t.columns])
-        self.assertIn('d1DxuZ0b003', [c.id_ for c in t.columns])
+            self.assertIn('d1DxuZ0b001', [c.id_ for c in t.columns])
+            self.assertIn('d1DxuZ0b002', [c.id_ for c in t.columns])
+            self.assertIn('d1DxuZ0b003', [c.id_ for c in t.columns])
         
     def test_generate_schema(self):
         '''Uses the generateSchema method in the bundle'''
         from databundles.orm import  Column
         
-        s = self.bundle.schema
-        
-        s.clean()
-        
-        t1 = s.add_table('table1')
-                
-        s.add_column(t1,name='col1', datatype=Column.DATATYPE_REAL )
-        s.add_column(t1,name='col2', datatype=Column.DATATYPE_INTEGER )
-        s.add_column(t1,name='col3', datatype=Column.DATATYPE_TEXT )  
-        
-        t2 = s.add_table('table2')   
-        s.add_column(t2,name='col1' )
-        s.add_column(t2,name='col2' )
-        s.add_column(t2,name='col3' )   
+        with self.bundle.session:
+            s = self.bundle.schema
+            s.clean()
+            
+            t1 = s.add_table('table1')
+                    
+            s.add_column(t1,name='col1', datatype=Column.DATATYPE_REAL )
+            s.add_column(t1,name='col2', datatype=Column.DATATYPE_INTEGER )
+            s.add_column(t1,name='col3', datatype=Column.DATATYPE_TEXT )  
+            
+            t2 = s.add_table('table2')   
+            s.add_column(t2,name='col1' )
+            s.add_column(t2,name='col2' )
+            s.add_column(t2,name='col3' )   
+    
+            t3 = s.add_table('table3') 
+            s.add_column(t3,name='col1', datatype=Column.DATATYPE_REAL )
+            s.add_column(t3,name='col2', datatype=Column.DATATYPE_INTEGER )
+            s.add_column(t3,name='col3', datatype=Column.DATATYPE_TEXT )   
 
-        t3 = s.add_table('table3') 
-        s.add_column(t3,name='col1', datatype=Column.DATATYPE_REAL )
-        s.add_column(t3,name='col2', datatype=Column.DATATYPE_INTEGER )
-        s.add_column(t3,name='col3', datatype=Column.DATATYPE_TEXT )   
-
-        self.bundle.database.session.commit()
      
     def test_names(self):
         print 'Testing Names'
@@ -226,28 +225,29 @@ class Test(TestBase):
         from databundles.orm import  Column
         from databundles.transform import BasicTransform, CensusTransform
         
-        s = self.bundle.schema  
-        s.clean()
         
-        t = s.add_table('table3') 
-        s.add_column(t,name='col1', datatype=Column.DATATYPE_INTEGER, default=-1, illegal_value = '999' )
-        s.add_column(t,name='col2', datatype=Column.DATATYPE_TEXT )   
-        s.add_column(t,name='col3', datatype=Column.DATATYPE_REAL )
-
-        self.bundle.database.session.commit()
-        
-        c1 = t.column('col1')
+        with self.bundle.session:
+            s = self.bundle.schema  
+            s.clean()
+            
+            t = s.add_table('table3') 
+            s.add_column(t,name='col1', datatype=Column.DATATYPE_INTEGER, default=-1, illegal_value = '999' )
+            s.add_column(t,name='col2', datatype=Column.DATATYPE_TEXT )   
+            s.add_column(t,name='col3', datatype=Column.DATATYPE_REAL )
 
         
-        self.assertEquals(1, BasicTransform(c1)({'col1': ' 1 '}))
-        
-        with self.assertRaises(ValueError):
-            print "PROCESSOR '{}'".format(CensusTransform(c1)({'col1': ' B '}))
-        
-        self.assertEquals(1, CensusTransform(c1)({'col1': ' 1 '}))
-        self.assertEquals(-1, CensusTransform(c1)({'col1': ' 999 ' }))
-        self.assertEquals(-3, CensusTransform(c1)({'col1': ' # '}))
-        self.assertEquals(-2, CensusTransform(c1)({'col1': ' ! '}))
+            c1 = t.column('col1')
+    
+            
+            self.assertEquals(1, BasicTransform(c1)({'col1': ' 1 '}))
+            
+            with self.assertRaises(ValueError):
+                print "PROCESSOR '{}'".format(CensusTransform(c1)({'col1': ' B '}))
+            
+            self.assertEquals(1, CensusTransform(c1)({'col1': ' 1 '}))
+            self.assertEquals(-1, CensusTransform(c1)({'col1': ' 999 ' }))
+            self.assertEquals(-3, CensusTransform(c1)({'col1': ' # '}))
+            self.assertEquals(-2, CensusTransform(c1)({'col1': ' ! '}))
        
        
     def test_validator(self):
@@ -335,27 +335,22 @@ class Test(TestBase):
         
     def test_partition(self):
         
- 
         from  databundles.partition import  PartitionIdentity
 
         ## TODO THis does does not test the 'table' parameter of the ParitionId
           
         pid1 = PartitionIdentity(self.bundle.identity, time=10, space=10)
-
-        
         pid2 = PartitionIdentity(self.bundle.identity, time=20, space=20)
         pid3 = PartitionIdentity(self.bundle.identity, space=30,)
         
         
         self.bundle.partitions.new_db_partition(pid1, data={'pid':'pid1'})
-    
         self.bundle.partitions.new_db_partition(pid2, data={'pid':'pid2'})
         self.bundle.partitions.new_db_partition(pid3, data={'pid':'pid3'})
         self.bundle.partitions.new_db_partition(pid1, data={'pid':'pid1'})
         self.bundle.partitions.new_db_partition(pid2, data={'pid':'pid21'})
         self.bundle.partitions.new_db_partition(pid3, data={'pid':'pid31'})
-        
-        self.bundle.database.session.commit()
+
         
         # 4 partitions from the build ( defined in meta/geoschema.csv),
         # three we just created. 
@@ -384,11 +379,12 @@ class Test(TestBase):
         p = self.bundle.partitions.find(pid3)   
         self.assertEquals('pid3',p.data['pid'] ) 
          
-        p = self.bundle.partitions._find_orm(pid3).first()  
-        s = self.bundle.database.session
-        p.data['foo'] = 'bar'
-        s.commit()
-        
+        with self.bundle.session:
+            p = self.bundle.partitions._find_orm(pid3).first() 
+            s = self.bundle.database.session
+            p.data['foo'] = 'bar'
+    
+            
         p = self.bundle.partitions.find(pid3)   
         self.assertEquals('bar',p.data['foo'] ) 
        
@@ -416,21 +412,18 @@ class Test(TestBase):
             pid = PartitionIdentity(self.bundle.identity,**dict(v))
             pids.append(pid)
         
-        s = self.bundle.database.session
+        with self.bundle.session as s:
         
-        # These two deletely bits clear out all of the old
-        # partitions, to avoid a conflict with the next section. We also have
-        # to delete the files, since create() adds a partition record to the database, 
-        # and if one arealy exists, it will throw and Integrity Error. 
-        for p in self.bundle.partitions:
-            if os.path.exists(p.database.path):
-                os.remove(p.database.path)
-        
-        for p in self.bundle.dataset.partitions:
-            s.delete(p)
-
-        s.commit()
-
+            # These two deletely bits clear out all of the old
+            # partitions, to avoid a conflict with the next section. We also have
+            # to delete the files, since create() adds a partition record to the database, 
+            # and if one arealy exists, it will throw and Integrity Error. 
+            for p in self.bundle.partitions:
+                if os.path.exists(p.database.path):
+                    os.remove(p.database.path)
+            
+            for p in self.bundle.dataset.partitions:
+                s.delete(p)
 
         for pid in pids:
 
@@ -468,11 +461,13 @@ class Test(TestBase):
         
         for i in range(10):
             w.writerow([i,i,i])
-        
+
+      
     def test_make_bundles(self):        
-        bundle = Bundle()   
+        bundle = Bundle()
         bundle.clean()
         bundle = Bundle()   
+        bundle.exit_on_fatal = False
         bundle.prepare()
         bundle.build()
 

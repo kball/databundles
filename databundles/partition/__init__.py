@@ -263,6 +263,13 @@ class PartitionBase(PartitionInterface):
         self.data = self.record.data
         self.table = self.get_table()
         
+        #
+        # These two values take refreshible fields out of the partition ORM record. 
+        # Use these if you are getting DetatchedInstance errors like: 
+        #    sqlalchemy.orm.exc.DetachedInstanceError: Instance <Table at 0x1077d5450> 
+        #    is not bound to a Session; attribute refresh operation cannot proceed
+        self.record_count = self.record.count
+        
         self._db_class = None
         self._database =  None
 

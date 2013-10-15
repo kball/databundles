@@ -8,12 +8,12 @@ from . import WarehouseInterface
 
 class RelationalWarehouse(WarehouseInterface):
     
-    def __init__(self, database,  library=None, storage=None, resolver = None, progress_cb=None):
+    def __init__(self, database,  library=None, storage=None, resolver = None, logger=None):
 
         super(RelationalWarehouse, self).__init__(database,  library=library, storage=storage, 
-                                                  resolver = resolver, progress_cb=progress_cb)
+                                                  resolver = resolver, logger=logger)
         
-        self.library.create()
+        self.library.database.create()
         
     def __del__(self):
         pass # print self.id, 'closing Warehouse'
@@ -21,10 +21,10 @@ class RelationalWarehouse(WarehouseInterface):
     def get(self, name_or_id):
         """Return true if the warehouse already has the referenced bundle or partition"""
         
-        r = self.library.get_name(name_or_id)
+        r = self.library.database.get_name(name_or_id)
 
         if not r[0]:
-            r = self.library.get_id(name_or_id)
+            r = self.library.database.get_id(name_or_id)
         
         return r
         
@@ -39,28 +39,31 @@ class RelationalWarehouse(WarehouseInterface):
         if not self.resolver:
             raise Exception("Can't resolve a dependency without a resolver defined")
 
-        self.progress_cb('get_dependency',name,None)
+        self.log('get_dependency {}'.format(name))
 
         b = self.resolver(name)
         
         if not b:
             raise DependencyError("Resolver failed to get {}".format(name))
         
-        self.progress_cb('install_dependency',name,None)
+        self.logger.log('install_dependency '+name)
 
         self.install(b)
       
     def install_by_name(self,name):
     
-        self.progress_cb('install_name',name,None)
+        self.logger.log('install_name {}'.format(name))
 
         d, p = self.resolver.get_ref(name)
         
         if not d:
             raise DependencyError("Resolver failed to get dataset reference for {}".format(name))
         
+        if not p:
+            raise ValueError("Name must refer to a partition")
+        
         if not self.has(d.vid):
-            self.progress_cb('install_dataset',d.vname,None)
+            self.logger.log('install_dataset {}'.format(name))
             
             b = self.resolver.get(d.vid)
             
@@ -69,7 +72,7 @@ class RelationalWarehouse(WarehouseInterface):
                   
             self._install_bundle(b)
         else:
-            self.progress_cb('dataset already installed',d.vname,None)
+            self.logger.log('dataset already installed {}'.format(d.vname))
         
         if p:
             b = self.resolver.get(d.vid)
@@ -78,7 +81,7 @@ class RelationalWarehouse(WarehouseInterface):
     
     def install_partition_by_name(self, bundle, p):
         
-        self.progress_cb('install_partition',p.vname,None)
+        self.logger.log('install_partition '.format(p.vname))
         
         partition = bundle.partitions.partition(p.id_)
     
@@ -90,10 +93,11 @@ class RelationalWarehouse(WarehouseInterface):
         else:
             self._install_partition(bundle, partition)
 
+
     def _install_bundle(self, bundle):
         
-        self.progress_cb('install_bundle',bundle.identity.vname,None)
-        self.library.install_bundle(bundle)
+        self.logger.log('install_bundle {}'.format(bundle.identity.vname))
+        self.library.database.install_bundle(bundle)
     
     def has_table(self, table_name):
 
@@ -103,20 +107,21 @@ class RelationalWarehouse(WarehouseInterface):
         
         from ..schema import Schema
 
-        meta, table = Schema.get_table_meta_from_db(self.library, table_name, d_vid = d_vid,  use_id=use_id, session=self.library.session)
+        meta, table = Schema.get_table_meta_from_db(self.library.database, table_name, d_vid = d_vid,  use_id=use_id, 
+                                                    session=self.library.database.session)
 
         if not self.has_table(table.name):
             table.create(bind=self.database.engine)
-            self.progress_cb('create_table',table.name,None)
+            self.logger.log('create_table {}'.format(table.name))
         else:
-            self.progress_cb('table_exists',table.name,None)
+            self.logger.log('table_exists {}'.format(table.name))
 
         return table, meta
         
     
     def _install_partition(self, partition):
 
-        self.progress_cb('install_partition',partition.identity.name,None)
+        self.logger.log('install_partition {}'.format(partition.identity.name))
 
         pdb = partition.database
      
@@ -129,7 +134,7 @@ class RelationalWarehouse(WarehouseInterface):
             if not table_name in self.database.inspector.get_table_names():    
                 t_meta, table = partition.bundle.schema.get_table_meta(table_name, use_id=True, driver = self.database.driver) #@UnusedVariable
                 table.create(bind=self.database.engine)   
-                self.progress_cb('create_table',table_name,None)
+                self.logger.log('create_table {}'.format(table_name))
         
         self.database.session.commit()
         
@@ -148,19 +153,19 @@ class RelationalWarehouse(WarehouseInterface):
             
             caster = partition.bundle.schema.table(table_name).cast_transform()
 
-            self.progress_cb('populate_table',table_name,None)
+            self.logger.log('populate_table {}'.format(table_name))
             with self.database.inserter(dest_table.name, cache_size = cache_size, caster = caster) as ins:
    
                 try: self.database.session.execute("DELETE FROM {}".format(dest_table.name))
                 except: pass
    
                 for i,row in enumerate(pdb.session.execute(src_table.select())):
-                    self.progress_cb('add_row',table_name,i)
+                    self.logger.progress('add_row',table_name,i)
   
                     ins.insert(row)
 
         self.database.session.commit()
-        self.progress_cb('done',table_name,None)
+        self.logger.log('done {}'.format(table_name))
 
     def _install_geo_partition(self, partition):
         #
@@ -173,8 +178,27 @@ class RelationalWarehouse(WarehouseInterface):
         
         print "HDF Partition ", partition.database.path   
           
-    def uninstall(self,b_or_p):
-        pass
+    def remove_by_name(self,name):
+        from ..orm import Dataset
+        from ..bundle import LibraryDbBundle
+        from sqlalchemy.exc import  NoSuchTableError
+        
+        dataset, partition = self.get(name)
+
+        if partition:
+            b = LibraryDbBundle(self.library.database, dataset.vid)
+            p = b.partitions.find(partition)
+            self.logger.log("Dropping tables in partition {}".format(p.identity.vname))
+            for t in p.tables:
+                try:
+                    self.database.drop_table(t)
+                    self.logger.log("Dropped table: {}".format(t))
+                except NoSuchTableError:
+                    self.logger.log("Table does not exist: {}".format(t))
+            
+            self.library.database.remove_partition(partition)
+        else:
+            self.library.database.remove_bundle(dataset)
         
     def clean(self):
         self.database.clean()

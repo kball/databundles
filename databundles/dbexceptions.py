@@ -40,3 +40,6 @@ class QueryError(Exception):
 
 class ConflictError(Exception):
     """COnflict with existing resource"""
+    
+class FatalError(Exception):
+    """A Fatal Bundle Error, generated in testing instead of a system exit. """

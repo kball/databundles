@@ -209,7 +209,6 @@ class RestApi(object):
             r =  self.remote.datasets(identity.as_dataset.vid_enc).partitions(identity.vid_enc).post(metadata)
             raise_for_status(r)
 
-
         return r
 
     def find(self, query):

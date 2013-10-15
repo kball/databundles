@@ -3,8 +3,8 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from ..dbmanage import prt
-
+from . import prt, err, _print_info #@UnresolvedImport
+from databundles.warehouse import ResolverInterface
 
 def warehouse_command(args, rc, src):
     from databundles.warehouse import new_warehouse
@@ -18,6 +18,44 @@ def warehouse_command(args, rc, src):
 
     globals()['warehouse_'+args.subcommand](args, w,config)
 
+def warehouse_parser(cmd):
+   
+    whr_p = cmd.add_parser('warehouse', help='Manage a warehouse')
+    whr_p.set_defaults(command='warehouse')
+    whp = whr_p.add_subparsers(title='warehouse commands', help='command help')
+ 
+    group = whr_p.add_mutually_exclusive_group()
+    group.add_argument('-s', '--server',  default=False, dest='is_server',  action='store_true', help = 'Select the server configuration')
+    group.add_argument('-c', '--client',  default=False, dest='is_server',  action='store_false', help = 'Select the client configuration')
+        
+    whr_p.add_argument('-l','--library',  default='default',  help='Select a different name for the library')
+    whr_p.add_argument('-n','--name',  default='default',  help='Select a different name for the warehouse')
+
+    whsp = whp.add_parser('install', help='Install a bundle or partition to a warehouse')
+    whsp.set_defaults(subcommand='install')
+    whsp.add_argument('term', type=str,help='Name of bundle or partition')
+
+    whsp = whp.add_parser('remove', help='Remove a bundle or partition from a warehouse')
+    whsp.set_defaults(subcommand='remove')
+    whsp.add_argument('term', type=str,help='Name of bundle or partition')
+    
+    whsp = whp.add_parser('sync', help='Syncronize database to a list of names')
+    whsp.set_defaults(subcommand='sync')
+    whsp.add_argument('file', type=str,help='Name of file containing a list of names')
+    
+    whsp = whp.add_parser('connect', help='Test connection to a warehouse')
+    whsp.set_defaults(subcommand='connect')
+
+    whsp = whp.add_parser('info', help='Configuration information')
+    whsp.set_defaults(subcommand='info')   
+ 
+    whsp = whp.add_parser('drop', help='Drop the warehouse database')
+    whsp.set_defaults(subcommand='drop')   
+ 
+    whsp = whp.add_parser('list', help='List the datasets inthe warehouse')
+    whsp.set_defaults(subcommand='list')   
+    whsp.add_argument('term', type=str, nargs='?', help='Name of bundle, to list partitions')
+
    
 def warehouse_info(args, w,config):
     
@@ -28,13 +66,20 @@ def warehouse_info(args, w,config):
     prt("Library : {}",w.library.dsn)
 
  
-def warehouse_drop(args, w,config):
-    
-    w.database.enable_delete = True
-    w.library.clean()
-    w.drop()
+class Logger(object):
+    def __init__(self, prefix, lr):
+        self.prefix = prefix
+        self.lr = lr
+        
+    def progress(self,type_,name, n, message=None):
+        self.lr("{}: {} {}: {}".format(self.prefix,type_, name, n))
+        
+    def log(self,message):
+        prt("{}: {}",self.prefix, message)
+        
+    def error(self,message):
+        err("{}: {}",self.prefix, message)
    
-from warehouse import ResolverInterface
 class Resolver(ResolverInterface):
     
     def __init__(self, library):
@@ -63,30 +108,45 @@ class Resolver(ResolverInterface):
         else:
             return dsi['dataset']['url']
 
-     
-
     
 def warehouse_install(args, w,config):
-    import library
+    from ..library import new_library
     from functools import partial
     from databundles.util import init_log_rate
     
     if not w.exists():
         w.create()
 
-    l = library.new_library(config.library(args.library))
-
-    
+    l = new_library(config.library(args.library))
     w.resolver = Resolver(l)
-    
-    def progress_cb(lr, type_,name,n):
-        if n:
-            lr("Warehouse Install: {} {}: {}".format(type, name, n))
-        else:
-            prt("Warehouse Install: {} {}",type_, name)
-
-    lr = init_log_rate(2000)
-    
-    w.progress_cb = partial(progress_cb, lr) 
-
+    w.logger = Logger('Warehouse Install',init_log_rate(2000))
+ 
     w.install_by_name(args.term )
+
+def warehouse_remove(args, w,config):
+    from functools import partial
+    from databundles.util import init_log_rate
+
+    w.logger = Logger('Warehouse Remove',init_log_rate(2000))
+    
+    w.remove_by_name(args.term )
+      
+def warehouse_drop(args, w,config):
+    
+    w.database.enable_delete = True
+    w.library.clean()
+    w.drop()
+    
+def warehouse_list(args, w, config):    
+
+    l = w.library
+
+    if not args.term:
+
+        for ident in sorted(l.list(), key=lambda x: x['vname']):
+            prt("{:2s} {:10s} {}", ''.join(ident['location']), ident['vid'], ident['vname'])
+    else:
+        d, p = l.get_ref(args.term)
+                
+        _print_info(l,d,p, list_partitions=True)
+  

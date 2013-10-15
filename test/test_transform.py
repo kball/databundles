@@ -60,10 +60,7 @@ class Test(TestBase):
         
         table = self.bundle.schema.table('tone')
         
-        caster =  table.cast_transform()
-        
-        for p in self.bundle.partitions:
-            print p.name
+        caster =  table.caster()
         
         p = self.bundle.partitions.find(table='tone')
         

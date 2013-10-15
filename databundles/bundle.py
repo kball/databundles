@@ -49,7 +49,8 @@ class Bundle(object):
         self._library = None
         self._identity = None
         self._repository = None
-
+        self._dataset_id = None # Needed in LibraryDbBundle to  disambiguate multiple datasets
+        
         if not logger:
             from .util import get_logger
             self.logger = get_logger(__name__)
@@ -109,7 +110,10 @@ class Bundle(object):
         
         from databundles.orm import Dataset
 
-        return  (session.query(Dataset).one())
+        if self._dataset_id:
+            return (session.query(Dataset).filter(Dataset.vid == self._dataset_id).one())
+        else:
+            return (session.query(Dataset).one())
         
     @property
     def dataset(self):
@@ -177,13 +181,21 @@ class Bundle(object):
     def error(self, message, **kwargs):
         '''Log an error messsage'''
         self.logger.error(message)
+     
+    def warn(self, message, **kwargs):
+        '''Log an error messsage'''
+        self.logger.warn(message)
         
     def fatal(self, message, **kwargs):
         '''Log a fata messsage and exit'''
         import sys 
         self.logger.fatal(message)
         sys.stderr.flush()
-        sys.exit(1)
+        if self.exit_on_fatal:
+            sys.exit(1)
+        else:
+            from dbexceptions import FatalError
+            raise FatalError(message)
     
 class DbBundle(Bundle):
 
@@ -230,9 +242,38 @@ class DbBundle(Bundle):
         if 'select' not in query:
             query = "select * from {} ".format(query)
  
-        
         return petl.fromsqlite3(self.database.path, query) #@UndefinedVariable
-      
+
+
+class LibraryDbBundle(Bundle):
+    '''A database bundle that is built in place from the data in a library '''
+
+    def __init__(self, database, dataset_id, logger=None):
+        '''Initialize a db and all of its sub-components. 
+
+        '''
+        from .database.sqlite import SqliteBundleDatabase #@UnresolvedImport
+        import os
+        
+        super(LibraryDbBundle, self).__init__(logger=logger)
+   
+        self._dataset_id = dataset_id
+        self.database = database
+
+        self.db_config = self.config = BundleDbConfig(self, self.database)
+        
+        self.partition = None # Set in Library.get() and Library.find() when the user requests a partition. s
+        
+    @property
+    def path(self):
+        raise NotImplemented()
+        
+    def sub_path(self, *args):
+        '''For constructing paths to partitions'''
+        raise NotImplemented() 
+        
+
+
 
 class BuildBundle(Bundle):
     '''A bundle class for building bundle files. Uses the bundle.yaml file for
@@ -280,6 +321,8 @@ class BuildBundle(Bundle):
 
         self._build_time = None
         self._update_time = None
+       
+        self.exit_on_fatal = True
        
     @property
     def path(self):
@@ -414,8 +457,7 @@ class BuildBundle(Bundle):
                 time.clock(), # start time. This one gets replaced after first message
                 N, # ticker to next message
                 N,  #frequency to log a message
-                message,
-                False # Real start time?
+                message
                 ]
 
         f = functools.partial(self._log_rate, d)
@@ -431,18 +473,9 @@ class BuildBundle(Bundle):
         
         import time 
 
-        #if not message:
-        #    message = d[3]
-    
-
-        
-        if d[2] < 0:
+        if d[2] <= 0:
             
             d[2] = d[3]
-            
-            if not d[5]:
-                d[1] = time.clock()-1
-                d[5] = True
 
             # Prints the processing rate in 1,000 records per sec.
             self.log(message+': '+str(int( d[0]/(time.clock()-d[1])))+'/s '+str(d[0]/1000)+"K ") 
@@ -515,7 +548,15 @@ class BuildBundle(Bundle):
                 if os.path.exists(sf):
                     with open(sf, 'rbU') as f:
                         self.schema.clean()
-                        if not self.schema.schema_from_file(f):
+                        warnings,errors = self.schema.schema_from_file(f)
+                        
+                        for title, s,f  in (("Errors", errors, self.error), ("Warnings", warnings, self.warn)):
+                            if s:
+                                self.log("----- Schema {} ".format(title))
+                                for table, column, message in s:
+                                    f("{:20s} {}".format("{}.{}".format(table.name if table else '', column.name if column else ''), message ))
+                    
+                        if errors:
                             self.fatal("Schema load filed. Exiting")    
 
         return True
@@ -1242,7 +1283,7 @@ class BundleDbConfig(BundleConfig):
 
         from databundles.orm import Dataset
 
-        self.dataset = (self.database.session.query(Dataset).one())
+        self.dataset = bundle.dataset # (self.database.session.query(Dataset).one())
        
     @property
     def dict(self): #@ReservedAssignment

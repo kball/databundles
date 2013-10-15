@@ -68,10 +68,14 @@ class Partitions(object):
         import sqlalchemy.exc
 
         try:
-            return [self.partition(op) 
-                    for op in self.bundle.database.session.query(OrmPartition)
+            ds = self.bundle.dataset
+            
+            q = (self.bundle.database.session.query(OrmPartition)
+                                    .filter(OrmPartition.d_vid == ds.vid)
                                     .order_by(OrmPartition.vid.asc())
-                                    .order_by(OrmPartition.segment.asc()).all()]
+                                    .order_by(OrmPartition.segment.asc()))
+
+            return [self.partition(op) for op in q.all()]
         except sqlalchemy.exc.OperationalError:
             raise
             return []
@@ -223,7 +227,7 @@ class Partitions(object):
         import sqlalchemy.orm.exc
 
         from databundles.identity import Identity
-        from databundles.orm import Partition as OrmPartition
+        from databundles.orm import Partition as OrmPartition, Dataset
         
         pid, name = self._pid_or_args_to_pid(self.bundle, pid, kwargs)
 
@@ -260,6 +264,10 @@ class Partitions(object):
                     
                     q = q.filter(OrmPartition.t_id==tr.id_)
  
+
+        ds = self.bundle.dataset
+        
+        q = q.filter(Dataset.vid == ds.vid)
 
         q = q.order_by(OrmPartition.vid.asc()).order_by(OrmPartition.segment.asc())
  

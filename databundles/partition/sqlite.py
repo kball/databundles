@@ -94,7 +94,8 @@ class SqlitePartition(PartitionBase):
         
         # Shoot for about 250M uncompressed, which should compress to about 25M
 
-        rows_per_seg = (size / (len(self.table.columns) * BYTES_PER_CELL) ) 
+        table  = self.get_table()
+        rows_per_seg = (size / (len(table.columns) * BYTES_PER_CELL) ) 
         
         # Round up to nearest 100K
         
@@ -106,7 +107,9 @@ class SqlitePartition(PartitionBase):
     def csvize(self, logger=None, store_library=False, write_header=False):
         '''Convert this partition to CSV files that are linked to the partition'''
         
-        if not self.record.count:
+        self.table = self.get_table()
+        
+        if self.record_count:
             self.write_stats()
 
         rows_per_seg = self.optimal_rows_per_segment()
@@ -156,7 +159,8 @@ class SqlitePartition(PartitionBase):
 
                 p = self.bundle.partitions.find_or_new_csv(ident)
                 ins = p.inserter( write_header=write_header)
-                logger.always("New CSV Segment: {}".format(p.identity.name), now=True)
+                if logger:
+                    logger.always("New CSV Segment: {}".format(p.identity.name), now=True)
                 
             count += 1
             ins.insert(dict(row))
@@ -205,15 +209,15 @@ class SqlitePartition(PartitionBase):
 
     def write_stats(self):
         
-        t = self.table
+        t = self.get_table()
         
         if not t:
             return
 
         s = self.database.session
-        self.record.count = s.execute("SELECT COUNT(*) FROM {}".format(t.name)).scalar()
-        self.record.min_key = s.execute("SELECT MIN({}) FROM {}".format(t.primary_key.name,t.name)).scalar()
-        self.record.max_key = s.execute("SELECT MAX({}) FROM {}".format(t.primary_key.name,t.name)).scalar()
+        self.record.count = s.execute("SELECT COUNT(*) FROM {}".format(self.table.name)).scalar()
+        self.record.min_key = s.execute("SELECT MIN({}) FROM {}".format(t.primary_key.name,self.table.name)).scalar()
+        self.record.max_key = s.execute("SELECT MAX({}) FROM {}".format(t.primary_key.name,self.table.name)).scalar()
         s.commit()
         
         with self.bundle.session as s:

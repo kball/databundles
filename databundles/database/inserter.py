@@ -81,7 +81,7 @@ class SegmentedInserter(InserterInterface):
 
 class ValueWriter(InserterInterface):
     '''Inserts arrays of values into  database table'''
-    def __init__(self, bundle,  db, cache_size=50000, text_factory = None, replace=False, caster = None):
+    def __init__(self, bundle,  db, cache_size=50000, text_factory = None, replace=False):
         import string 
         self.cache = []
         
@@ -93,7 +93,7 @@ class ValueWriter(InserterInterface):
 
         self.cache_size = cache_size
         self.statement = None
-        self.caster = caster
+     
         
         if text_factory:
             self.db.engine.raw_connection().connection.text_factory = text_factory
@@ -146,12 +146,12 @@ class ValueWriter(InserterInterface):
  
 class ValueInserter(ValueWriter):
     '''Inserts arrays of values into  database table'''
-    def __init__(self, bundle, table, db, cache_size=50000, text_factory = None, replace=False, caster = None, skip_none=True): 
-        
-        super(ValueInserter, self).__init__(bundle, db, cache_size=cache_size, text_factory = text_factory, caster = caster)  
+    def __init__(self, bundle, table, db, cache_size=50000, text_factory = None, replace=False,  skip_none=True): 
+
+        super(ValueInserter, self).__init__(bundle, db, cache_size=cache_size, text_factory = text_factory)  
    
         self.table = table
-        
+
         self.header = [c.name for c in self.table.columns]
    
         self.statement = self.table.insert()
@@ -160,6 +160,8 @@ class ValueInserter(ValueWriter):
         
         self.null_row = self.bundle.schema.table(table.name).null_dict
     
+        self.caster = self.bundle.schema.table(table.name).caster
+
         if replace:
             self.statement = self.statement.prefix_with('OR REPLACE')
 
@@ -167,16 +169,15 @@ class ValueInserter(ValueWriter):
 
         try:
             if isinstance(values, dict):
+
                 if self.caster:
                     d = self.caster(values)
                 else:
-                    d = dict(values)
-    
+                    d = dict((k.lower(), v) for k,v in values.items())
+
                 if self.skip_none:
-            
                     d = { k: d[k] if k in d and d[k] is not None else v for k,v in self.null_row.items() }
-                  
-                    
+
             else:
                 
                 if self.caster:
@@ -191,6 +192,8 @@ class ValueInserter(ValueWriter):
                 
                 if self.skip_none:
                     d = { k: d[k] if k in d and d[k] is not None else v for k,v in self.null_row.items() }
+                
+            
                 
             self.cache.append(d)
          

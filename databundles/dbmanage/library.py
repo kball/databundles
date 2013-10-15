@@ -3,19 +3,19 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from ..dbmanage import prt, err, Progressor
+from ..dbmanage import prt, err, Progressor, _find, _print_info #@UnresolvedImport
 import os
 
 
 def library_command(args, rc, src):
-    import library
+    from  ..library import new_library
 
     if args.is_server:
         config  = src
     else:
         config = rc
     
-    l = library.new_library(config.library(args.name))
+    l = new_library(config.library(args.name))
 
     globals()['library_'+args.subcommand](args, l,config)
 
@@ -242,101 +242,6 @@ def library_files(args, l, config):
 def library_find(args, l, config):
     return _find(args, l, config, False)
 
-def _find(args, l, config, remote):
-
-    from databundles.library import QueryCommand
-
-    terms = []
-    for t in args.term:
-        if ' ' in t or '%' in t:
-            terms.append("'{}'".format(t))
-        else:
-            terms.append(t)
-
-
-    qc = QueryCommand.parse(' '.join(terms))
-    
-    prt("Query: {}", qc)
-    
-    if remote:
-        identities = l.remote_find(qc)
-    else:
-        identities = l.find(qc)
-
-    try: first = identities[0]
-    except: first = None
-    
-    if not first:
-        return
-    
-    t = ['{id:<14s}','{vname:20s}']
-    header = {'id': 'ID', 'vname' : 'Versioned Name'}
-    
-    multi = False
-    if 'column' in first:
-        multi = True
-        t.append('{column:12s}')
-        header['column'] = 'Column'
-
-    if 'table' in first:
-        multi = True
-        t.append('{table:12s}')
-        header['table'] = 'table'
-
-    if 'partition' in first:
-        multi = True
-        t.append('{partition:50s}')
-        header['partition'] = 'partition'
-        
-    ts = ' '.join(t)
-    
-    dashes = { k:'-'*len(v) for k,v in header.items() }
-   
-    prt(ts, **header) # Print the header
-    prt(ts, **dashes) # print the dashes below the header
-   
-    last_rec = None
-    first_rec_line = True
-    for r in identities:
-
-        if not last_rec or last_rec['id'] != r['identity']['vid']:
-            rec = {'id': r['identity']['vid'], 'vname':r['identity']['vname']}
-            last_rec = rec
-            first_rec_line = True
-        else:
-            rec = {'id':'', 'vname':''}
-   
-        if 'column' in r:
-            rec['column'] = ''
-            
-        if 'table' in r:
-            rec['table'] = ''
-
-        if 'partition' in r:
-            rec['partition'] = ''
-           
-        if multi and first_rec_line:
-            prt(ts, **rec)
-            rec = {'id':'', 'vname':''}
-            first_rec_line = False
-           
-        if 'column' in r:
-            rec['id'] = r['column']['vid']
-            rec['column'] = r['column']['name']
-
-        if 'table' in r:
-            rec['id'] = r['table']['vid']
-            rec['table'] = r['table']['name']
-
-        if 'partition' in r:
-            rec['id'] = r['partition']['vid']
-            rec['partition'] = r['partition']['vname']
-
-
-        prt(ts, **rec)
-
-    return 
-
 def library_schema(args, l, config):
     from databundles.bundle import DbBundle    
 
@@ -366,58 +271,6 @@ def library_schema(args, l, config):
             print(yaml.dump(s))
     else:
         raise Exception("Unknown format" )    
-        
-def _print_info(l,d,p, list_partitions=False):
-    from cache import RemoteMarker
-    
-    api = None
-    try:
-        api = l.remote.get_upstream(RemoteMarker)
-    except AttributeError: # No api
-        api = l.remote
-    
-    remote_d = None
-    remote_p = None
-    
-    if api:
-        from ..client.exceptions import NotFound
-        try:
-            r = api.get(d.vid, p.vid if p else None)
-            if r:
-                remote_d = r['dataset']
-                remote_p = r['partitions'].items()[0][1] if p and 'partitions' in r and len(r['partitions']) != 0 else None
-        except NotFound:
-            pass 
-
-    prt("D --- Dataset ---")
-    prt("D Dataset   : {}; {}",d.vid, d.vname)
-    prt("D Is Local  : {}",l.cache.has(d.cache_key) is not False)
-    prt("D Rel Path  : {}",d.cache_key)
-    prt("D Abs Path  : {}",l.cache.path(d.cache_key) if l.cache.has(d.cache_key) else '')
-
-    if remote_d:
-        prt("D Web Path  : {}",remote_d['url'])
-    
-    if l.cache.has(d.cache_key):
-        b = l.get(d.vid)
-        prt("D Partitions: {}",b.partitions.count)
-        if not p and (list_partitions or b.partitions.count < 12):
-            
-            for partition in  b.partitions.all:
-                prt("P {:15s} {}", partition.identity.vid, partition.identity.vname)
-        
-    else:
-        print(remote_d)
-
-    if p:
-        prt("P --- Partition ---")
-        prt("P Partition : {}; {}",p.vid, p.vname)
-        prt("P Is Local  : {}",(l.cache.has(p.cache_key) is not False) if p else '')
-        prt("P Rel Path  : {}",p.cache_key)
-        prt("P Abs Path  : {}",l.cache.path(p.cache_key) if l.cache.has(p.cache_key) else '' )   
-  
-        if remote_p:
-            prt("P Web Path  : {}",remote_p['url'])
   
 def library_get(args, l, config):
 

@@ -281,6 +281,9 @@ class BundleFilesystem(Filesystem):
                         
 
                 return abs_path
+        except zipfile.BadZipfile:
+            self.bundle.error("Error processing supposed zip file: '{}' You may want to delete it and try again. ".format(path))
+            raise
         finally:
             self.rm_rf(tmpdir)
             
@@ -393,7 +396,7 @@ class BundleFilesystem(Filesystem):
                 
             except KeyboardInterrupt:
                 print "\nRemoving Files! \n Wait for deletion to complete! \n"
-                cache.remove(file_path)
+                cache.remove(file_path, propagate = True)
                 raise
             except DownloadFailedError as e:
                 self.bundle.error("Failed:  "+str(e))
@@ -409,7 +412,7 @@ class BundleFilesystem(Filesystem):
                 # can throw exceptions that will propagate to here. Unexpected, but very useful. 
                 # We should probably create a FileNotValueError, but I'm lazy. 
                 self.bundle.error("Got an invalid zip file for "+url)
-                cache.remove(file_path)
+                cache.remove(file_path, propagate = True)
                 excpt = e
                 
             except Exception as e:

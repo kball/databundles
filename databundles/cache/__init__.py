@@ -79,6 +79,7 @@ class CacheInterface(object):
         else:
             return None
 
+
 class RemoteMarker(object):
     pass
    

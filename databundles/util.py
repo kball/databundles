@@ -467,6 +467,33 @@ class AttrDict(OrderedDict):
         yaml.safe_dump( self, stream,
             default_flow_style=False, indent=4, encoding='utf-8' )
 
+from collections import Mapping
+
+class CaseInsensitiveDict(Mapping): #http://stackoverflow.com/a/16202162
+    def __init__(self, d):
+        self._d = d
+        self._s = dict((k.lower(), k) for k in d)
+        
+    def __contains__(self, k):
+        return k.lower() in self._s
+    def __len__(self):
+        return len(self._s)
+    def __iter__(self): 
+        return iter(self._s)
+    def __getitem__(self, k):
+        return self._d[self._s[k.lower()]]
+    def __setitem__(self, k, v):
+        self._d[k] = v
+        self._s[k.lower()] = k
+    def pop(self, k):
+        k0 = self._s.pop(k.lower())
+        return self._d.pop(k0)
+    def actual_key_case(self, k):
+        return self._s.get(k.lower())
+
+def lowercase_dict(d):
+    return dict((k.lower(), v) for k,v in d.items())
+
 def configure_logging(cfg, custom_level=None):
     '''Don't know what this is for .... '''
     import itertools as it, operator as op
@@ -865,19 +892,20 @@ def _log_rate(d, message=None, prt=None):
     import time 
 
     if not prt:
-        
         prt = print 
 
     if not d[1]:
-        d[1] = time.time()
+        d[1] = time.clock()
 
     if not message:
         message = d[3]
 
     d[0] += 1
-    if d[0] % d[2] == 0:
+    print (d[0],d[2], d[0] % d[2])
+    if  d[0] % d[2] == 0:
         # Prints the processing rate in 1,000 records per sec.
-        prt(message+': '+str(int( d[0]/(time.time()-d[1])))+'/s '+str(d[0]/1000)+"K ") 
+        rate = int( d[0]/(time.clock()-d[1]))
+        prt(message+': '+str(rate)+'/s '+str(d[0]/1000)+"K ") 
     
 
         
@@ -892,8 +920,9 @@ def init_log_rate(N, message=''):
             N,  #frequency to log a message
             message]
 
-    return functools.partial(_log_rate, d)
-
+    f = functools.partial(_log_rate, d)
+    f.always = print
+    return f
 
 def daemonize(f, args,  rc, prog_name='databundles'):
         '''Run a process as a daemon'''

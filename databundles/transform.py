@@ -194,7 +194,7 @@ class CensusTransform(BasicTransform):
             f = lambda v: v.strip().decode('latin1').encode('ascii','xmlcharrefreplace')
 
         if column.default and column.default.strip():
-            if column.datatype == 'text':
+            if column.datatype == 'text' or column.datatype == 'varchar':
                 default = column.default 
             elif column.datatype == 'real' or column.datatype == 'float':
                 default = float(column.default) 
@@ -221,7 +221,7 @@ class CensusTransform(BasicTransform):
         
         self.f = f
     
-class RowTypeTransformBuilder(object):
+class CasterTransformBuilder(object):
     
     def __init__(self):
         self.types = []
@@ -232,11 +232,13 @@ class RowTypeTransformBuilder(object):
         
     def makeListTransform(self):
         import uuid
-        
+        import datetime
         f_name = "f"+str(uuid.uuid4()).replace('-','')
         
         o = """
 def {}(row):
+
+    raise NotImplementedError()
 
     stripped_num = lambda x: x.strip() if isinstance(x, basestring) else x
     is_not_nothing = lambda x: True if x!='' and x != None else False
@@ -272,10 +274,41 @@ def {}(row):
          
     def makeDictTransform(self):
         import uuid
-        
+        import datetime
+         
         f_name = "f"+str(uuid.uuid4()).replace('-','')
         
-        o = "def {}(row):\n    return {{".format(f_name)
+        o = """def {}(row):
+    
+    is_not_nothing = lambda x: True if x!='' and x != None else False
+    import dateutil.parser as dp
+    import datetime
+    
+    def parse_date(v):
+        if isinstance(v, basestring):
+            return dp.parse(v).date()
+        elif isinstance(v, datetime.date):
+            return v
+        else:
+            raise TypeError("Expected datetime.date or basestring, got {{}}".format(type(v)))
+
+    def parse_time(v):
+        if isinstance(v, basestring):
+            return dp.parse(v).time()
+        elif isinstance(v, datetime.time):
+            return v
+        else:
+            raise TypeError("Expected datetime.time or basestring, got {{}}".format(type(v)))
+ 
+    def parse_datetime(v):
+        if isinstance(v, basestring):
+            return dp.parse(v)
+        elif isinstance(v, datetime.datetime):
+            return v
+        else:
+            raise TypeError("Expected datetime.datetime or basestring, got {{}}".format(type(v)))        
+        
+    return {{""".format(f_name)
     
         for i,(name,type_) in enumerate(self.types):
             if i != 0:
@@ -285,12 +318,19 @@ def {}(row):
                 type_ = unicode
                 
             if type_ == float or type_ == int:
-                o += "'{name}':{type}(row['{name}']) if row['{name}'] != '' and  row['{name}'] is not None else None".format(type=type_.__name__,name=name)
+                o += "'{name}':{type}(row['{name}']) if is_not_nothing(row['{name}']) else None".format(type=type_.__name__,name=name)
+            elif type_ == datetime.date:
+                o += "'{name}':parse_date(row['{name}']) if is_not_nothing(row['{name}']) else None".format(type=type_.__name__,name=name)
+            elif type_ == datetime.time:
+                o += "'{name}':parse_time(row['{name}']) if is_not_nothing(row['{name}']) else None".format(type=type_.__name__,name=name)
+            elif type_ == datetime.datetime:
+                o += "'{name}':parse_datetime(row['{name}']) if is_not_nothing(row['{name}']) else None".format(type=type_.__name__,name=name)
+
             else:
                 o += "'{name}':{type}(row['{name}'])".format(type=type_.__name__,name=name)
             
         o+= '}\n'
- 
+
         return f_name, o
           
     def compile(self):
@@ -313,15 +353,18 @@ def {}(row):
             
             
     def __call__(self, row):
-
+        from sqlalchemy.engine.result import RowProxy
+        
         f = self.compile()
 
         if isinstance(row, dict):
             return f[1](row)
         
         elif isinstance(row, (list,tuple)):
-            return f[0](row)   
-                  
+            return f[0](row) 
+          
+        elif isinstance(row, RowProxy):
+            return f[1](dict(row))     
         else:
             raise Exception("Unknown row type: {} ".format(type(row)))
         
