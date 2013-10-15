@@ -59,7 +59,8 @@ class Partitions(object):
     def count(self):
         from databundles.orm import Partition as OrmPartition
     
-        return self.bundle.database.session.query(OrmPartition).count()
+        return (self.bundle.database.session.query(OrmPartition)
+                .filter(OrmPartition.d_vid == self.bundle.dataset.vid)).count()
     
     @property 
     def all(self): #@ReservedAssignment

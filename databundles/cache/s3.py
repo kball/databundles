@@ -349,11 +349,16 @@ class S3Cache(Cache, RemoteMarker):
             return False
         
         if not md5:
+            
             return  k.exists()
         else:
             remote_md5 = k.get_metadata('md5')
-            return k.exists() and  str(md5) == str(remote_md5) 
+            
+            r =  k.exists() and  str(md5) == str(remote_md5) 
+            #print "=== ",r
 
+            return r
+    
     def metadata(self, rel_path):
 
         k = self._get_boto_key(rel_path)

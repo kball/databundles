@@ -50,11 +50,13 @@ class PartitionDb(SqliteDatabase, RelationalPartitionDatabaseMixin, SqliteAttach
                 
                 if not table_name in self.inspector.get_table_names():
                     raise Exception("Don't have table "+table_name)
+                
             table = self.table(table_name)
             
         else:
             table = self.table(table_or_name.name)
 
+        
         return ValueInserter(self.bundle, table , self,**kwargs)
         
     def updater(self, table_or_name=None,**kwargs):

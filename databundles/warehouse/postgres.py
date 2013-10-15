@@ -16,9 +16,7 @@ class PostgresWarehouse(RelationalWarehouse):
         
     def _copy_command(self, table, url):
         
-        template = """COPY "public"."{table}" 
-FROM  PROGRAM 'curl -s -L --compressed "{url}"' 
-WITH ( DELIMITER '|', NULL '' ) ;"""
+        template = """COPY "public"."{table}"  FROM  PROGRAM 'curl -s -L --compressed "{url}"'  WITH ( DELIMITER '|', NULL '' )"""
 
         return template.format(table = table, url = url)
      
@@ -59,8 +57,8 @@ WITH ( DELIMITER '|', NULL '' ) ;"""
             raise 
      
         cmd =  self._copy_command(table.name, url)
-    
+        #print 'Postgres._install_csv_partition', cmd
         self.database.connection.execute(cmd)
-        print cmd
+
         self.logger.log('installed_partition {}'.format(p.identity.name)) 
             

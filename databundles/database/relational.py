@@ -143,7 +143,7 @@ class RelationalDatabase(DatabaseInterface):
 
         self._drop()
 
-    def drop_table(self, table_name):
+    def drop_table(self, table_name, use_id = False):
         table = self.table(table_name)
         
         table.drop(self.engine)

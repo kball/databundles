@@ -95,6 +95,7 @@ class ValueWriter(InserterInterface):
         self.statement = None
      
         
+        
         if text_factory:
             self.db.engine.raw_connection().connection.text_factory = text_factory
 
@@ -151,16 +152,23 @@ class ValueInserter(ValueWriter):
         super(ValueInserter, self).__init__(bundle, db, cache_size=cache_size, text_factory = text_factory)  
    
         self.table = table
+   
+        self.orm_table = self.bundle.schema.table(table.name)
 
-        self.header = [c.name for c in self.table.columns]
+        self.header = [c.name for c in self.orm_table.columns]
+
+        self.text_fields = [c.name for c in self.orm_table.columns if c.type_is_text()]
+        
+        self._max_lengths = [ 0 for x in self.text_fields ]
    
         self.statement = self.table.insert()
-        
+ 
         self.skip_none = skip_none
         
         self.null_row = self.bundle.schema.table(table.name).null_dict
     
         self.caster = self.bundle.schema.table(table.name).caster
+
 
         if replace:
             self.statement = self.statement.prefix_with('OR REPLACE')
@@ -194,6 +202,8 @@ class ValueInserter(ValueWriter):
                     d = { k: d[k] if k in d and d[k] is not None else v for k,v in self.null_row.items() }
                 
             
+            for i,col_name in enumerate(self.text_fields):
+                self._max_lengths[i] = max(len(d[col_name]), self._max_lengths[i])
                 
             self.cache.append(d)
          
@@ -221,6 +231,10 @@ class ValueInserter(ValueWriter):
             raise
 
         return True
+   
+    @property
+    def max_lengths(self):
+        return dict(zip(self.text_fields, self._max_lengths))
    
 class ValueUpdater(ValueWriter, UpdaterInterface):
     '''Updates arrays of values into  database table'''

@@ -90,6 +90,7 @@ class RelationalWarehouse(WarehouseInterface):
             
         elif partition.record.format == 'hdf':
             self._install_hdf_partition(bundle,  partition)
+            
         else:
             self._install_partition(bundle, partition)
 
@@ -103,12 +104,19 @@ class RelationalWarehouse(WarehouseInterface):
 
         return table_name in self.database.inspector.get_table_names()
     
+    def table_meta(self, d_vid, table_name,use_id=True):
+        from ..schema import Schema
+
+        meta, table = Schema.get_table_meta_from_db(self.library.database, table_name, d_vid = d_vid,  use_id=use_id, 
+                                                    session=self.library.database.session)        
+    
+        return meta, table
+    
     def create_table(self, d_vid, table_name, use_id = True):
         
         from ..schema import Schema
 
-        meta, table = Schema.get_table_meta_from_db(self.library.database, table_name, d_vid = d_vid,  use_id=use_id, 
-                                                    session=self.library.database.session)
+        meta, table = self.table_meta(d_vid, table_name, use_id)
 
         if not self.has_table(table.name):
             table.create(bind=self.database.engine)
@@ -127,8 +135,8 @@ class RelationalWarehouse(WarehouseInterface):
      
         tables = partition.data.get('tables',[])
 
-
         s = self.database.session
+        
         # Create the tables
         for table_name in tables:
             if not table_name in self.database.inspector.get_table_names():    
@@ -181,7 +189,7 @@ class RelationalWarehouse(WarehouseInterface):
     def remove_by_name(self,name):
         from ..orm import Dataset
         from ..bundle import LibraryDbBundle
-        from sqlalchemy.exc import  NoSuchTableError
+        from sqlalchemy.exc import  NoSuchTableError, ProgrammingError
         
         dataset, partition = self.get(name)
 
@@ -189,16 +197,27 @@ class RelationalWarehouse(WarehouseInterface):
             b = LibraryDbBundle(self.library.database, dataset.vid)
             p = b.partitions.find(partition)
             self.logger.log("Dropping tables in partition {}".format(p.identity.vname))
-            for t in p.tables:
+            for table_name in p.tables: # Table name without the id prefix
+                
+                meta, table = self.table_meta(dataset.vid, table_name, use_id=True) # May have the id_prefix
+                
                 try:
-                    self.database.drop_table(t)
-                    self.logger.log("Dropped table: {}".format(t))
-                except NoSuchTableError:
-                    self.logger.log("Table does not exist: {}".format(t))
+                    self.database.drop_table(table.name)
+                    self.logger.log("Dropped table: {}".format(table.name))
+                except NoSuchTableError, ProgrammingError:
+                    self.logger.log("Table does not exist: {}".format(table.name))
             
             self.library.database.remove_partition(partition)
-        else:
+        elif dataset:
+            
+            b = LibraryDbBundle(self.library.database, dataset.vid)
+            for p in b.partitions:
+                self.remove_by_name(p.identity.vname)
+            
+            self.logger.log('Removing bundle {}'.format(dataset.vname))
             self.library.database.remove_bundle(dataset)
+        else:
+            self.logger.error("Failed to find partition or bundle by name '{}'".format(name))
         
     def clean(self):
         self.database.clean()

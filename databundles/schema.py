@@ -107,7 +107,8 @@ class Schema(object):
     def table(self, name_or_id):
         '''Return an orm.Table object, from either the id or name'''
 
-        return Schema.get_table_from_database(self.bundle.database, name_or_id, session = self.bundle.database.session)
+        return Schema.get_table_from_database(self.bundle.database, name_or_id, session = self.bundle.database.session, 
+                                              d_vid = self.bundle.identity.vid)
      
 
     def add_table(self, name,  **kwargs):
@@ -791,6 +792,21 @@ class {name}(Base):
                 sql = "CREATE VIEW {} AS {};".format(name, view)
                 p.database.connection.execute(sql)  
         
+    def update_lengths(self, table_name,  lengths):
+        '''Update the sizes of the columns in table with a dict mapping column names to length'''
+        
+        with self.bundle.session as s:
+            
+            table = self.table(table_name)
+            
+            for c in table.columns:
+                
+                size = lengths.get(c.name, False)
+                
+                if size and size > c.size:
+                    c.size = size
+                    s.merge(c)
+
     def extract_query(self, source_table, extract_table, extra_columns=None):
      
         st = self.table(source_table)

@@ -1843,6 +1843,7 @@ class Library(object):
 
             self.remote.put(file_.path, identity.cache_key, metadata=identity.to_meta(file=file_.path))
             file_.state = 'pushed'
+            
             self.database.commit()
         else:
             for file_ in self.new_files:

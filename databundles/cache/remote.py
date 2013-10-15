@@ -85,8 +85,8 @@ class RestRemote(RemoteInterface):
             raise ConfigurationError("Metadata is missing keys: {}".format(metadata.keys()))
 
         # Store the bundle into the S3 cache. 
-        
-        if not self.upstream.has(rel_path, md5=metadata['md5']):
+
+        if not self.last_upstream().has(rel_path, md5=metadata['md5'], use_upstream=True):
             r =  self.upstream.put(source, rel_path, metadata=metadata)
         else:
             r = self.upstream.path(rel_path)

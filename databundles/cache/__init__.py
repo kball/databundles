@@ -51,7 +51,7 @@ class CacheInterface(object):
     
     def get_stream(self, rel_path, cb=None, return_encoding=False):  raise NotImplementedError(type(self))
     
-    def last_upstream(self):  raise NotImplementedError()
+    def last_upstream(self):  raise NotImplementedError(type(self))
     
     def has(self, rel_path, md5=None, use_upstream=True):  raise NotImplementedError()
     
@@ -97,7 +97,13 @@ class RemoteInterface(CacheInterface, RemoteMarker):
     
     def get_ref(self, id_): raise NotImplementedError()
     
-    
+    def last_upstream(self):
+        us = self
+        
+        while us.upstream:   
+            us = us.upstream
+            
+        return us    
        
 class Cache(CacheInterface):
     

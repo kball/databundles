@@ -264,6 +264,7 @@ def _print_bundle_list(*args):
 def _print_info(l,d,p, list_partitions=False):
     from ..cache import RemoteMarker
     from ..bundle import LibraryDbBundle # Get the bundle from the library
+    from sqlalchemy.orm.exc import NoResultFound
     
     api = None
     try:
@@ -294,14 +295,14 @@ def _print_info(l,d,p, list_partitions=False):
         prt("D Web Path  : {}",remote_d['url'])
 
     
-    b = LibraryDbBundle(l.database, d.vid)
-    
-    prt("D Partitions: {}",b.partitions.count)
-    if not p and (list_partitions or b.partitions.count < 12):
+    if l.cache.has(d.cache_key):
+        b = LibraryDbBundle(l.database, d.vid)
         
-        for partition in  b.partitions.all:
-            prt("P {:15s} {}", partition.identity.vid, partition.identity.vname)
-
+        prt("D Partitions: {}",b.partitions.count)
+        if not p and (list_partitions or b.partitions.count < 12):
+            
+            for partition in  b.partitions.all:
+                prt("P {:15s} {}", partition.identity.vid, partition.identity.vname)
 
     if p:
         prt("P --- Partition ---")
@@ -312,9 +313,7 @@ def _print_info(l,d,p, list_partitions=False):
   
         if remote_p:
             prt("P Web Path  : {}",remote_p['url'])
- 
 
-    
 def main():
     import argparse
     from .library import library_command #@UnresolvedImport

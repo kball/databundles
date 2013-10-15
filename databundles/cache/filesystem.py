@@ -749,7 +749,7 @@ class FsCompressionCache(Cache):
         
         # This odd structure is because the MD5 check won't work if it is computed on a uncompressed
         # file and checked on a compressed file. But it will work if the check is done on an s#
-        # file, which stored the md5 as metadada
+        # file, which stores the md5 as metadada
 
         r =  self.upstream.has(self._rename(rel_path), md5=md5, use_upstream=use_upstream)
 
