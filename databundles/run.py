@@ -220,18 +220,15 @@ class RunConfig(object):
             
         def __call__(self, name):
             
-            fs = self.this.group('filesystem') 
-            root_dir = fs['root_dir'] if 'root_dir' in fs  else  '/tmp/norootdir'
-            
+
             e =  self.this.group_item('sourcerepo', name) 
             e =  self.this._sub_strings(e, {
-                                         'account': lambda k,v: self.this.account(v),
-                                         'dir' : lambda k,v: v.format(root=root_dir)
+                                         'account': lambda k,v: self.this.account(v)
                                          }  ) 
             e['_name'] = name
          
             e['dir'] = self.dir
-         
+
             return e   
         
         @property
@@ -247,7 +244,11 @@ class RunConfig(object):
         def dir(self):   
             from source.repository import new_repository
             
-            return self.this.group('sourcerepo')['dir']
+            fs = self.this.group('filesystem') 
+            root_dir = fs['root_dir'] if 'root_dir' in fs  else  '/tmp/norootdir'
+                    
+            
+            return self.this.group('sourcerepo')['dir'].format(root=root_dir)
 
     
     def warehouse(self,name):
