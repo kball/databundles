@@ -103,6 +103,9 @@ class RelationalDatabase(DatabaseInterface):
 
             self.require_path()
       
+            # For Sqlite, this will create an empty database. 
+            self.get_connection(check_exists=False)
+      
             tables = [ Config ]
 
             for table in tables:
@@ -120,7 +123,7 @@ class RelationalDatabase(DatabaseInterface):
         if not 'config' in self.inspector.get_table_names():
             Config.__table__.create(bind=self.engine) #@UndefinedVariable
         
-        self.set_config_value(Config.ROOT_CONFIG_NAME_V, 'process','dbcreated', datetime.now().isoformat() )
+        self.set_config_value(Config.ROOT_CONFIG_NAME_V, 'process','dbcreated', datetime.now().isoformat(), session=self.creation_session )
         
     def post_create(self):
         '''Call all implementations of _post_create in this object's class heirarchy'''
@@ -150,7 +153,7 @@ class RelationalDatabase(DatabaseInterface):
         
 
     @property
-    def connection(self):
+    def connection(self, check_exists=True):
         '''Return an SqlAlchemy connection'''
         if not self._connection:
             try:
@@ -189,6 +192,16 @@ class RelationalDatabase(DatabaseInterface):
             self._unmanaged_session.flush = abort_flush # Monkeypatch to make read-only
 
         return self._unmanaged_session
+
+
+    @property
+    def creation_session(self):
+        '''Writable Session to be used during databasecreation'''
+
+        from sqlalchemy.orm import sessionmaker
+        Session = sessionmaker(bind=self.engine,autocommit=False, autoflush=False)
+        return Session()
+
 
 
     @property
@@ -302,7 +315,7 @@ class RelationalDatabase(DatabaseInterface):
 
 
 
-    def set_config_value(self, d_vid, group, key, value):
+    def set_config_value(self, d_vid, group, key, value, session=None):
         from databundles.orm import Config as SAConfig
         
         if group == 'identity' and d_vid != SAConfig.ROOT_CONFIG_NAME_V:
@@ -312,16 +325,16 @@ class RelationalDatabase(DatabaseInterface):
         key = key.strip('_')
   
 
-        s = self.session
+        session = self.session if not session else session
   
-        s.query(SAConfig).filter(SAConfig.group == group,
+        session.query(SAConfig).filter(SAConfig.group == group,
                                  SAConfig.key == key,
                                  SAConfig.d_vid == d_vid).delete()
         
 
         o = SAConfig(group=group, key=key,d_vid=d_vid,value = value)
-        s.add(o)
-        s.commit()
+        session.add(o)
+        session.commit()
 
 
 
@@ -349,6 +362,8 @@ class RelationalBundleDatabaseMixin(object):
         """Create the database from the base SQL"""
         from databundles.orm import  Dataset, Partition, Table, Column, File
         from ..identity import new_identity
+        from sqlalchemy.orm import sessionmaker
+
 
         tables = [ Dataset, Partition, Table, Column, File ]
 
@@ -356,7 +371,8 @@ class RelationalBundleDatabaseMixin(object):
             table.__table__.create(bind=self.engine)
 
         # Create the Dataset record
-
+        session = self.creation_session
+        
         ds = Dataset(**self.bundle.config.identity)
 
         ident = new_identity(self.bundle.config.identity)
@@ -364,8 +380,8 @@ class RelationalBundleDatabaseMixin(object):
         ds.name = ident.name
         ds.vname = ident.vname
 
-        self.session.add(ds)
-        self.session.commit()
+        session.add(ds)
+        session.commit()
 
     def rewrite_dataset(self):
         from ..orm import Dataset
@@ -377,13 +393,13 @@ class RelationalBundleDatabaseMixin(object):
 
         self.session.merge(ds)
 
-
     def _post_create(self):
         from ..orm import Config
-        self.set_config_value(self.bundle.identity.vid, 'info','type', 'bundle' )
-        self.set_config_value(Config.ROOT_CONFIG_NAME_V, 'bundle','vname', self.bundle.identity.vname )
-        self.set_config_value(Config.ROOT_CONFIG_NAME_V, 'bundle','vid', self.bundle.identity.vid )
+        from sqlalchemy.orm import sessionmaker
 
+        self.set_config_value(self.bundle.identity.vid, 'info','type', 'bundle', session=self.creation_session )
+        self.set_config_value(Config.ROOT_CONFIG_NAME_V, 'bundle','vname', self.bundle.identity.vname, session=self.creation_session  )
+        self.set_config_value(Config.ROOT_CONFIG_NAME_V, 'bundle','vid', self.bundle.identity.vid , session=self.creation_session )
 
 class RelationalPartitionDatabaseMixin(object):
     

@@ -63,7 +63,7 @@ def warehouse_info(args, w,config):
     prt("Name:     {}",args.name)
     prt("Class:    {}",w.__class__)
     prt("Database: {}",w.database.dsn)
-    prt("Library : {}",w.library.dsn)
+    prt("Library : {}",w.library.database.dsn)
 
  
 class Logger(object):

@@ -6,7 +6,8 @@ Created on Jun 10, 2012
 
 
 from  databundles.bundle import BuildBundle
-import petl.fluent as petl
+import petl.fluent as petl  # @UnresolvedImport
+
 
 class Bundle(BuildBundle):
     
@@ -63,8 +64,6 @@ class Bundle(BuildBundle):
         self.log("Build db, using an inserter")
         self.build_db_inserter()
 
-        return
-    
         self.log("Build geo")
         self.build_geo()
         
@@ -79,7 +78,7 @@ class Bundle(BuildBundle):
         self.build_csv()
 
         self.log("Build db, using petl")
-        self.build_db()
+        self.build_db_petl()
 
         self.log("Build hdf")
         self.build_hdf()
@@ -115,7 +114,8 @@ class Bundle(BuildBundle):
         field_gen =  self.fields3
       
         lr = self.init_log_rate(5000)
-        with p.inserter() as ins:
+        with p.inserter(cache_size = 1) as ins:
+            
             for i in range(10000):
                 row = { f[0]:f[1]() for f in field_gen }
                 ins.insert(row)

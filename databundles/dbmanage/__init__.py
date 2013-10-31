@@ -322,7 +322,7 @@ def main():
     from test import test_command #@UnresolvedImport
     from install import install_command #@UnresolvedImport
     from ckan import ckan_command #@UnresolvedImport
-    from source import source_command #@UnresolvedImport    
+    from source import source_command, source_parser  #@UnresolvedImport    
     parser = argparse.ArgumentParser(prog='python -mdatabundles',
                                      description='Databundles {}. Management interface for databundles, libraries and repositories. '.format(__version__))
     
@@ -415,8 +415,8 @@ def main():
     sp.add_argument('-o','--open',  default=False, action="store_true",  help='Open the database with sqlite')
     sp.add_argument('-f','--force',  default=False, action="store_true",  help='Force retrieving from the remote')
 
-    sp = asp.add_parser('delete', help='Delete a file from all local caches and the local library')
-    sp.set_defaults(subcommand='delete')
+    sp = asp.add_parser('remove', help='Delete a file from all local caches and the local library')
+    sp.set_defaults(subcommand='remove')
     sp.add_argument('term', type=str,help='Name or ID of the bundle or partition to remove')
 
     sp = asp.add_parser('load', help='Search for the argument as a bundle or partition name or id. Possible download the file from the remote library')
@@ -477,90 +477,8 @@ def main():
     sp.add_argument('-R', '--remote',  default=None,  help="Url of remote library")
 
 
-    #
-    # Source Command
-    #
-    src_p = cmd.add_parser('source', help='Manage bundle source files')
-    src_p.set_defaults(command='source')
-    src_p.add_argument('-n','--name',  default='default',  help='Select the name for the repository. Defaults to "default" ')
-    src_p.add_argument('-l','--library',  default='default',  help='Select a different name for the library')
-    asp = src_p.add_subparsers(title='source commands', help='command help')  
+    source_parser(cmd)
    
-
-    sp = asp.add_parser('new', help='Create a new bundle')
-    sp.set_defaults(subcommand='new')
-    sp.set_defaults(revision=1) # Needed in Identity.name_parts
-    sp.add_argument('-s','--source', required=True, help='Source, usually a domain name') 
-    sp.add_argument('-d','--dataset',  required=True, help='Name of the dataset') 
-    sp.add_argument('-b','--subset', nargs='?', default=None, help='Name of the subset') 
-    sp.add_argument('-v','--variation', default='orig', help='Name of the variation') 
-    sp.add_argument('-c','--creator',  required=True, help='Id of the creator') 
-    sp.add_argument('-n','--dry-run', default=False, help='Dry run') 
-    sp.add_argument('args', nargs=argparse.REMAINDER) # Get everything else. 
-
-    sp = asp.add_parser('info', help='Information about the source configuration')
-    sp.set_defaults(subcommand='info')
-    sp.add_argument('term',  nargs='?', type=str,help='Name or ID of the bundle or partition to print information for')
-    
-    
-    sp = asp.add_parser('deps', help='Print the depenencies for all source bundles')
-    sp.set_defaults(subcommand='deps')
-    sp.add_argument('ref', type=str,nargs='?',help='Name or id of a bundle to generate a sorted dependency list for.')   
-    sp.add_argument('-d','--detail',  default=False,action="store_true",  help='Display details of locations for each bundle')   
-    group = sp.add_mutually_exclusive_group()
-    group.add_argument('-f', '--forward',  default='f', dest='direction',   action='store_const', const='f', help='Display bundles that this one depends on')
-    group.add_argument('-r', '--reverse',  default='f', dest='direction',   action='store_const', const='r', help='Display bundles that depend on this one')
-    
-    sp = asp.add_parser('find', help='Find source bundle source directories')
-    sp.set_defaults(subcommand='find')
-    sp.add_argument('term', type=str,help='Query term')
-    sp.add_argument('-r','--register',  default=False,action="store_true",  help='Register directories in the library. ')
-
-    sp = asp.add_parser('init', help='Intialize the local and remote git repositories')
-    sp.set_defaults(subcommand='init')
-    sp.add_argument('dir', type=str,nargs='?',help='Directory')
-
-    sp = asp.add_parser('list', help='List the source dirctories')
-    sp.set_defaults(subcommand='list')
-
-    sp = asp.add_parser('sync', help='Load references from the confiurged source remotes')
-    sp.set_defaults(subcommand='sync')
-    sp.add_argument('-l','--library',  default='default',  help='Select a library to add the references to')
-  
-    sp = asp.add_parser('clone', help='Clone source into a local directory')
-    sp.set_defaults(subcommand='clone')
-    sp.add_argument('-l','--library',  default='default',  help='Select a library to take references from')
-    sp.add_argument('dir', type=str,nargs='?',help='Source id')      
-  
-    sp = asp.add_parser('make', help='Build sources')
-    sp.set_defaults(subcommand='make')
-    sp.add_argument('-f','--force', default=False,action="store_true", help='Build even if built or in library')
-    sp.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')
-    sp.add_argument('-i','--install', default=False,action="store_true", help='Install after build')
-
-    sp.add_argument('dir', type=str,nargs='?',help='Directory to start search for sources in. ')      
- 
- 
-    sp = asp.add_parser('run', help='Run a shell command in source directories')
-    sp.set_defaults(subcommand='run')
-    sp.add_argument('-d','--dir', nargs='?', help='Directory to start recursing from ')
-    sp.add_argument('-m','--message', nargs='+', default='.', help='Directory to start recursing from ')
-    sp.add_argument('shell_command',nargs=argparse.REMAINDER, type=str,help='Shell command to run')  
-    group = sp.add_mutually_exclusive_group()
-    group.add_argument('-c', '--commit',  default=False, dest='repo_command',   action='store_const', const='commit', help='Commit')
-    group.add_argument('-p', '--push',  default=False, dest='repo_command',   action='store_const', const='push', help='Push to origin/master')    
-    group.add_argument('-l', '--pull',  default=False, dest='repo_command',   action='store_const', const='pull', help='Pull from upstream')  
-    group.add_argument('-i', '--install',  default=False, dest='repo_command',   action='store_const', const='install', help='Install the bundle')  
-      
-            
-      
-    sp = asp.add_parser('find', help='Find source packages that meet a vareity of conditions')
-    sp.set_defaults(subcommand='find')
-    sp.add_argument('-d','--dir',  help='Directory to start recursing from ')
-    group = sp.add_mutually_exclusive_group()
-    group.add_argument('-c', '--commit',  default=False, dest='commit',   action='store_true', help='Find bundles that need to be committed')
-    group.add_argument('-p', '--push',  default=False, dest='push',   action='store_true', help='Find bundles that need to be pushed')
-      
     #
     # Remote Command
     #

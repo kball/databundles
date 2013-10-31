@@ -57,8 +57,18 @@ class PostgresWarehouse(RelationalWarehouse):
             raise 
      
         cmd =  self._copy_command(table.name, url)
-        #print 'Postgres._install_csv_partition', cmd
-        self.database.connection.execute(cmd)
+        self.logger.log('installing with command: {} '.format(cmd))
+        r = self.database.connection.execute(cmd)
+        r = self.database.connection.execute('commit')
+        
+        try: self.logger.log("Install result (a): {}".format(r))
+        except: pass
+        
+        try: self.logger.log("Install result (b): {}".format(r.fetchone()))
+        except: pass
+
+        try: self.logger.log("Install result (c): {}".format(r.fetchall()))
+        except: pass
 
         self.logger.log('installed_partition {}'.format(p.identity.name)) 
             

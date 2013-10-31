@@ -11,23 +11,12 @@ import databundles.client.exceptions as Exceptions
 import requests
 import json
 
-def get_client(rc=None, name=None):
+def new_ckan(config):
     from databundles.dbexceptions import ConfigurationError
-    if rc is None:
-        rc = get_runconfig()
-        
-    if name is None:
-        name = 'default'
-        
-    try:
-        catalog = rc.group('catalog')
-        cfg = rc.catalog.get(name)
-        url = cfg.url
-        key = cfg.key
-    except Exception as e:
-        raise ConfigurationError(("Failed to get configuration for catalog.{0}.url or "+
-                                 "catalog.{0}.key: {1}").format(name, e))
-           
+  
+    url = config.url
+    key = config.key
+  
     return Ckan(url, key)
            
 class Ckan(object):

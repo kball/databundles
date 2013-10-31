@@ -6,7 +6,7 @@ Created on Jun 22, 2012
 import unittest
 from  testbundle.bundle import Bundle
 from databundles.identity import * #@UnusedWildImport
-from test_base import  TestBase
+from test_base import  TestBase  # @UnresolvedImport
 
 class Test(TestBase):
  
@@ -133,8 +133,7 @@ class Test(TestBase):
         self.assertEquals('source-dataset-subset-variation-ca0d', b.identity.name)
         self.assertEquals('source-dataset-subset-variation-ca0d-r1', b.identity.vname)
         
-        with b.session:
-            b.database.create()
+        b.database.create()
         
         db_path =  b.database.path
         

@@ -220,7 +220,80 @@ class CensusTransform(BasicTransform):
 
         
         self.f = f
+ 
+#
+# Functions for CasterTransformBUilder
+# 
+
+def is_nothing(v):
     
+    if isinstance(v, basestring):
+        v = v.strip()
+    
+    if v is None or v == '':
+        return True
+    else:
+        return False
+
+def parse_int(v):
+    if is_nothing(v):
+        return None
+    else:
+        return int(round(float(v),0))
+
+def parse_type(type_,v):
+
+    if is_nothing(v):
+        return None
+    else:
+        return type_(v)   
+
+def parse_date(v):
+    import dateutil.parser as dp
+    import datetime
+    if is_nothing(v):
+        return None
+    elif isinstance(v, basestring):
+        try:
+            return dp.parse(v).date()
+        except ValueError as e:
+            raise ValueError("Failed to parse time for value '{}': {}".format(v, e.message))
+    elif isinstance(v, datetime.date):
+        return v
+    else:
+        raise TypeError("Expected datetime.date or basestring, got {{}}".format(type(v)))
+
+def parse_time(v):
+    import dateutil.parser as dp
+    import datetime
+    if is_nothing(v):
+        return None
+    elif isinstance(v, basestring):
+        try:
+            return dp.parse(v).time()
+        except ValueError as e:
+            raise ValueError("Failed to parse time for value '{}': {}".format(v, e.message))
+    elif isinstance(v, datetime.time):
+        return v
+    else:
+        raise TypeError("Expected datetime.time or basestring, got {{}}".format(type(v)))
+
+def parse_datetime(v):
+    import dateutil.parser as dp
+    import datetime
+    if is_nothing(v):
+        return None
+    elif isinstance(v, basestring):
+        try:
+            return dp.parse(v)
+        except ValueError as e:
+            raise ValueError("Failed to parse time for value '{}': {}".format(v, e.message))
+    elif isinstance(v, datetime.datetime):
+        return v
+    else:
+        raise TypeError("Expected datetime.datetime or basestring, got {{}}".format(type(v)))        
+        
+
 class CasterTransformBuilder(object):
     
     def __init__(self):
@@ -233,7 +306,9 @@ class CasterTransformBuilder(object):
     def makeListTransform(self):
         import uuid
         import datetime
-        f_name = "f"+str(uuid.uuid4()).replace('-','')
+        f_name = "row_transform_"+str(uuid.uuid4()).replace('-','')
+        
+        raise NotImplementedError("Needs to be fixed")
         
         o = """
 def {}(row):
@@ -276,39 +351,16 @@ def {}(row):
         import uuid
         import datetime
          
-        f_name = "f"+str(uuid.uuid4()).replace('-','')
+        f_name = "dict_transform_"+str(uuid.uuid4()).replace('-','')
+        f_name_inner = "dict_transform_"+str(uuid.uuid4()).replace('-','')
         
         o = """def {}(row):
     
-    is_not_nothing = lambda x: True if x!='' and x != None else False
     import dateutil.parser as dp
     import datetime
-    
-    def parse_date(v):
-        if isinstance(v, basestring):
-            return dp.parse(v).date()
-        elif isinstance(v, datetime.date):
-            return v
-        else:
-            raise TypeError("Expected datetime.date or basestring, got {{}}".format(type(v)))
+    from databundles.transform import parse_date, parse_time, parse_datetime
 
-    def parse_time(v):
-        if isinstance(v, basestring):
-            return dp.parse(v).time()
-        elif isinstance(v, datetime.time):
-            return v
-        else:
-            raise TypeError("Expected datetime.time or basestring, got {{}}".format(type(v)))
- 
-    def parse_datetime(v):
-        if isinstance(v, basestring):
-            return dp.parse(v)
-        elif isinstance(v, datetime.datetime):
-            return v
-        else:
-            raise TypeError("Expected datetime.datetime or basestring, got {{}}".format(type(v)))        
-        
-    return {{""".format(f_name)
+    r = lambda : {{""".format(f_name)
     
         for i,(name,type_) in enumerate(self.types):
             if i != 0:
@@ -317,20 +369,27 @@ def {}(row):
             if type_ == str:
                 type_ = unicode
                 
-            if type_ == float or type_ == int:
-                o += "'{name}':{type}(row['{name}']) if is_not_nothing(row['{name}']) else None".format(type=type_.__name__,name=name)
-            elif type_ == datetime.date:
-                o += "'{name}':parse_date(row['{name}']) if is_not_nothing(row['{name}']) else None".format(type=type_.__name__,name=name)
+            if type_ == datetime.date:
+                o += "'{name}':parse_date(row.get('{name}',None))".format(name=name)
             elif type_ == datetime.time:
-                o += "'{name}':parse_time(row['{name}']) if is_not_nothing(row['{name}']) else None".format(type=type_.__name__,name=name)
+                o += "'{name}':parse_time(row.get('{name}',None))".format(name=name)
             elif type_ == datetime.datetime:
-                o += "'{name}':parse_datetime(row['{name}']) if is_not_nothing(row['{name}']) else None".format(type=type_.__name__,name=name)
-
+                o += "'{name}':parse_datetime(row.get('{name}',None))".format(name=name)
+            elif type_ == int:
+                o += "'{name}':parse_int(row.get('{name}',None))".format(name=name)
             else:
-                o += "'{name}':{type}(row['{name}'])".format(type=type_.__name__,name=name)
+                o += "'{name}':parse_type({type},row.get('{name}',None))".format(type=type_.__name__,name=name)
             
-        o+= '}\n'
+        o+= """}
 
+    try:
+        return r()
+    except Exception as e:
+        import pprint
+        pprint.pprint(row)
+        raise TypeError("Row transform failed for row {}\\n{}: {}".format(row, type(e),  e.message))
+        
+"""
         return f_name, o
           
     def compile(self):
@@ -338,11 +397,12 @@ def {}(row):
 
         if not self._compiled:
                     
-            lfn, lf = self.makeListTransform()
+            #lfn, lf = self.makeListTransform()
             dfn, df = self.makeDictTransform()
 
-            exec(lf)
-            lf = locals()[lfn]
+            #exec(lf)
+            #lf = locals()[lfn]
+            lf = None
             
             exec(df)
             df = locals()[dfn]
@@ -353,18 +413,18 @@ def {}(row):
             
             
     def __call__(self, row):
-        from sqlalchemy.engine.result import RowProxy
+        from sqlalchemy.engine.result import RowProxy  # @UnresolvedImport
         
         f = self.compile()
 
         if isinstance(row, dict):
-            return f[1](row)
+            return f[1]({k.lower():v for k,v in row.items()})
         
         elif isinstance(row, (list,tuple)):
             return f[0](row) 
           
         elif isinstance(row, RowProxy):
-            return f[1](dict(row))     
+            return f[1]({k.lower():v for k,v in row.items()})     
         else:
             raise Exception("Unknown row type: {} ".format(type(row)))
         

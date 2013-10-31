@@ -326,6 +326,7 @@ class BundleFilesystem(Filesystem):
         import tempfile
         import urlparse
         import urllib2
+        import stat
       
         cache = self.get_cache_by_name('downloads')
         parsed = urlparse.urlparse(url)
@@ -361,9 +362,10 @@ class BundleFilesystem(Filesystem):
             try:                  
 
                 cached_file = cache.get(file_path)
+                size = os.stat(cached_file).st_size if cached_file else None
    
-                if cached_file:
-                 
+                if cached_file and size:
+
                     out_file = cached_file
                     
                     if test_f and not test_f(out_file):
@@ -385,11 +387,11 @@ class BundleFilesystem(Filesystem):
                         out_file = cache.put(resp, file_path)
                     except:
                         self.bundle.error("Caught exception, deleting download file")
-                        cache.remove(file_path)
+                        cache.remove(file_path, propagate = True)
                         raise
               
                     if test_f and not test_f(out_file):
-                        cache.remove(file_path)
+                        cache.remove(file_path, propagate = True)
                         raise DownloadFailedError("Download didn't pass test function "+url)
 
                 break
@@ -417,7 +419,7 @@ class BundleFilesystem(Filesystem):
                 
             except Exception as e:
                 self.bundle.error("Unexpected download error '"+str(e)+"' when downloading "+url)
-                cache.remove(file_path)
+                cache.remove(file_path, propagate = True)
                 raise 
     
 
@@ -437,9 +439,14 @@ class BundleFilesystem(Filesystem):
             key columm or columns to use as the key. If None, return a list
         
         """
+        import os.path
         
         opened = False
         if isinstance(f, basestring):
+            
+            if not os.path.exists(f):
+                f = self.path(f) # Asume it is relative to the bundle filsystem
+            
             f = open(f,'rb')
             opened = True
         
@@ -488,12 +495,15 @@ class BundleFilesystem(Filesystem):
             raise Exception("Failed to unzip {} and get .shp file ".format(zip_file))
         
         return file_
-        
+ 
     def load_yaml(self,*args):
         """Load a yaml file from the bundle file system. Arguments are passed to self.path()
         And if the first path element is not absolute, pre-pends the bundle path. 
-        
+
         Returns an AttrDict of the results. 
+        
+        This will load yaml files the same way as RunConfig files. 
+        
         """
         from databundles.util import AttrDict  
         
@@ -505,6 +515,23 @@ class BundleFilesystem(Filesystem):
         return ad
 
 
+        
+    def read_yaml(self,*args):
+        """Straight-to-object reading of a YAML file. 
+        """
+        import yaml
+        
+        from databundles.util import AttrDict  
+
+        with open(self.path(*args),'rb') as f:
+            return yaml.load(f)
+            
+
+    def write_yaml(self, o, *args):
+        import yaml
+        
+        with open(self.path(*args),'wb') as f:
+            return yaml.safe_dump( o, f,default_flow_style=False, indent=4, encoding='utf-8' )       
 
     def get_url(self,source_url, create=False):
         '''Return a database record for a file'''
@@ -566,6 +593,8 @@ class BundleFilesystem(Filesystem):
             return None
         
         return o
+
+
 
 # Stolen from : https://bitbucket.org/fabian/filechunkio/src/79ba1388ee96/LICENCE?at=default
 

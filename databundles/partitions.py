@@ -31,10 +31,12 @@ class Partitions(object):
         from databundles.identity import PartitionNumber
         from partition import PartitionIdentity
         from sqlalchemy import or_
+        from sqlalchemy.util._collections import KeyedTuple
         
         from partition import new_partition
         
         session = self.bundle.database.session
+
 
         if isinstance(arg,OrmPartition):
             orm_partition = arg
@@ -50,7 +52,7 @@ class Partitions(object):
             orm_partition = session.query(OrmPartition).filter(OrmPartition.id_==str(arg.id_) ).one()  
                
         else:
-            raise ValueError("Arg must be a Partition or PartitionNumber")
+            raise ValueError("Arg must be a Partition or PartitionNumber. Got {}".format(type(arg)))
 
         return new_partition(self.bundle, orm_partition, **kwargs)
 
@@ -184,7 +186,7 @@ class Partitions(object):
             elif len(partitions) > 1 :
                 from databundles.dbexceptions import ResultCountError
                 
-                rl = "; ".join([p.identity.name for p in partitions])
+                rl = "; ".join([p.identity.vname for p in partitions])
                 
                 raise ResultCountError("Got too many results: {}".format(rl)) 
             else:
@@ -228,7 +230,7 @@ class Partitions(object):
         import sqlalchemy.orm.exc
 
         from databundles.identity import Identity
-        from databundles.orm import Partition as OrmPartition, Dataset
+        from databundles.orm import Partition as OrmPartition
         
         pid, name = self._pid_or_args_to_pid(self.bundle, pid, kwargs)
 
@@ -268,9 +270,10 @@ class Partitions(object):
 
         ds = self.bundle.dataset
         
-        q = q.filter(Dataset.vid == ds.vid)
+        q = q.filter(OrmPartition.d_vid == ds.vid)
 
         q = q.order_by(OrmPartition.vid.asc()).order_by(OrmPartition.segment.asc())
+
  
         return q
 
@@ -364,7 +367,10 @@ class Partitions(object):
         else: 
             kwargs['format'] = 'db'
             
-        return self._new_partition(pid, **kwargs)
+        p =  self._new_partition(pid, **kwargs)
+        p.create()
+        
+        return p
     
     def new_geo_partition(self, pid=None, **kwargs):
         from sqlalchemy.orm.exc import  NoResultFound

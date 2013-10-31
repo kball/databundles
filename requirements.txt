@@ -7,5 +7,6 @@ python-dateutil
 unicodecsv
 lockfile
 sh
+petl
 # This pysqlite clone enables load_extension. Only needed on Linux
 # -e git+https://github.com/clarinova/pysqlite.git#egg=pysqlite

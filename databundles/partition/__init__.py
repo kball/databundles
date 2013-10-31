@@ -282,6 +282,15 @@ class PartitionBase(PartitionInterface):
         return self.identity.name
     
     
+    def get(self):
+        '''Fetch this partition from the library or remote if it does not exist'''
+        import os
+        if not os.path.exists(self.database.path):
+            self.bundle.library.get(self.identity.vid)
+            return True
+        else:
+            return False
+    
     @property
     def path(self):
         '''Return a pathname for the partition, relative to the containing 
@@ -332,10 +341,12 @@ class PartitionBase(PartitionInterface):
             self.database.delete()
             self._database = None
             
-            s = self.bundle.database.session
-            s.delete(self.record)
-            s.commit()
-            
+            with self.bundle.session as s:
+                # Reload the record into this session so we can delete it. 
+                from ..orm import Partition
+                r = s.query(Partition).get(self.record.vid)
+                s.delete(r)
+
             self.record = None
             
         except:

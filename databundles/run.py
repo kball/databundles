@@ -189,8 +189,8 @@ class RunConfig(object):
         return e
 
 
-    def repository(self,name):
-        e =  self.group_item('repository', name) 
+    def datarepo(self,name):
+        e =  self.group_item('datarepo', name) 
 
         return self._sub_strings(e, {
                                      'filesystem': lambda k,v: self.filesystem(v)
@@ -300,7 +300,7 @@ if __name__ == '__main__':
     bundle_file = sys.argv[1]
     
     if not os.path.exists(os.path.join(os.getcwd(), 'bundle.yaml')):
-        print >> sys.stderr, "ERROR: Current directory '{}' does not have a bundle.yaml file".format(os.getcwd())
+        print >> sys.stderr, "ERROR: Current directory '{}' does not have a bundle.yaml file, so it isn't a bundle file. Did you mean to run 'dbmanage'?".format(os.getcwd())
         sys.exit(1)
 
     # Import the bundle file from the 

@@ -6,7 +6,7 @@ Created on Aug 31, 2012
 import unittest
 from  testbundle.bundle import Bundle
 from databundles.run import  RunConfig
-from test_base import  TestBase
+from test_base import  TestBase  # @UnresolvedImport
 
 class Test(TestBase):
 
@@ -56,17 +56,99 @@ class Test(TestBase):
             print values
         
         
-    def test_builder(self):
+    def test_caster(self):
+        from databundles.transform import CasterTransformBuilder
+        import datetime
         
-        table = self.bundle.schema.table('tone')
+        ctb = CasterTransformBuilder()
         
-        caster =  table.caster()
+        ctb.append('int',int)
+        ctb.append('float',float)
+        ctb.append('str',str)
         
-        p = self.bundle.partitions.find(table='tone')
+        row = ctb({'int':1,'float':2,'str':'3'})
         
-        for row in p.query("SELECT * FROM tone LIMIT 10"):
-            print caster(row)
-           
+        self.assertTrue(isinstance(row['int'],int))
+        self.assertEquals(row['int'],1)
+        self.assertTrue(isinstance(row['float'],float))
+        self.assertEquals(row['float'],2.0)
+        self.assertTrue(isinstance(row['str'],unicode))
+        self.assertEquals(row['str'],'3')
+        
+        # Should be idempotent
+        row = ctb(row)
+        self.assertTrue(isinstance(row['int'],int))
+        self.assertEquals(row['int'],1)
+        self.assertTrue(isinstance(row['float'],float))
+        self.assertEquals(row['float'],2.0)
+        self.assertTrue(isinstance(row['str'],unicode))
+        self.assertEquals(row['str'],'3')
+                
+        
+        ctb = CasterTransformBuilder()
+        
+        ctb.append('date',datetime.date)
+        ctb.append('time',datetime.time)
+        ctb.append('datetime',datetime.datetime)        
+        
+        row = ctb({'int':1,'float':2,'str':'3'})
+        
+        self.assertIsNone(row['date'])
+        self.assertIsNone(row['time'])
+        self.assertIsNone(row['datetime'])
+        
+        row = ctb({'date':'1990-01-01','time':'10:52','datetime':'1990-01-01T12:30'})
+        
+        self.assertTrue(isinstance(row['date'],datetime.date))
+        self.assertTrue(isinstance(row['time'],datetime.time))
+        self.assertTrue(isinstance(row['datetime'],datetime.datetime))
+        
+        self.assertEquals(row['date'],datetime.date(1990, 1, 1))
+        self.assertEquals(row['time'],datetime.time(10, 52))
+        self.assertEquals(row['datetime'],datetime.datetime(1990, 1, 1, 12, 30))
+        
+        # Should be idempotent
+        row = ctb(row)
+        self.assertTrue(isinstance(row['date'],datetime.date))
+        self.assertTrue(isinstance(row['time'],datetime.time))
+        self.assertTrue(isinstance(row['datetime'],datetime.datetime))
+        
+        # Case insensitive
+        row = ctb({'Date':'1990-01-01','Time':'10:52','Datetime':'1990-01-01T12:30'})
+
+        self.assertEquals(row['date'],datetime.date(1990, 1, 1))
+        self.assertEquals(row['time'],datetime.time(10, 52))
+        self.assertEquals(row['datetime'],datetime.datetime(1990, 1, 1, 12, 30))
+        
+        
+    def test_intuit(self):
+        import pprint
+                
+        schema = self.bundle.schema
+        
+        
+        data = [
+             (1,2,3),
+             (1,2.1,3),
+             (1,2.1,"foobar"),
+             (1,2,3)
+             ]
+                                
+        
+        memo = None
+        
+        for row in data:
+            memo  = schema.intuit(row, memo)
+
+        pprint.pprint(memo)
+        
+        memo = None
+        for row in data:
+            row = dict(zip(('one', 'two','three'), row))
+            memo  = schema.intuit(row, memo)        
+        
+        pprint.pprint(memo)
+        
         
 def suite():
     suite = unittest.TestSuite()

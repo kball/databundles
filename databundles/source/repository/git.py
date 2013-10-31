@@ -108,6 +108,12 @@ class GitShellService(object):
         except ErrorReturnCode_128 as e:
             logger.error("Needs_push failed in {}".format(os.getcwd()))
             return False
+     
+    def needs_init(self):
+        import os
+        
+        dot_git = os.path.join(os.getcwd(),'.git')
+        return not (os.path.exists(dot_git) and os.path.isdir(dot_git))
            
     def ignore(self, pattern):
         import os
@@ -326,7 +332,7 @@ class GitRepository(RepositoryInterface):
         self.impl.init()
         
         self.bundle.log("Create .gitignore")
-        for p in ('*.pyc', 'build','.project','.pydevproject', 'meta/schema-revised.csv'):
+        for p in ('*.pyc', 'build','.project','.pydevproject', 'meta/schema-revised.csv', 'meta/schema-old.csv'):
             self.impl.ignore(p)
                
         self.bundle.log("Create remote {}".format(self.name))
@@ -390,6 +396,9 @@ class GitRepository(RepositoryInterface):
     
     def needs_push(self):
         return self.impl.needs_push()
+    
+    def needs_init(self):
+        return self.impl.needs_init()
     
     def clone(self, url, path, dir_):
         '''Locate the source for the named bundle from the library and retrieve the 

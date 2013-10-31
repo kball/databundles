@@ -39,11 +39,16 @@ class PartitionDb(SqliteDatabase, RelationalPartitionDatabaseMixin, SqliteAttach
 
     def inserter(self, table_or_name=None,**kwargs):
 
+        if not self.exists():
+            raise Exception("Database doesn't exist yet")
+
         if table_or_name is None and self.partition.table is not None:
-            table_or_name = self.partition.table
+            table_or_name = self.partition.get_table()
       
         if isinstance(table_or_name, basestring):
+
             table_name = table_or_name
+            
             if not table_name in self.inspector.get_table_names():
                 t_meta, table = self.bundle.schema.get_table_meta(table_name) #@UnusedVariable
                 table.create(bind=self.engine)
@@ -87,6 +92,8 @@ class PartitionDb(SqliteDatabase, RelationalPartitionDatabaseMixin, SqliteAttach
         
         
         self.require_path()
+        
+        SqliteDatabase._create(self) # Creates the database file
         
         if RelationalDatabase._create(self):
             self.post_create()

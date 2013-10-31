@@ -196,15 +196,56 @@ class SqliteDatabase(RelationalDatabase):
                                          native_datetime=True,
                                          echo=False) 
             
+            
             logger.debug("_get_engine: {}".format(self.dsn))
             
             from sqlalchemy import event
             
             event.listen(self._engine, 'connect',connect_listener)
             #event.listen(self._engine, 'connect', _on_connect_update_schema)
+
             _on_connect_update_schema(self.connection)
              
         return self._engine
+
+    @property
+    def connection(self):
+        return self.get_connection()
+
+    def get_connection(self, check_exists=True):
+        '''Return an SqlAlchemy connection'''
+        if not self._connection:
+            
+            if not os.path.exists(self.path) and check_exists:
+                raise Exception("Trying to make a connection to a sqlite database that does not exist. check_exists={}".format(check_exists))
+
+            try:
+    
+                self._connection = self.engine.connect()
+            except Exception as e:
+                self.error("Failed to open: '{}': {} ".format(self.path, e))
+                raise
+            
+        return self._connection
+
+    def _create(self):
+        """Need to ensure the database exists before calling for the connection, but the
+        connection expects the database to exist first, so we create it here. """
+        
+        from sqlalchemy import create_engine  
+        
+        engine = create_engine(self.dsn, echo=True)
+        connection = engine.connect()
+
+    def is_empty(self):
+        
+        if not os.path.exists(self.path):
+            return True
+        
+        if not 'config' in self.inspector.get_table_names():
+            return True
+        else:
+            return False
 
     @property
     def dbapi_connection(self):
@@ -396,6 +437,8 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
     def create(self):
 
         self.require_path()
+  
+        SqliteDatabase._create(self) # Creates the database file
   
         if RelationalDatabase._create(self):
             

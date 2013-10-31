@@ -339,7 +339,7 @@ class Column(Base):
         DATATYPE_VARCHAR:(sqlalchemy.types.String,str,'VARCHAR'),
         DATATYPE_CHAR:(sqlalchemy.types.String,str,'VARCHAR'),
         DATATYPE_INTEGER:(sqlalchemy.types.Integer,int,'INTEGER'),
-        DATATYPE_INTEGER64:(sqlalchemy.types.BigInteger,int,'INTEGER64'),
+        DATATYPE_INTEGER64:(sqlalchemy.types.BigInteger,long,'INTEGER64'),
         DATATYPE_REAL:(sqlalchemy.types.Float,float,'REAL'),
         DATATYPE_FLOAT:(sqlalchemy.types.Float,float,'REAL'),
         DATATYPE_NUMERIC:(sqlalchemy.types.Float,float,'REAL'),
@@ -657,12 +657,14 @@ class Table(Base):
             
             for col in  self.columns:
                 
-                if not col.width:
+                size = col.width if col.width else col.size
+                
+                if not size:
                     continue
                 
-                pos += col.width
+                pos += size
             
-                regex += "(.{{{}}})".format(col.width)
+                regex += "(.{{{}}})".format(size)
                 header.append(col.name)
            
             return header, re.compile(regex) , regex 
@@ -670,23 +672,26 @@ class Table(Base):
     def get_fixed_unpack(self):
             '''Using the size values for the columns for the table, construct a
             regular expression to  parsing a fixed width file.'''
-        
+            from functools import partial
+            import struct
             unpack_str = ''
             header = []
             length = 0
             
             for col in  self.columns:
                 
-                if not col.width:
+                size = col.width if col.width else col.size
+                
+                if not size:
                     continue
                 
-                length += col.width
+                length += size
             
-                unpack_str += "{}s".format(col.width)
+                unpack_str += "{}s".format(size)
                 
                 header.append(col.name)
            
-            return header, unpack_str, length
+            return partial(struct.unpack, unpack_str), header, unpack_str, length
 
     @property
     def null_row(self):
@@ -880,8 +885,7 @@ class File(Base, SavableMixin):
 
         return  dict((col, getattr(self, col)) for col 
                      in ['path', 'source_url', 'process', 'state', 'content_hash', 'modified', 'size', 'group', 'ref', 'type_','data'])
-    
-    
+ 
 
 class Partition(Base):
     __tablename__ = 'partitions'

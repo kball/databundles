@@ -204,8 +204,12 @@ class RelationalWarehouse(WarehouseInterface):
                 try:
                     self.database.drop_table(table.name)
                     self.logger.log("Dropped table: {}".format(table.name))
-                except NoSuchTableError, ProgrammingError:
-                    self.logger.log("Table does not exist: {}".format(table.name))
+                    
+                except NoSuchTableError:
+                    self.logger.log("Table does not exist (a): {}".format(table.name))
+                    
+                except ProgrammingError:
+                    self.logger.log("Table does not exist (b): {}".format(table.name))
             
             self.library.database.remove_partition(partition)
         elif dataset:

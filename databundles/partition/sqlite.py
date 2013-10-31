@@ -86,7 +86,7 @@ class SqlitePartition(PartitionBase):
             self.database.query("DELETE FROM {}".format(table))
         
 
-    def optimal_rows_per_segment(self, size = 500*1024*1024):
+    def optimal_rows_per_segment(self, size = 100*1024*1024, max=200000):
         '''Calculate how many rows to put into a CSV segment for a target number
         of bytes per file'''
         
@@ -100,6 +100,9 @@ class SqlitePartition(PartitionBase):
         # Round up to nearest 100K
         
         rows_per_seg = round(rows_per_seg/100000+1) * 100000
+        
+        if rows_per_seg > max:
+            return max
         
         return rows_per_seg
         
@@ -169,9 +172,11 @@ class SqlitePartition(PartitionBase):
             if logger:
                 logger("CSVing for {}".format(ident.name))
 
-        p.write_stats(min_key, max_key, count)
-        ins.close()
-        _store_library(p)
+        # make sure we get the last partition
+        if p:
+            p.write_stats(min_key, max_key, count)
+            ins.close()
+            _store_library(p)
 
     def get_csv_parts(self):
         ident = self.identity.clone()   

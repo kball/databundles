@@ -158,7 +158,7 @@ def library_list(args, l, config):
     else:
         library_info(args, l, config, list_all=True)    
  
-def library_delete(args, l, config):   
+def library_remove(args, l, config):   
     
     name = args.term
     

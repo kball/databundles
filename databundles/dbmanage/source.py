@@ -16,6 +16,86 @@ def source_command(args, rc, src):
 
     globals()['source_'+args.subcommand](args, rc,src)
 
+def source_parser(cmd):
+    import argparse
+    
+    src_p = cmd.add_parser('source', help='Manage bundle source files')
+    src_p.set_defaults(command='source')
+    src_p.add_argument('-n','--name',  default='default',  help='Select the name for the repository. Defaults to "default" ')
+    src_p.add_argument('-l','--library',  default='default',  help='Select a different name for the library')
+    asp = src_p.add_subparsers(title='source commands', help='command help')  
+   
+
+    sp = asp.add_parser('new', help='Create a new bundle')
+    sp.set_defaults(subcommand='new')
+    sp.set_defaults(revision=1) # Needed in Identity.name_parts
+    sp.add_argument('-s','--source', required=True, help='Source, usually a domain name') 
+    sp.add_argument('-d','--dataset',  required=True, help='Name of the dataset') 
+    sp.add_argument('-b','--subset', nargs='?', default=None, help='Name of the subset') 
+    sp.add_argument('-v','--variation', default='orig', help='Name of the variation') 
+    sp.add_argument('-c','--creator',  required=True, help='Id of the creator') 
+    sp.add_argument('-n','--dry-run', default=False, help='Dry run') 
+    sp.add_argument('args', nargs=argparse.REMAINDER) # Get everything else. 
+
+    sp = asp.add_parser('info', help='Information about the source configuration')
+    sp.set_defaults(subcommand='info')
+    sp.add_argument('term',  nargs='?', type=str,help='Name or ID of the bundle or partition to print information for')
+    
+    
+    sp = asp.add_parser('deps', help='Print the depenencies for all source bundles')
+    sp.set_defaults(subcommand='deps')
+    sp.add_argument('ref', type=str,nargs='?',help='Name or id of a bundle to generate a sorted dependency list for.')   
+    sp.add_argument('-d','--detail',  default=False,action="store_true",  help='Display details of locations for each bundle')   
+    group = sp.add_mutually_exclusive_group()
+    group.add_argument('-f', '--forward',  default='f', dest='direction',   action='store_const', const='f', help='Display bundles that this one depends on')
+    group.add_argument('-r', '--reverse',  default='f', dest='direction',   action='store_const', const='r', help='Display bundles that depend on this one')
+    
+    sp = asp.add_parser('init', help='Intialize the local and remote git repositories')
+    sp.set_defaults(subcommand='init')
+    sp.add_argument('dir', type=str,nargs='?',help='Directory')
+
+    sp = asp.add_parser('list', help='List the source dirctories')
+    sp.set_defaults(subcommand='list')
+
+    sp = asp.add_parser('sync', help='Load references from the confiurged source remotes')
+    sp.set_defaults(subcommand='sync')
+    sp.add_argument('-l','--library',  default='default',  help='Select a library to add the references to')
+  
+    sp = asp.add_parser('clone', help='Clone source into a local directory')
+    sp.set_defaults(subcommand='clone')
+    sp.add_argument('-l','--library',  default='default',  help='Select a library to take references from')
+    sp.add_argument('dir', type=str,nargs='?',help='Source id')      
+  
+    sp = asp.add_parser('make', help='Build sources')
+    sp.set_defaults(subcommand='make')
+    sp.add_argument('-f','--force', default=False,action="store_true", help='Build even if built or in library')
+    sp.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')
+    sp.add_argument('-i','--install', default=False,action="store_true", help='Install after build')
+
+    sp.add_argument('dir', type=str,nargs='?',help='Directory to start search for sources in. ')      
+ 
+ 
+    sp = asp.add_parser('run', help='Run a shell command in source directories')
+    sp.set_defaults(subcommand='run')
+    sp.add_argument('-d','--dir', nargs='?', help='Directory to start recursing from ')
+    sp.add_argument('-m','--message', nargs='+', default='.', help='Directory to start recursing from ')
+    sp.add_argument('shell_command',nargs=argparse.REMAINDER, type=str,help='Shell command to run')  
+    group = sp.add_mutually_exclusive_group()
+    group.add_argument('-c', '--commit',  default=False, dest='repo_command',   action='store_const', const='commit', help='Commit')
+    group.add_argument('-p', '--push',  default=False, dest='repo_command',   action='store_const', const='push', help='Push to origin/master')    
+    group.add_argument('-l', '--pull',  default=False, dest='repo_command',   action='store_const', const='pull', help='Pull from upstream')  
+    group.add_argument('-i', '--install',  default=False, dest='repo_command',   action='store_const', const='install', help='Install the bundle')  
+      
+             
+    sp = asp.add_parser('find', help='Find source packages that meet a vareity of conditions')
+    sp.set_defaults(subcommand='find')
+    sp.add_argument('-d','--dir',  help='Directory to start recursing from ')
+    group = sp.add_mutually_exclusive_group()
+    group.add_argument('-c', '--commit',  default=False, dest='commit',   action='store_true', help='Find bundles that need to be committed')
+    group.add_argument('-p', '--push',  default=False, dest='push',   action='store_true', help='Find bundles that need to be pushed')
+    group.add_argument('-i', '--init',  default=False, dest='init',   action='store_true', help='Find bundles that need to be initialized')
+               
+
 def source_info(args,rc, src):
     
     if not args.term:
@@ -23,8 +103,8 @@ def source_info(args,rc, src):
         for repo in  rc.sourcerepo.list:
             prt("Repo      : {}", repo.ident)
     else:
-        import library
-        from identity import new_identity
+        import databundles.library as library
+        from ..identity import new_identity
         l = library.new_library(rc.library(args.library))  
         found = False      
         for r in l.database.get_file_by_type('source'):
@@ -36,7 +116,7 @@ def source_info(args,rc, src):
         if not found:
             err("Didn't find source for term '{}'. (Maybe need to run 'source sync')", args.term)
         else:
-            from source.repository import new_repository
+            from ..source.repository import new_repository
             repo = new_repository(rc.sourcerepo(args.name))
             ident = new_identity(r.data)
             repo.bundle_ident = ident
@@ -63,7 +143,7 @@ def source_info(args,rc, src):
 def source_list(args,rc, src, names=None):
     '''List all of the source packages'''
     from collections import defaultdict
-    import library
+    import databundles.library as library
     
     dir_ = rc.sourcerepo.dir
     l = library.new_library(rc.library(args.library))
@@ -81,9 +161,9 @@ def source_list(args,rc, src, names=None):
         
 def source_clone(args,rc, src):   
     '''Clone one or more registered source packages ( via sync ) into the source directory '''
-    import library
-    from dbexceptions import ConflictError
-    from identity import new_identity
+    import databundles.library as library
+    from ..dbexceptions import ConflictError
+    from ..identity import new_identity
     l = library.new_library(rc.library(args.library))
 
     def get_by_group(group):
@@ -101,8 +181,8 @@ def source_clone(args,rc, src):
                 
 def source_new(args,rc, src):   
     '''Clone one or more registered source packages ( via sync ) into the source directory '''
-    from source.repository import new_repository
-    from identity import new_identity, DatasetNumber
+    from ..source.repository import new_repository
+    from ..identity import new_identity, DatasetNumber
     
     repo = new_repository(rc.sourcerepo(args.name))  
 
@@ -128,13 +208,13 @@ def source_new(args,rc, src):
     file_ = os.path.join(bundle_dir, 'bundle.yaml')
     yaml.dump(config, file(file_, 'w'), indent=4, default_flow_style=False)
 
-    bundle_file =  os.path.join(os.path.dirname(__file__),'support','bundle.py')
+    bundle_file =  os.path.join(os.path.dirname(__file__),'..','support','bundle.py')
 
     shutil.copy(bundle_file, bundle_dir  )
 
     os.makedirs(os.path.join(bundle_dir, 'meta'))
 
-    schema_file =  os.path.join(os.path.dirname(__file__),'support','schema.csv')
+    schema_file =  os.path.join(os.path.dirname(__file__),'..','support','schema.csv')
     
     shutil.copy(schema_file, os.path.join(bundle_dir, 'meta')  )
 
@@ -165,7 +245,7 @@ def source_make(args,rc, src):
     
         
     def build(bundle_dir):
-        from library import new_library
+        from databundles.library import new_library
         # Import the bundle file from the directory
 
         bundle_class = load_bundle(bundle_dir)
@@ -201,7 +281,7 @@ def source_make(args,rc, src):
             
        
     if name:
-        from source.repository import new_repository
+        from ..source.repository import new_repository
         repo = new_repository(rc.sourcerepo(args.name))        
 
         deps = repo.bundle_deps(name)
@@ -228,7 +308,7 @@ def source_make(args,rc, src):
 
 def source_run(args,rc, src):
 
-    from source.repository.git import GitRepository
+    from databundles.source.repository.git import GitRepository
 
     dir_ = args.dir
 
@@ -273,7 +353,7 @@ def source_run(args,rc, src):
                 os.chdir(saved_path)         
        
 def source_find(args,rc, src):
-    from source.repository.git import GitRepository
+    from ..source.repository.git import GitRepository
     
     dir_ = args.dir
     
@@ -291,17 +371,20 @@ def source_find(args,rc, src):
             elif args.push:
                 if repo.needs_push():
                     print(root)
+            elif args.init:
+                if repo.needs_init():
+                    print(root)
             else:
                 err("Must specify either --push or --commit")
                 
    
          
 def source_init(args,rc, src):
-    from source.repository import new_repository
+    from ..source.repository import new_repository
 
     dir_ = args.dir
     
-    if not dir:
+    if not dir_:
         dir_ = os.getcwd()
     
     repo = new_repository(rc.sourcerepo(args.name))
@@ -317,8 +400,8 @@ def source_init(args,rc, src):
     
 def source_sync(args,rc, src):
     '''Synchronize all of the repositories with the local library'''
-    import library
-    from identity import new_identity
+    import databundles.library as library
+    from databundles.identity import new_identity
 
     l = library.new_library(rc.library(args.library))
 
@@ -338,8 +421,8 @@ def source_sync(args,rc, src):
 def source_deps(args,rc, src):
     """Produce a list of dependencies for all of the source bundles"""
 
-    from util import toposort
-    from source.repository import new_repository
+    from ..util import toposort
+    from ..source.repository import new_repository
 
     repo = new_repository(rc.sourcerepo(args.name))        
 

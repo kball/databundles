@@ -131,8 +131,9 @@ class Bundle(object):
         else:
             ident = resolved_bundle.identity
     
-        with self.session:
-            self.db_config.set_value('rdep', key, ident.to_dict())
+        if not self.database.is_empty():
+            with self.session:
+                self.db_config.set_value('rdep', key, ident.to_dict())
 
         
     @property
@@ -282,6 +283,7 @@ class BuildBundle(Bundle):
     META_COMPLETE_MARKER = '.meta_complete'
     SCHEMA_FILE = 'schema.csv'
     SCHEMA_REVISED_FILE = 'schema-revised.csv'
+    SCHEMA_OLD_FILE = 'schema-old.csv'
 
     def __init__(self, bundle_dir=None):
         '''
@@ -325,14 +327,22 @@ class BuildBundle(Bundle):
         self.exit_on_fatal = True
        
     @property
+    def build_dir(self):
+        
+        try:
+            cache = self.filesystem.get_cache_by_name('build')
+            return cache.cache_dir
+        except KeyError:
+            return  self.filesystem.path(self.filesystem.BUILD_DIR)
+        
+       
+    @property
     def path(self):
-        return self.filesystem.path(
-                    self.filesystem.BUILD_DIR,
-                    self.identity.path) 
+        return os.path.join(self.build_dir, self.identity.path) 
 
     def sub_path(self, *args):
         '''For constructing paths to partitions'''
-        return self.filesystem.path(self.filesystem.BUILD_DIR, self.identity.path,  *args) 
+        return os.path.join(self.build_dir, self.identity.path, *args) 
 
     @property
     def database(self):
@@ -532,32 +542,37 @@ class BuildBundle(Bundle):
 
     def prepare(self):
 
-        with self.session: # This will create the database if it doesn't exist, but it will be empty
-            if not self.database.exists():
-                self.log("Creating bundle database")
-                self.database.create()
-            else:
-                self.log("Bundle database already exists")
+       # with self.session: # This will create the database if it doesn't exist, but it will be empty
+        if not self.database.exists():
+            self.log("Creating bundle database")
+            self.database.create()
+        else:
+            self.log("Bundle database already exists")
 
-        with self.session:
-            if self.run_args and vars(self.run_args).get('rebuild',False):
+
+        if self.run_args and vars(self.run_args).get('rebuild',False):
+            with self.session:
                 self.rebuild_schema()
-            else:
-                
-                sf  = self.filesystem.path(self.config.build.get('schema_file', 'meta/'+self.SCHEMA_FILE))
-                if os.path.exists(sf):
-                    with open(sf, 'rbU') as f:
-                        self.schema.clean()
+        else:
+            
+            sf  = self.filesystem.path(self.config.build.get('schema_file', 'meta/'+self.SCHEMA_FILE))
+            if os.path.exists(sf):
+                with open(sf, 'rbU') as f:
+                    self.log("Loading schema from file: {}".format(sf))
+                    self.schema.clean()
+                    with self.session:
                         warnings,errors = self.schema.schema_from_file(f)
-                        
-                        for title, s,f  in (("Errors", errors, self.error), ("Warnings", warnings, self.warn)):
-                            if s:
-                                self.log("----- Schema {} ".format(title))
-                                for table, column, message in s:
-                                    f("{:20s} {}".format("{}.{}".format(table.name if table else '', column.name if column else ''), message ))
                     
-                        if errors:
-                            self.fatal("Schema load filed. Exiting")    
+                    for title, s,f  in (("Errors", errors, self.error), ("Warnings", warnings, self.warn)):
+                        if s:
+                            self.log("----- Schema {} ".format(title))
+                            for table, column, message in s:
+                                f("{:20s} {}".format("{}.{}".format(table.name if table else '', column.name if column else ''), message ))
+                
+                    if errors:
+                        self.fatal("Schema load filed. Exiting") 
+            else:
+                self.log("No schema file ('{}') not loading schema".format(sf))   
 
         return True
     
@@ -621,6 +636,7 @@ class BuildBundle(Bundle):
     def post_build(self):
         from datetime import datetime
         from time import time
+        import shutil
           
         with self.session:
             self.db_config.set_value('process', 'built', datetime.now().isoformat())
@@ -628,8 +644,18 @@ class BuildBundle(Bundle):
             self.update_configuration()
 
             self._revise_schema()
-         
-            
+        
+        
+        shutil.copy(
+                    self.filesystem.path('meta',self.SCHEMA_FILE),
+                    self.filesystem.path('meta',self.SCHEMA_OLD_FILE)
+                    )
+
+        shutil.copy(
+                    self.filesystem.path('meta',self.SCHEMA_REVISED_FILE),
+                    self.filesystem.path('meta',self.SCHEMA_FILE)
+                    )
+        
         return True
     
     @property
@@ -1130,7 +1156,7 @@ class BuildBundle(Bundle):
        
         if 'test' in phases:
             ''' Run the unit tests'''
-            import nose, unittest, sys
+            import nose, unittest, sys  # @UnresolvedImport
     
             dir_ = b.filesystem.path('test') #@ReservedAssignment
                              

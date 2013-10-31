@@ -55,13 +55,21 @@ class Schema(object):
         return (self.bundle.database.session.query(Dataset).one())
 
     def clean(self):
+        '''Delete all tables and columns. 
+        WARNING! This will also delete partitions, since partitions can depend on tables
+        '''
+        
         from databundles.orm import Table, Column, Partition
         
-        s = self.bundle.database.session
-        s.query(Partition).delete()        
-        s.query(Column).delete() 
-        s.query(Table).delete()       
-        
+        self._seen_tables = {}
+        self.table_sequence = None
+        self.auto_col_numbering = False
+
+        with self.bundle.session as s:
+            s.query(Partition).delete()        
+            s.query(Column).delete() 
+            s.query(Table).delete()       
+            
     @property
     def tables(self):
         '''Return a list of tables for this bundle'''
@@ -76,6 +84,7 @@ class Schema(object):
     @classmethod
     def get_table_from_database(cls, db, name_or_id, session=None, d_vid=None):
         from databundles.orm import Table
+        
         import sqlalchemy.orm.exc
         from sqlalchemy.sql import or_, and_
         
@@ -207,7 +216,7 @@ class Schema(object):
         
     @classmethod        
     def translate_type(cls,driver, table, column):
-        '''Translate types for particular driver, and perform some cvalidity checks'''
+        '''Translate types for particular driver, and perform some validity checks'''
         # Creates a lot of unnecessary objects, but speed is not important here.  
         
         if driver == 'mysql':
@@ -404,6 +413,7 @@ class Schema(object):
         from orm import Column
         import csv, re
         
+        # Not using this!! Because it failed to handle commas inside double quotes. 
         try:
             dlct = csv.Sniffer().sniff(file_.read(2024))
         except:
@@ -415,7 +425,7 @@ class Schema(object):
             def progress_cb(m):
                 pass
 
-        reader  = csv.DictReader(file_, dialect=dlct)
+        reader  = csv.DictReader(file_)
 
         t = None
 
@@ -473,8 +483,7 @@ class Schema(object):
                 raise ConfigurationError("Row error: no table on line {}".format(line_no))
             if not row.get('type', False):
                 raise ConfigurationError("Row error: no type on line {}".format(line_no))
-            
-            # Build the index and unique constraint values. 
+
             indexes = [ row['table']+'_'+c for c in row.keys() if (re.match('i\d+', c) and _clean_flag(row[c]))]  
             uindexes = [ row['table']+'_'+c for c in row.keys() if (re.match('ui\d+', c) and _clean_flag(row[c]))]  
             uniques = [ row['table']+'_'+c for c in row.keys() if (re.match('u\d+', c) and  _clean_flag(row[c]))]  
@@ -491,7 +500,7 @@ class Schema(object):
             
             data = { k.replace('d_','',1): v for k,v in row.items() if k.startswith('d_') }
             
-            description = row.get('description','').strip()
+            description = row.get('description','').strip().encode('utf-8')
 
             
             progress_cb("Column: {}".format(row['column']))
@@ -526,6 +535,22 @@ class Schema(object):
             
         return warnings, errors
 
+           
+    def write_schema(self):
+        '''Write the schema back to the schema file'''
+        with open(self.filesystem.path('meta',self.bundle.SCHEMA_FILE), 'w') as f:
+            self.schema.as_csv(f)
+        
+           
+    def copy_table(self, in_table):
+        
+        with self.bundle.session as s:
+            table = self.add_table(in_table.name, data=in_table.data)
+            
+            for c in in_table.columns:
+                d = c.to_dict()
+                del d['t_vid']
+                self.add_column(table, **d) 
             
 
     def _dump_gen(self):
@@ -609,7 +634,7 @@ class Schema(object):
         
         if f is None:
             f = sys.stdout
-        
+
         g = self._dump_gen()
         
         try:
@@ -618,7 +643,7 @@ class Schema(object):
             # No schema file at all!
             return 
             
-        w = csv.DictWriter(f,header)
+        w = csv.DictWriter(f,header, encoding='utf-8')
         w.writeheader()
         last_table = None
         for row in g:
@@ -794,6 +819,7 @@ class {name}(Base):
         
     def update_lengths(self, table_name,  lengths):
         '''Update the sizes of the columns in table with a dict mapping column names to length'''
+
         
         with self.bundle.session as s:
             
@@ -806,6 +832,7 @@ class {name}(Base):
                 if size and size > c.size:
                     c.size = size
                     s.merge(c)
+            s.commit()
 
     def extract_query(self, source_table, extract_table, extra_columns=None):
      
@@ -831,10 +858,112 @@ class {name}(Base):
         return  "SELECT " + ',\n'.join(lines) + " FROM {} ".format(st.name)
      
 
+    def intuit(self, row, memo):
+        '''Accumulate information about a database row to determine the most likely datatype and length for each
+        field. 
+        
+        To use, run in the row loop:
+        
+            d = bundle.schema.intuit_schema(row,d)
+            
+        For row being either a dict or list of row values. 
+        
+        '''
+        
+        if memo is None :
+            memo = {'fields' : None, 'name_index': {}}
+            
+            memo['fields'] = [{'name': None, 'type': int, 'length': 0} for i in range(len(row))]
+            
+            if isinstance(row, dict):
+                for i,name in enumerate(row.keys()):
+                    memo['fields'][i]['name'] = name
+                    memo['name_index'][name] = i
 
+        for i, v in enumerate(row):
+            
+            if isinstance(row, dict):
+                key = v
+                i =  memo['name_index'][key]
+                v = row[key]
 
+            if isinstance(v, basestring):
+                v = v.strip()
+            
+            if v is None or v == '-' or v == '':
+                continue
+            elif memo['fields'][i]['type'] == str:
+                continue # No more conversions are possible. 
+            elif isinstance(v, (int,float, long)):
+                memo['fields'][i]['length'] = max(memo['fields'][i]['length'], len(str(v))) # In case the field turns out to be a string
+            else:
+                memo['fields'][i]['length'] = max(memo['fields'][i]['length'], len(v))
 
-     
-     
-  
+            if memo['fields'][i]['type'] is int:
+                try:
+                    int(v)      
+                    memo['fields'][i]['type'] = int
+
+                except ValueError:
+                    memo['fields'][i]['type'] = float
+                    
+            if memo['fields'][i]['type'] is float or isinstance(v, float):
+                try:
+                    float(v)
+                    memo['fields'][i]['type'] = float
+
+                except ValueError:
+                    memo['fields'][i]['type'] = str
+
+        return memo
+
+    def _update_from_memo(self, table_name,  memo, logger=None):
+        '''Update a table schema using a memo from intuit()'''
+
+        with self.bundle.session as s:
+            table = self.table(table_name)
+
+            index = memo['name_index'] if len(memo['name_index']) > 0 else None
+            fields = memo['fields']
+            
+            type_map = {int: 'integer', str: 'varchar',  float: 'real'}
+            
+            for i,c in enumerate(table.columns):
+
+                if index:
+                    i = index[c.name]
+
+                c.size = fields[i]['length'] if fields[i]['type'] == str else None
+                c.datatype = type_map[fields[i]['type']]
+                c.default = '-' if fields[i]['type'] == str  else -1
+                s.merge(c)
+           
+                
+    def update(self, table_name, itr, logger=None):
+        '''Update the schema from an interator that returns rows. '''
+        
+        memo = None
+        
+        for row in itr:
+            memo = self.intuit(dict(row), memo)
+            logger()
+
+        self._update_from_memo(table_name, memo)
+
+        with open(self.bundle.filesystem.path('meta',self.bundle.SCHEMA_FILE), 'w') as f:
+            self.as_csv(f)        
+        
+
+    def add_code_table(self, name='codes'):
+        '''Add a table to the schema for codes. The codes are integers that are associated 
+        with strings, usually to indicate exceptional conditions in an integer field. '''
+        
+        
+        t = self.add_table(name)
+        self.add_column(t, 'id', datatype='integer')
+        self.add_column(t, 'code', datatype='integer', description='Integer value of code')
+        self.add_column(t, 'column', datatype='text', description='The name of the column this code is associated with')
+        self.add_column(t, 'description', datatype='text', description='Code description')
+        
+
         

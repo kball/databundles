@@ -147,7 +147,7 @@ class ValueWriter(InserterInterface):
  
 class ValueInserter(ValueWriter):
     '''Inserts arrays of values into  database table'''
-    def __init__(self, bundle, table, db, cache_size=50000, text_factory = None, replace=False,  skip_none=True): 
+    def __init__(self, bundle, table, db, cache_size=50000, text_factory = None, replace=False,  skip_none=True, update_size = True): 
 
         super(ValueInserter, self).__init__(bundle, db, cache_size=cache_size, text_factory = text_factory)  
    
@@ -169,21 +169,30 @@ class ValueInserter(ValueWriter):
     
         self.caster = self.bundle.schema.table(table.name).caster
 
+        self.update_size = update_size
+
 
         if replace:
             self.statement = self.statement.prefix_with('OR REPLACE')
 
     def insert(self, values):
+        from sqlalchemy.engine.result import RowProxy
+        
+        if isinstance(values, RowProxy):
+            values = dict(values)
 
         try:
+
             if isinstance(values, dict):
 
                 if self.caster:
                     d = self.caster(values)
+
                 else:
                     d = dict((k.lower(), v) for k,v in values.items())
 
                 if self.skip_none:
+
                     d = { k: d[k] if k in d and d[k] is not None else v for k,v in self.null_row.items() }
 
             else:
@@ -201,9 +210,9 @@ class ValueInserter(ValueWriter):
                 if self.skip_none:
                     d = { k: d[k] if k in d and d[k] is not None else v for k,v in self.null_row.items() }
                 
-            
-            for i,col_name in enumerate(self.text_fields):
-                self._max_lengths[i] = max(len(d[col_name]), self._max_lengths[i])
+            if self.update_size:
+                for i,col_name in enumerate(self.text_fields):
+                    self._max_lengths[i] = max(len(d[col_name]) if d[col_name] else 0, self._max_lengths[i])
                 
             self.cache.append(d)
          
@@ -235,6 +244,13 @@ class ValueInserter(ValueWriter):
     @property
     def max_lengths(self):
         return dict(zip(self.text_fields, self._max_lengths))
+   
+    def __exit__(self, type_, value, traceback):
+        
+        super(ValueInserter, self).__exit__(type_, value, traceback)
+
+        if self.update_size:
+            self.bundle.schema.update_lengths(self.table.name, self.max_lengths)
    
 class ValueUpdater(ValueWriter, UpdaterInterface):
     '''Updates arrays of values into  database table'''
