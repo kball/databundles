@@ -10,3 +10,5 @@ test/html
 test/testbundle/build-save/source/dataset-subset-variation-ca0d-r1/hdf5.hdf5
 test/testbundle/build-save/test-marker
 test/testbundle/build-save
+.idea
+.metadata
