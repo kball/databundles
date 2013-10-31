@@ -220,7 +220,7 @@ class RunConfig(object):
             
         def __call__(self, name):
             
-            fs = self.group('filesystem') 
+            fs = self.this.group('filesystem') 
             root_dir = fs['root_dir'] if 'root_dir' in fs  else  '/tmp/norootdir'
             
             e =  self.this.group_item('sourcerepo', name) 
