@@ -167,10 +167,11 @@ def source_clone(args,rc, src):
     l = library.new_library(rc.library(args.library))
 
     def get_by_group(group):
+        print '!!!', group
         return [f for f in  l.database.get_file_by_type('source') if f.group == group]
 
     for repo in rc.sourcerepo.list:
-        print ("--- Cloning sources from: ", repo.ident)
+        prt ("--- Cloning sources from: {}", repo.ident)
         for f in get_by_group(repo.ident):
             try:
                 ident = new_identity(f.data)

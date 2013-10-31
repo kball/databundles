@@ -219,9 +219,14 @@ class RunConfig(object):
             self.this = this
             
         def __call__(self, name):
+            
+            fs = self.group('filesystem') 
+            root_dir = fs['root_dir'] if 'root_dir' in fs  else  '/tmp/norootdir'
+            
             e =  self.this.group_item('sourcerepo', name) 
             e =  self.this._sub_strings(e, {
                                          'account': lambda k,v: self.this.account(v),
+                                         'dir' : lambda k,v: v.format(root=root_dir)
                                          }  ) 
             e['_name'] = name
          
