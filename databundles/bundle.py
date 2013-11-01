@@ -527,7 +527,7 @@ class BuildBundle(Bundle):
     def pre_prepare(self):
         from dbexceptions import NotFoundError
         
-        if self.database.exists() and not vars(self.run_args).get('rebuild',False) and  self.db_config.get_value('process','prepared'):
+        if self.database.exists() and not vars(self.run_args).get('rebuild',False) and  self.db_config.get_value('process','prepared', False):
             self.log("Bundle has already been prepared")
             #raise ProcessError("Bundle has already been prepared")
      

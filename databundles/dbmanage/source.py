@@ -314,7 +314,7 @@ def source_run(args,rc, src):
 
     dir_ = args.dir
 
-    if not dir:
+    if not dir_:
         dir_ = rc.sourcerepo.dir
 
     for root, _, files in os.walk(dir_):
