@@ -28,5 +28,12 @@ def install_command(args, rc, src):
         if args.prt:
             prt(s)
         else:
+            
+            dirname = os.path.dirname(rc.ROOT_CONFIG)
+            
+            if not os.path.isdir(dirname):
+                os.makedirs(dirname)
+            
+            
             with open(rc.ROOT_CONFIG,'w') as f:
                 f.write(s)
