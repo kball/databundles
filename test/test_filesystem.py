@@ -115,13 +115,11 @@ class Test(TestBase):
             
             copy_file_or_flo(stream, uncomp_stream)
             
+        dcf = uncomp_cache.get('decomp')
         
-        print "Decompressed to ", uncomp_cache.get('decomp')
         
-        md5_decomp = md5_for_file(uncomp_cache.get('decomp'))
-        
-        print md5_orig
-        print md5_decomp
+        print md5_for_file(fn), fn
+        print  md5_for_file(dcf), dcf
        
          
 def suite():
