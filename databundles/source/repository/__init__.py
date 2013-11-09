@@ -8,10 +8,18 @@ def new_repository(config):
 
     from ..service import new_service, GitServiceMarker #@UnresolvedImport
     
-    service = new_service(config['account'])
+    if 'account' in config:
+        service = new_service(config['account'])
+    else:
+        defaults_config = {'user': None, 'password': None, 'org': None}
+        defaults_config.update(config)
+
+        service = new_service(defaults_config)
     
     config['service'] = service
-    del config['account']
+    
+    try: del config['account']
+    except: pass
     
     if isinstance(service,GitServiceMarker):
         from .git import GitRepository #@UnresolvedImport

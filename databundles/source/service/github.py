@@ -25,13 +25,24 @@ class GitHubService(ServiceInterface,GitServiceMarker):
         
         self.auth = (self.user, self.password)
  
+    def get(self, url):
+        '''Constructs a request, using auth is the user is set '''
+        import requests, json
+        
+        if self.user:
+            r = requests.get(url, auth=self.auth)
+        else:
+            r = requests.get(url)
+             
+        return r
+             
     def has(self,name):
         import requests, json
 
         url = self.urls['info'].format(name=name)
 
-        r = requests.get(url, auth=self.auth)
-        
+        r = self.get(url)
+            
         if r.status_code != 200:
             return False
         else:
@@ -73,9 +84,13 @@ class GitHubService(ServiceInterface,GitServiceMarker):
 
         for page in range(1,500):
             url = self.urls['repos'].format(page=page)
-            r = requests.get(url, auth=self.auth)
+            
+            r = self.get(url)
+
+            r.raise_for_status()
 
             for i,e in enumerate(r.json()): 
+               
                 r = requests.get(e['url'].replace('api.github.com/repos', 'raw.github.com')+'/master/bundle.yaml')
                 try:
                     config = yaml.load(r.content, OrderedDictYAMLLoader)

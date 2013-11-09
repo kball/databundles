@@ -12,6 +12,7 @@ def new_service(config):
 
     if name == 'github':
         from github import GitHubService #@UnresolvedImport
+
         return GitHubService(**config)
     else:
         from databundles.dbexceptions import ConfigurationError
