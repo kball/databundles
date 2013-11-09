@@ -66,7 +66,7 @@ class Test(TestBase):
     def test_decompress(self):
 
         import sys
-        from util import StreamingGZip
+        from databundles.util import StreamingGZip
         
         f = open('/tmp/compressed.gz','rb')
 

@@ -110,7 +110,7 @@ def bundle_file_type(path_or_file):
         elif path_or_file.endswith('.gz'):
             return 'gzip'
         else:
-            raise Exception("Can't figure out file type for {}".format(path_or_file))
+            Exception("Can't figure out file type for {}".format(path_or_file))
     
     d = d.strip()
     
@@ -775,9 +775,12 @@ class FileLikeFromIter(object):
 from gzip import GzipFile
 import zlib
 class StreamingGZip(GzipFile):
-    '''This version of the standard GzipFile doe snot use seek() and tell(), which aren't implemented
-    in most streams from http libraries. As a result, this can only read on file member. '''
+    '''This version of the standard GzipFile does not use seek() and tell(), which aren't implemented
+    in most streams from http libraries. As a result, this can only read one file member. '''
     def _read(self, size=1024):
+        #raise Exception("This is probably failing on Ubuntu because pf a version change in the code. ")
+        #raise Exception("Try streaming decomp code: http://rationalpie.wordpress.com/2010/06/02/python-streaming-gzip-decompression/")
+    
         if self.fileobj is None:
             raise EOFError, "Reached EOF"
 
@@ -786,6 +789,7 @@ class StreamingGZip(GzipFile):
             self._read_gzip_header()
             self.decompress = zlib.decompressobj(-zlib.MAX_WBITS)
             self._new_member = False
+
 
         # Read a chunk of data from the file
         buf = self.fileobj.read(size)

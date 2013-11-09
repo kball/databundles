@@ -36,7 +36,7 @@ filesystem:
 
     filesystem3:
         dir: filesystem3
-        account: 'devtest.clarinova.net'
+        account: 'devtest.sandiegodata.org'
         
     fscache:
       dir: /tmp/cache-test/fscache
@@ -55,8 +55,8 @@ filesystem:
       
     s3cache-noupstream: 
       prefix: test_server/s3cache-noupstream
-      bucket: devtest.clarinova.net
-      account: devtest.clarinova.net
+      bucket: devtest.sandiegodata.org
+      account: devtest.sandiegodata.org
 
       
     cached-s3:
@@ -68,8 +68,8 @@ filesystem:
       upstream: 
         options: [compress]
         prefix: library-test
-        bucket: devtest.clarinova.net
-        account: devtest.clarinova.net
+        bucket: devtest.sandiegodata.org
+        account: devtest.sandiegodata.org
         
       
     rest-cache:
@@ -77,7 +77,7 @@ filesystem:
       port: 7979
       upstream:
         prefix: library-test # Must match server config
-        bucket: devtest.clarinova.net
-        account: devtest.clarinova.net
+        bucket: devtest.sandiegodata.org
+        account: devtest.sandiegodata.org
       
       

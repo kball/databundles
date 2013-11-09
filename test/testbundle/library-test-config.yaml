@@ -44,9 +44,9 @@ filesystem:
         size: 5   
         options: [compress]
         upstream:
-          bucket: devtest.clarinova.net
+          bucket: devtest.sandiegodata.org
           prefix: /test/s3-l3/
-          account: devtest.clarinova.net
+          account: devtest.sandiegodata.org
 
       
 downloads:

@@ -23,8 +23,8 @@ library:
         remote:
           options: [compress]
           prefix: library-test
-          bucket: devtest.clarinova.net
-          account: devtest.clarinova.net
+          bucket: devtest.sandiegodata.org
+          account: devtest.sandiegodata.org
         
 
 
@@ -55,8 +55,8 @@ filesystem:
    
     remote:
       prefix: server-test
-      bucket: devtest.clarinova.net
-      account: devtest.clarinova.net
+      bucket: devtest.sandiegodata.org
+      account: devtest.sandiegodata.org
       upstream:
         size: 2000
         dir: /tmp/server/s3cache

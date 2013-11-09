@@ -32,9 +32,7 @@ class Test(TestBase):
            
     def test_caches(self):
         '''Basic test of put(), get() and has() for all cache types'''
-        from functools import partial
-        from databundles.run import  get_runconfig, RunConfig
-        from databundles.filesystem import Filesystem
+        from databundles.run import  get_runconfig
         from databundles.cache import new_cache
         from databundles.util import md5_for_file
         from databundles.bundle import DbBundle
@@ -85,8 +83,47 @@ class Test(TestBase):
         r = cache.put(fn, 'a')
  
           
+    def test_compression(self):
+        from databundles.run import  get_runconfig
+        from databundles.cache import new_cache
+        from databundles.util import  temp_file_name, md5_for_file, StreamingGZip, copy_file_or_flo
         
+        fn =  temp_file_name()
+        print 'Write to ', fn
+        with open(fn,'wb') as f:
+            for i in range(1000):
+                f.write("{:03d}\n".format(i))
+
+        md5_orig = md5_for_file(fn)
+
+        rc = get_runconfig((os.path.join(self.bundle_dir,'test-run-config.yaml'),RunConfig.USER_CONFIG))
+
+        comp_cache = new_cache(rc.filesystem('compressioncache'))
         
+        cf = comp_cache.put(fn, 'compressed')
+
+        md5_comp = md5_for_file(cf)
+        
+        print cf, md5_orig, md5_comp
+        
+        with open(cf) as stream:
+            stream = StreamingGZip(fileobj=stream)
+            
+            uncomp_cache = new_cache(rc.filesystem('fscache'))
+            
+            uncomp_stream = uncomp_cache.put_stream('decomp')
+            
+            copy_file_or_flo(stream, uncomp_stream)
+            
+        
+        print "Decompressed to ", uncomp_cache.get('decomp')
+        
+        md5_decomp = md5_for_file(uncomp_cache.get('decomp'))
+        
+        print md5_orig
+        print md5_decomp
+       
+         
 def suite():
     suite = unittest.TestSuite()
     suite.addTest(unittest.makeSuite(Test))
