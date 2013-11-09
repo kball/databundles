@@ -110,7 +110,7 @@ def library_restore(args, l, config, *kwargs):
     l.restore(backup_file)
    
 def library_server(args, l, config):
-    from util import daemonize
+    from ..util import daemonize
 
     from databundles.server.main import production_run, local_run
 

@@ -71,4 +71,21 @@ class PostgresWarehouse(RelationalWarehouse):
         except: pass
 
         self.logger.log('installed_partition {}'.format(p.identity.name)) 
+        
+        
+    def remove_by_name(self,name):
+        '''Call the parent, then remove CSV partitions'''
+        from ..bundle import LibraryDbBundle
+        
+        super(PostgresWarehouse, self).remove_by_name(name)
+
+        dataset, partition = self.get(name)
+
+        if partition:
+            b = LibraryDbBundle(self.library.database, dataset.vid)
+            p = b.partitions.find(partition)
+ 
+            for p in p.get_csv_parts():
+                super(PostgresWarehouse, self).remove_by_name(p.vname)
+        
             

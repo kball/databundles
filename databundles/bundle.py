@@ -591,8 +591,7 @@ class BuildBundle(Bundle):
     def _revise_schema(self):
         '''Write the schema from the database back to a file. If the schema template exists, overwrite the
         main schema file. If it does not exist, use the revised file
-        
-        MUST BE RUN IN A SESSION BLOCK
+
         
         '''
 
@@ -600,9 +599,14 @@ class BuildBundle(Bundle):
 
         sf_out = self.filesystem.path('meta',self.SCHEMA_REVISED_FILE)
 
+        # Need to expire the unmanaged cache, or the regeneration of the schema may 
+        # use the cached schema object rather than the ones we just updated, if the schem objects
+        # have alread been loaded. 
+        self.database.unmanaged_session.expire_all()
+
         with open(sf_out, 'w') as f:
             self.schema.as_csv(f)    
-                
+                    
     def post_prepare(self):
         '''Set a marker in the database that it is already prepared. '''
         from datetime import datetime
@@ -634,6 +638,8 @@ class BuildBundle(Bundle):
         return False
     
     def post_build(self):
+        '''After the build, update the configuration with the time required for the build, 
+        then save the schema back to the tables, if it was revised during the build.  '''
         from datetime import datetime
         from time import time
         import shutil
@@ -846,8 +852,6 @@ class BuildBundle(Bundle):
     
         cmd = parser.add_subparsers(title='commands', help='command help')
         
-       
- 
         command_p = cmd.add_parser('config', help='Operations on the bundle configuration file')
         command_p.set_defaults(command='config')
            
@@ -855,6 +859,12 @@ class BuildBundle(Bundle):
     
         sp = asp.add_parser('rewrite', help='Re-write the bundle file, updating the formatting')     
         sp.set_defaults(subcommand='rewrite')
+  
+        sp = asp.add_parser('dump', help='dump the configuration')     
+        sp.set_defaults(subcommand='dump') 
+   
+        sp = asp.add_parser('schema', help='Print the schema')     
+        sp.set_defaults(subcommand='schema') 
        
         #
         # Clean Command
@@ -869,10 +879,7 @@ class BuildBundle(Bundle):
         command_p.set_defaults(command='meta')   
         
         command_p.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')     
-        
-        #action='append_const', const='meta', dest='command', 
-                                   
-        
+                         
         #
         # Prepare Command
         #
@@ -1012,6 +1019,10 @@ class BuildBundle(Bundle):
                 b.log("Rewriting the config file")
                 with self.session:
                     b.update_configuration()
+            elif args.subcommand == 'dump':
+                print b.config._run_config.dump()
+            elif args.subcommand == 'schema':
+                print b.schema.as_markdown()
             return
     
         if args.command == 'repopulate':
@@ -1223,7 +1234,7 @@ class BundleFileConfig(BundleConfig):
     def rewrite(self, **kwargs):
         '''Re-writes the file from its own data. Reformats it, and updates
         the modification time. Will also look for a config directory and copy the
-        contents of files there into the bundle.yaml file, ad a key derived from the name
+        contents of files there into the bundle.yaml file, adding a key derived from the name
         of the file. '''
         import yaml
         from databundles.dbexceptions import ConfigurationError

@@ -6,7 +6,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 from databundles.run import get_runconfig
-import ckanclient
+import ckanclient # sudo pip install git+https://github.com/okfn/ckanclient.git
 import databundles.client.exceptions as Exceptions
 import requests
 import json
@@ -194,14 +194,26 @@ class Ckan(object):
             
         except requests.exceptions.HTTPError:
             # Create minimal package, since we always update next. 
+            
+            if not bundle.config.about.get('organization',None):
+                raise Exception("Bundle must specify an organization")
+            
             payload = {'name': name,
-                       'owner_org': bundle.config.about.get('organization','none')
+                       'owner_org': bundle.config.about.get('organization',None)
                        }
             
-            r = requests.post(self.url+'/rest/package',
+            url  =self.url+'/rest/package'
+            
+            r = requests.post( url,
                               headers =  self.auth_headers,
                               data=json.dumps(payload))
-            r.raise_for_status()
+            try:
+                r.raise_for_status()
+            except Exception as e:
+                print "URL {}".format(url)
+                print "REQUEST: {}".format(json.dumps(payload))
+                print "RESPONSE: {}".format(r.content)
+                raise e
    
         new_payload = self.entity_from_bundle(name, bundle)
      
@@ -213,22 +225,35 @@ class Ckan(object):
                 date=datetime.date.today().isoformat()
             )
 
+        tables = {}
+        
+        for table in bundle.schema.tables:
+            tables[table.name] = bundle.schema.as_text(table.name)
+
+        from collections import  namedtuple
+
+        Tables = namedtuple('Tables', tables.keys())
+
+        tables = Tables(**tables)
+
+
         description = bundle.config.about.get('description','').format(
                 datetime=datetime.datetime.now().isoformat('T'),
                 date=datetime.date.today().isoformat(),
-                bundle_name = bundle.identity.name
+                bundle_name = bundle.identity.name,
+                tables=tables,
+                **(dict(bundle.config.about))
             )
 
         payload['notes'] = description
         payload['title'] = title
         payload['groups'] = [group['id'] for group in groups]
         payload['license_id'] = bundle.config.about.get('license','other')
-        
-  
-    
+
         r = requests.post(self.url+'/rest/package/{name}'.format(name=name),
                           headers =  self.auth_headers,
                           data=json.dumps(payload))
+
 
         try:
             r.raise_for_status()

@@ -338,6 +338,7 @@ class OrderedDictYAMLLoader(yaml.Loader):
     def include(self, node):
         from databundles.dbexceptions import ConfigurationError
         
+
         if not self.dir:   
             return "ConfigurationError: Can't include file: wasn't able to set base directory"
 

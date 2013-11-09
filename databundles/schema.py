@@ -553,7 +553,7 @@ class Schema(object):
                 self.add_column(table, **d) 
             
 
-    def _dump_gen(self):
+    def _dump_gen(self, table_name=None):
         """Return the current schema as a CSV file
         
         :param f: A file-like object where the CSV data will be written. If ``None``, 
@@ -562,7 +562,6 @@ class Schema(object):
         """
         
         from collections import OrderedDict
-
         
         # Collect indexes
         indexes = {}
@@ -571,7 +570,14 @@ class Schema(object):
         
         opt_col_fields = []
         
-        for table in self.tables:
+        if table_name:
+            tables = [ table for table in self.tables if table.name == table_name]
+        else:
+            tables = self.tables
+            
+        
+        for table in tables:
+
             for col in table.columns: 
                 for index_set in [col.indexes, col.uindexes, col.unique_constraints]:
                     if not index_set:
@@ -597,7 +603,9 @@ class Schema(object):
         indexes = OrderedDict(sorted(indexes.items(), key=lambda t: t[0]))
 
         first = True
-        for table in self.tables:
+        
+        for table in tables:
+            
             for col in table.columns:
                 row = OrderedDict()
                 row['table'] = table.name
@@ -691,7 +699,73 @@ class Schema(object):
             
         return o      
         
+    def as_text(self, table, pad = '    '):
+        import textwrap
         
+        g = self._dump_gen(table_name=table)
+        
+        header = g.next()
+    
+        rows = []
+        rows.append(['#', 'Id', 'Column', 'Type', 'Size','Description'])
+    
+        def fill(row, sizes):
+            return [ str(cell).ljust(size) for cell, size in zip(row, sizes)]
+    
+        out = "### {} table\n".format(table.title())
+
+        for row in g: 
+            
+            if  'size' not in row or  row['size'] is None:
+                row['size'] = ''
+                
+            
+                
+                   
+            rows.append([row['seq'], row['id'], row['column'], row['type'].title(), row['size'], row['description'] ])
+
+        desc_wrap = 40
+        
+        sizes = [0] * len(rows[0])
+        for row in rows:
+            for i, cell in enumerate(row):
+                sizes[i] = max(sizes[i], len(str(cell)))
+
+                
+        sizes[-1] = desc_wrap
+
+        out += pad + '  '.join(fill(rows.pop(0), sizes))+'\n'
+        
+        lines = pad + '-+'.join( [ '-'*size for size in sizes ]) +'\n'
+        out += lines
+
+        for row in rows:
+            
+            # Handling the wrapping of the description is tricky. 
+            if row[-1]:
+                drows = textwrap.wrap(row[-1], desc_wrap) # Put in the first row of the wrapped desc
+                row[-1] = drows.pop(0)
+            else:
+                drows = []
+                
+            join_str = '  '
+            
+            out += pad + join_str.join(fill(row, sizes))+'\n'
+            
+            # Now add in all of the other rows. 
+            if drows:
+                row.pop() # Get rid of the desc, so we can get the length of the padding for subsequent rows. 
+                dsizes = list(sizes)
+                dsizes.pop()
+                desc_pad = ' ' * len(pad + join_str.join(fill(row, dsizes)) )
+                for desc in drows:
+                    out += desc_pad + join_str+ desc + "\n"
+            
+            #out += lines
+
+        return out
+        
+
                 
     def as_orm(self):
         """Return a string that holds the schema represented as Sqlalchemy
@@ -820,9 +894,8 @@ class {name}(Base):
     def update_lengths(self, table_name,  lengths):
         '''Update the sizes of the columns in table with a dict mapping column names to length'''
 
-        
         with self.bundle.session as s:
-            
+
             table = self.table(table_name)
             
             for c in table.columns:
@@ -830,9 +903,21 @@ class {name}(Base):
                 size = lengths.get(c.name, False)
                 
                 if size and size > c.size:
+                    self.bundle.log("Updating schema column length {}.{} {} -> {}".format(table.name, c.name, c.size,size))
                     c.size = size
+                    
+                    # Integers that are too long for 32 bits should be upgraded to 64
+                    if c.datatype == c.DATATYPE_INTEGER and c.size >= 10: #  2^32 is 10 gigits
+                        self.bundle.log("Updating schema column datatype {}.{} to integer64".format(table.name, c.name, c.size,size))
+                        c.datatype = c.DATATYPE_INTEGER64
+                    
                     s.merge(c)
-            s.commit()
+
+
+        # Need to expire the unmanaged cache, or the regeneration of the schema in _revise_schema will 
+        # use the cached schema object rather than the ones we just updated. 
+        self.bundle.database.unmanaged_session.expire_all()
+        
 
     def extract_query(self, source_table, extract_table, extra_columns=None):
      
@@ -938,11 +1023,19 @@ class {name}(Base):
                 c.default = '-' if fields[i]['type'] == str  else -1
                 s.merge(c)
            
+        # Need to expire the unmanaged cache, or the regeneration of the schema in _revise_schema will 
+        # use the cached schema object rather than the ones we just updated, if the schem objects
+        # have alread been loaded. 
+        self.bundle.database.unmanaged_session.expire_all()
+        
+                
                 
     def update(self, table_name, itr, logger=None):
         '''Update the schema from an interator that returns rows. '''
         
         memo = None
+        
+        raise Exception("HERE")
         
         for row in itr:
             memo = self.intuit(dict(row), memo)

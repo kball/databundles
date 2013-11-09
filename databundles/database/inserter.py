@@ -157,9 +157,10 @@ class ValueInserter(ValueWriter):
 
         self.header = [c.name for c in self.orm_table.columns]
 
-        self.text_fields = [c.name for c in self.orm_table.columns if c.type_is_text()]
-        
-        self._max_lengths = [ 0 for x in self.text_fields ]
+        # Int is included b/c long integer values get a type of integer64
+        self.sizable_fields = [c.name for c in self.orm_table.columns if c.type_is_text() or c.datatype == c.DATATYPE_INTEGER ]
+
+        self._max_lengths = [ 0 for x in self.sizable_fields ]
    
         self.statement = self.table.insert()
  
@@ -211,8 +212,12 @@ class ValueInserter(ValueWriter):
                     d = { k: d[k] if k in d and d[k] is not None else v for k,v in self.null_row.items() }
                 
             if self.update_size:
-                for i,col_name in enumerate(self.text_fields):
-                    self._max_lengths[i] = max(len(d[col_name]) if d[col_name] else 0, self._max_lengths[i])
+                for i,col_name in enumerate(self.sizable_fields):
+                    try:
+                        self._max_lengths[i] = max(len(str(d[col_name])) if d[col_name] else 0, self._max_lengths[i])
+                    except UnicodeEncodeError:
+                        # Unicode is a PITA
+                        pass
                 
             self.cache.append(d)
          
@@ -243,7 +248,7 @@ class ValueInserter(ValueWriter):
    
     @property
     def max_lengths(self):
-        return dict(zip(self.text_fields, self._max_lengths))
+        return dict(zip(self.sizable_fields, self._max_lengths))
    
     def __exit__(self, type_, value, traceback):
         

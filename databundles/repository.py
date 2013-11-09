@@ -33,7 +33,7 @@ class Repository(object):
 
     def set_api(self): 
         import databundles.client.ckan
-        repo_group = self.bundle.config.group('repository')
+        repo_group = self.bundle.config.group('datarepo')
         
         if not repo_group.get(self.repo_name): 
             raise ConfigurationError("'repository' group in configure either nonexistent"+
@@ -117,12 +117,11 @@ class Repository(object):
 
         if extract_data.get('function',False):
             file_ = self._do_function_extract(extract_data)
-        elif extract_data.get('query',False) or extract_data.get('source_table',False):
-            file_ = self._do_query_extract(extract_data)
+        if extract_data.get('file',False):  
+            file_ = self._do_copy_file(extract_data) 
         else:
-            from databundles.dbexceptions import ConfigurationError
-            self.bundle.error("Bad Extract config: {}".format(extract_data))
-            raise ConfigurationError("Bad Extract config")
+            file_ = self._do_query_extract(extract_data)
+
 
         return file_
         
@@ -138,14 +137,48 @@ class Repository(object):
 
         return file_
 
-                       
+    def _do_copy_file(self, extract_data):
+        '''Run a function on the build that produces a file to upload'''
+        import os.path
+        import pkgutil
+
+        f_name = extract_data['file']
+   
+        if extract_data['name'].endswith('.html') and f_name.endswith('.md'):
+            import markdown
+            
+            self.bundle.log("Translate Markdown to HTML")
+            
+            with open(self.bundle.filesystem.path(f_name)) as f:
+                html_body = markdown.markdown(f.read())
+
+            template = pkgutil.get_data('databundles.support','extract_template.html')
+
+            out_file = self.bundle.filesystem.path('extracts',extract_data['name'])
+
+            with open(out_file, 'wb') as f:
+                
+                html_body = html_body.format(**dict(self.bundle.config.about))
+                
+                html  = str(template).format(
+                                             body=html_body,
+                                             **dict(self.bundle.config.about))
+                f.write(html)
+               
+            return out_file
+                
+        else:
+   
+            return self.bundle.filesystem.path(f_name)
+
+                           
     def _do_query_extract(self,  extract_data):
         """Extract a CSV file and  upload it to CKAN"""
         import tempfile
         import uuid
         import os
         import sqlite3
-        import csv
+        import unicodecsv as csv
 
         p = extract_data['_partition'] # Set in _make_partition_dict
 
@@ -156,19 +189,35 @@ class Repository(object):
         else:
             file_ =  os.path.join(tempfile.gettempdir(), str(uuid.uuid4()) )
 
-        if extract_data.get('source_table', False) and  extract_data.get('extract_table', False):
-            query = self.bundle.schema.extract_query(extract_data['source_table'],extract_data['extract_table'] )
+        if extract_data.get('query', False):
+            query = extract_data['query']
+        else:
+
+            source_table = extract_data.get('source_table', False)
+            
+            if not source_table:
+                source_table = p.table.name
+                
+            extract_table = extract_data.get('extract_table', False)
+            
+            if not extract_table:
+                extract_table = source_table
+            
+            query = self.bundle.schema.extract_query(source_table,extract_table )
 
             where = extract_data.get('extract_where', False)
             
             if where:
                 query = query + " WHERE "+where
-            
-            
-        else:
-            query = extract_data['query']
-       
-        self.bundle.log("Extracting {} to {}".format(extract_data['name'],file_))
+
+        self.bundle.log("Running CSV extract from a query")
+        self.bundle.log("    Partition: {}".format(p.name))
+        self.bundle.log("    Source table: {}".format(source_table))
+        self.bundle.log("    Extract Table: {}".format(extract_table))
+        self.bundle.log("    Query: {}".format(query.replace('\n',' ')))
+        self.bundle.log("    Name: {}".format(extract_data['name']))        
+        self.bundle.log("    Output: {}".format(file_))       
+
         #self.bundle.log(query)
 
         conn = sqlite3.connect(p.database.path)
@@ -319,16 +368,8 @@ class Repository(object):
             if partition:
                 partitions = [partition]
             else:
-                raise Exception("Bad idea: this could generate extracts from old data. Failed for {}".format(partition_name))
-                l = self.bundle.library
-               
-                r = l.get(partition_name)
-                if not r:
-                    raise Exception("Failed to get partition {} ".format(partition_name))
-                elif r.partition:
-                    partitions = [r.partition]
-                else:
-                    partitions = [r.bundle]
+                raise Exception("Didn't get a partition for name: {}".format(partition_name))
+
         out = []
          
         if not for_:
@@ -370,7 +411,7 @@ class Repository(object):
         data['name'] = data.get('name','').format(**data)
         data['layer_name'] = data.get('layer_name','').format(**data)
         data['path'] = self.bundle.filesystem.path('extracts',format(data['name']))
-        data['done_if'] = data.get('done_if','').format(**data)
+        data['done_if'] = data.get('done_if','os.path.exists(path)').format(**data)
         
   
         return data
@@ -437,6 +478,7 @@ class Repository(object):
             extract['_name'] = key
             for_ = extract.get('for', "'True'")
             function = extract.get('function', False)
+            file_ = extract.get('file', False)
             each = extract.get('each', [])
             p_id = extract.get('partition', False)
             eaches = self._expand_each(each)
@@ -455,6 +497,9 @@ class Repository(object):
                     for data in eaches:     
                         yield self._sub(dict(p_dict.items()+extract.items() + 
                                              data.items() ))
+            elif file_:
+                for data in eaches:
+                    yield self._sub(dict(extract.items() + data.items()))
             else:
                 self.bundle.error("Extract group {} should have either a function or a partition".format(key))
               
@@ -553,7 +598,7 @@ class Repository(object):
             elif zip == 'file':
                 zip_inputs[extract_data['path']] = extract_data
                 will_zip = True
- 
+
             file_ = self._do_extract(extract_data, force=force)
             
             if will_zip:
