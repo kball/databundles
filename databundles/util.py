@@ -771,47 +771,7 @@ class FileLikeFromIter(object):
 
             return result
 
-
-from gzip import GzipFile
-import zlib
-class StreamingGZip(GzipFile):
-    '''This version of the standard GzipFile does not use seek() and tell(), which aren't implemented
-    in most streams from http libraries. As a result, this can only read one file member. '''
-    def _read(self, size=1024):
-        #raise Exception("This is probably failing on Ubuntu because pf a version change in the code. ")
-        #raise Exception("Try streaming decomp code: http://rationalpie.wordpress.com/2010/06/02/python-streaming-gzip-decompression/")
     
-        if self.fileobj is None:
-            raise EOFError, "Reached EOF"
-
-        if self._new_member:
-            self._init_read()
-            self._read_gzip_header()
-            self.decompress = zlib.decompressobj(-zlib.MAX_WBITS)
-            self._new_member = False
-
-
-        # Read a chunk of data from the file
-        buf = self.fileobj.read(size)
-
-        # If the EOF has been reached, flush the decompression object
-        # and mark this object as finished.
-
-        if buf == "":
-            uncompress = self.decompress.flush()
-            self._read_eof()
-            self._add_read_data( uncompress )
-            raise EOFError, 'Reached EOF B'
-
-        uncompress = self.decompress.decompress(buf)
-        self._add_read_data( uncompress )
-
-        if self.decompress.unused_data != "":
-            raise EOFError, 'Reached EOF C'
-          
-    def _read_eof(self):
-        pass
-        
 
 def walk_dict(d):
     '''

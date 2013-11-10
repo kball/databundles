@@ -41,6 +41,8 @@ def open(filename, mode="rb", compresslevel=9):
     """
     return GzipFile(filename, mode, compresslevel)
 
+
+
 class GzipFile(io.BufferedIOBase):
     """The GzipFile class simulates most of the methods of a file object with
     the exception of the readinto() and truncate() methods.
@@ -50,8 +52,8 @@ class GzipFile(io.BufferedIOBase):
     myfileobj = None
     max_read_chunk = 10 * 1024 * 1024   # 10Mb
 
-    def __init__(self, filename=None, mode=None,
-                 compresslevel=9, fileobj=None,
+    def __init__(self, filename_or_obj=None, mode=None,
+                 compresslevel=9,
                  mtime=None, comment=None, extra=None):
         """Constructor for the GzipFile class.
 
@@ -99,8 +101,21 @@ class GzipFile(io.BufferedIOBase):
         # that care about that sort of thing
         if mode and 'b' not in mode:
             mode += 'b'
+            
+        if hasattr(filename_or_obj, 'read'):
+            filename = None
+            fileobj = filename_or_obj
+        elif isinstatnce(filename_or_obj, basestring):
+            filename = filename_or_obj
+            fileobj = None         
+        else:
+            raise IOError, ('First parameter must be a string'+
+                ' filename or file-like object')
+            
+            
         if fileobj is None:
             fileobj = self.myfileobj = __builtin__.open(filename, mode or 'rb')
+            
         if filename is None:
             # Issue #13781: os.fdopen() creates a fileobj with a bogus name
             # attribute. Avoid saving this in the gzip header's filename field.
@@ -198,11 +213,15 @@ class GzipFile(io.BufferedIOBase):
         self.fileobj.write('\377')
         
         if self.extra:
+            import json
             # Write the length of the extra field
-            l_in_256, l_remainder = divmod(len(self.extra), 256)
+            extra = json.dumps(self.extra)
+            # It's really an LSB  short integer, right?, but this is the
+            # way it is written in _write_gzip_header
+            l_in_256, l_remainder = divmod(len(extra), 256)
             self.fileobj.write(chr(l_remainder))
             self.fileobj.write(chr(l_in_256))
-            self.fileobj.write(self.extra)
+            self.fileobj.write(extra)
             
         if fname:
             self.fileobj.write(fname + '\000')
@@ -228,10 +247,16 @@ class GzipFile(io.BufferedIOBase):
         self.fileobj.read(2)
 
         if flag & FEXTRA:
+            import json
             # Read & discard the extra field, if present
             xlen = ord(self.fileobj.read(1))
             xlen = xlen + 256*ord(self.fileobj.read(1))
-            self.extra = self.fileobj.read(xlen)
+            data = self.fileobj.read(xlen)
+            try:
+                self.extra = json.loads(data)
+            except:
+                self.extra = data
+                
         if flag & FNAME:
             # Read and discard a null-terminated string containing the filename
             while True:
@@ -331,7 +356,7 @@ class GzipFile(io.BufferedIOBase):
                     self.fileobj.seek( pos ) # Return to original position
                 
             except AttributeError:
-                print "No tell() in file obj ... "
+                pass
                                 
             self._init_read()
             self._read_gzip_header()
@@ -372,7 +397,7 @@ class GzipFile(io.BufferedIOBase):
                 # If the file object doesn't have seek(), and there
                 # are 8 bytes left, assume that it is a stream and the 
                 # remaining bytes are the checksum
-                print 'Done!'
+
                 self._read_eof(self.decompress.unused_data)
                 self.done = True
                 raise EOFError, 'Reached EOF of Stream'
@@ -435,6 +460,7 @@ class GzipFile(io.BufferedIOBase):
             self.fileobj = None
         elif self.mode == READ:
             self.fileobj = None
+            
         if self.myfileobj:
             self.myfileobj.close()
             self.myfileobj = None
@@ -538,57 +564,59 @@ class GzipFile(io.BufferedIOBase):
             self.min_readsize = min(readsize, self.min_readsize * 2, 512)
         return ''.join(bufs) # Return resulting line
 
-class flo(object):
-
-    def __init__(self, inner):
-        self.f = inner
-
-    def read(self, n=None):
-        return self.f.read(n)
-
-uc_fn = 'uncompressed'
-cpm_fn = 'compressed.gz'
-dcpm_fn = 'decompressed'
-
-
-def init_write():
-    import sys
-    with __builtin__.open (uc_fn,'w') as f:
-        s = ':'.join(['{:03d}'.format(i) for i in range(50)])
-        f.write(s)
-    
-def compress():
-
-    with  __builtin__.open (uc_fn,'rb') as f_in:
-        with  __builtin__.open (cpm_fn,'wb') as f_out:
-            gz_out = GzipFile(fileobj=f_out, mode='wb', 
-                    extra = 'this is extra', comment='This is the comment')
-            while True:
-                chunk=f_in.read(10)
-                if not chunk:
-                    break
-                gz_out.write(chunk)
-            gz_out.close()
-
-def decompress():
-
-    with  __builtin__.open (cpm_fn,'rb') as f_in:
-        with  __builtin__.open (dcpm_fn,'wb') as f_out:
-            flo_in = flo(f_in)
-            gz_in = GzipFile(fileobj=flo_in, mode='rb')
-            
-            while True:
-                chunk=gz_in.read(10)
-                if not chunk:
-                    break
-                f_out.write(chunk)
-            gz_in.close()
-            
-            print 'Extra:', gz_in.extra
-            print 'Comment:', gz_in.comment
             
 if __name__ == '__main__':
     import sys
+
+    class flo(object):
+        '''A File Like Object that has only a read method, to test
+        operations with simplistic HTTP request bodies. '''
+        def __init__(self, inner):
+            self.f = inner
+
+        def read(self, n=None):
+            return self.f.read(n)
+
+    uc_fn = '/tmp/uncompressed'
+    cpm_fn = '/tmp/compressed.gz'
+    dcpm_fn = '/tmp/decompressed'
+
+
+    def init_write():
+        import sys
+        with __builtin__.open (uc_fn,'w') as f:
+            s = ':'.join(['{:03d}'.format(i) for i in range(50)])
+            f.write(s)
+
+    def compress():
+
+        with  __builtin__.open (uc_fn,'rb') as f_in:
+            with  __builtin__.open (cpm_fn,'wb') as f_out:
+                gz_out = GzipFile(f_out, mode='wb', 
+                        extra = ['this is extra',{'foo':'bar'}], comment='This is the comment')
+                while True:
+                    chunk=f_in.read(10)
+                    if not chunk:
+                        break
+                    gz_out.write(chunk)
+                gz_out.close()
+
+    def decompress():
+
+        with  __builtin__.open (cpm_fn,'rb') as f_in:
+            with  __builtin__.open (dcpm_fn,'wb') as f_out:
+                gz_in = GzipFile( flo(f_in), mode='rb')
+
+                while True:
+                    chunk=gz_in.read(10)
+                    if not chunk:
+                        break
+                    f_out.write(chunk)
+                gz_in.close()
+
+                print 'Extra:', gz_in.extra
+                print 'Extra:', gz_in.extra[1]['foo']
+                print 'Comment:', gz_in.comment
 
     init_write()
     compress()
