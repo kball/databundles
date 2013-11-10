@@ -76,12 +76,11 @@ class RestApi(object):
                 
             if r.headers['content-encoding'] == 'gzip':
                 from ..util import FileLikeFromIter   
-               
-                response = FileLikeFromIter(r.iter_content()) # In  the requests library, iter_content will auto-decompress
+                 # In  the requests library, iter_content will auto-decompress
+                response = FileLikeFromIter(r.iter_content())
             else:
                 response = r.raw
 
-            
         elif response.status != 200:
             raise RestError("Error from server: {} {}".format(response.status, response.reason))
         
@@ -150,6 +149,11 @@ class RestApi(object):
     
     
     def get_stream_by_key(self, key, cb=None, return_meta=False):
+        '''Get a stream to to the remote file. 
+        
+        Queries the REST api to get the URL to the file, then fetches the file
+        and returns a stream, wrapping it in decompression if required. '''
+        
         import requests, urllib
         
         r1  = self.remote.key(key).get()
@@ -164,8 +168,8 @@ class RestApi(object):
         stream = r.raw
               
         if r.headers['content-encoding'] == 'gzip':
-            from ..util import StreamingGZip
-            stream = StreamingGZip(fileobj=stream)
+            from sgzip import GZipFile
+            stream = GZipFile(stream)
 
         if return_meta:
             response = stream, r.headers
