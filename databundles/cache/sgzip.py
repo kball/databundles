@@ -51,7 +51,8 @@ class GzipFile(io.BufferedIOBase):
     max_read_chunk = 10 * 1024 * 1024   # 10Mb
 
     def __init__(self, filename=None, mode=None,
-                 compresslevel=9, fileobj=None, mtime=None):
+                 compresslevel=9, fileobj=None,
+                 mtime=None, comment=None, extra=None):
         """Constructor for the GzipFile class.
 
         At least one of fileobj and filename must be given a
@@ -140,6 +141,8 @@ class GzipFile(io.BufferedIOBase):
         self.offset = 0
         self.mtime = mtime
         self.done = False
+        self.comment = comment
+        self.extra = extra
         
         if self.mode == WRITE:
             self._write_gzip_header()
@@ -179,6 +182,13 @@ class GzipFile(io.BufferedIOBase):
         flags = 0
         if fname:
             flags = FNAME
+            
+        if self.comment:
+            flags = flags | FCOMMENT
+            
+        if self.extra:
+            flags = flags | FEXTRA    
+   
         self.fileobj.write(chr(flags))
         mtime = self.mtime
         if mtime is None:
@@ -186,8 +196,19 @@ class GzipFile(io.BufferedIOBase):
         write32u(self.fileobj, long(mtime))
         self.fileobj.write('\002')
         self.fileobj.write('\377')
+        
+        if self.extra:
+            # Write the length of the extra field
+            l_in_256, l_remainder = divmod(len(self.extra), 256)
+            self.fileobj.write(chr(l_remainder))
+            self.fileobj.write(chr(l_in_256))
+            self.fileobj.write(self.extra)
+            
         if fname:
             self.fileobj.write(fname + '\000')
+
+        if self.comment:
+            self.fileobj.write(self.comment + '\000')
 
     def _init_read(self):
         self.crc = zlib.crc32("") & 0xffffffffL
@@ -210,7 +231,7 @@ class GzipFile(io.BufferedIOBase):
             # Read & discard the extra field, if present
             xlen = ord(self.fileobj.read(1))
             xlen = xlen + 256*ord(self.fileobj.read(1))
-            self.fileobj.read(xlen)
+            self.extra = self.fileobj.read(xlen)
         if flag & FNAME:
             # Read and discard a null-terminated string containing the filename
             while True:
@@ -221,8 +242,15 @@ class GzipFile(io.BufferedIOBase):
             # Read and discard a null-terminated string containing a comment
             while True:
                 s = self.fileobj.read(1)
+                
                 if not s or s=='\000':
                     break
+                    
+                if not self.comment:
+                    self.comment = s
+                else:
+                    self.comment += s
+                
         if flag & FHCRC:
             self.fileobj.read(2)     # Read & discard the 16-bit header CRC
 
@@ -533,7 +561,8 @@ def compress():
 
     with  __builtin__.open (uc_fn,'rb') as f_in:
         with  __builtin__.open (cpm_fn,'wb') as f_out:
-            gz_out = GzipFile(fileobj=f_out, mode='wb')
+            gz_out = GzipFile(fileobj=f_out, mode='wb', 
+                    extra = 'this is extra', comment='This is the comment')
             while True:
                 chunk=f_in.read(10)
                 if not chunk:
@@ -554,6 +583,9 @@ def decompress():
                     break
                 f_out.write(chunk)
             gz_in.close()
+            
+            print 'Extra:', gz_in.extra
+            print 'Comment:', gz_in.comment
             
 if __name__ == '__main__':
     import sys
