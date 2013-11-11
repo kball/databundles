@@ -86,41 +86,38 @@ class Test(TestBase):
     def test_compression(self):
         from databundles.run import  get_runconfig
         from databundles.cache import new_cache
-        from databundles.util import  temp_file_name, md5_for_file, StreamingGZip, copy_file_or_flo
+        from databundles.util import  temp_file_name, md5_for_file, copy_file_or_flo
         
-        fn =  temp_file_name()
-        print 'Write to ', fn
-        with open(fn,'wb') as f:
-            for i in range(1000):
-                f.write("{:03d}\n".format(i))
-
-        md5_orig = md5_for_file(fn)
-
         rc = get_runconfig((os.path.join(self.bundle_dir,'test-run-config.yaml'),RunConfig.USER_CONFIG))
 
         comp_cache = new_cache(rc.filesystem('compressioncache'))
         
-        cf = comp_cache.put(fn, 'compressed')
+        test_file_name = 'test_file'
 
-        md5_comp = md5_for_file(cf)
-        
-        print cf, md5_orig, md5_comp
-        
+        fn =  temp_file_name()
+        print 'orig file ', fn
+        with open(fn,'wb') as f:
+            for i in range(1000):
+                f.write("{:03d}:".format(i))
+
+        cf = comp_cache.put(fn, test_file_name)
+
         with open(cf) as stream:
-            stream = StreamingGZip(fileobj=stream)
+            from databundles.util.sgzip import GzipFile
+            stream = GzipFile(stream)
             
             uncomp_cache = new_cache(rc.filesystem('fscache'))
             
             uncomp_stream = uncomp_cache.put_stream('decomp')
             
             copy_file_or_flo(stream, uncomp_stream)
+    
+        uncomp_stream.close()
             
         dcf = uncomp_cache.get('decomp')
-        
-        
-        print md5_for_file(fn), fn
-        print  md5_for_file(dcf), dcf
-       
+
+        self.assertEquals(md5_for_file(fn), md5_for_file(dcf))
+
          
 def suite():
     suite = unittest.TestSuite()

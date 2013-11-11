@@ -168,8 +168,8 @@ class RestApi(object):
         stream = r.raw
               
         if r.headers['content-encoding'] == 'gzip':
-            from sgzip import GZipFile
-            stream = GZipFile(stream)
+            from ..util.sgzip import GzipFile
+            stream = GzipFile(stream)
 
         if return_meta:
             response = stream, r.headers

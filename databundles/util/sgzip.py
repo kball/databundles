@@ -105,7 +105,7 @@ class GzipFile(io.BufferedIOBase):
         if hasattr(filename_or_obj, 'read'):
             filename = None
             fileobj = filename_or_obj
-        elif isinstatnce(filename_or_obj, basestring):
+        elif isinstance(filename_or_obj, basestring):
             filename = filename_or_obj
             fileobj = None         
         else:

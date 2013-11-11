@@ -573,15 +573,21 @@ def md5_for_file(f, block_size=2**20):
     
     md5 = hashlib.md5()
     try:
+        # Guess that f is a FLO. 
+        f.seek(0)
+        
         while True:
             data = f.read(block_size)
             if not data:
-                break
+                break 
             md5.update(data)
-        return md5.hexdigest()  
+        return md5.hexdigest()
+    
     except AttributeError as e: 
+        # Nope, not a FLO. Maybe string?
+
         file_name = f
-        with open(file_name) as f:
+        with open(file_name, 'rb') as f:
             return md5_for_file(f, block_size)
 
   
