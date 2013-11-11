@@ -990,8 +990,8 @@ class RedirectStdStreams(object):
         sys.stderr = self.old_stderr
         self.devnull.close()
 
-def _print(arg):
-    print arg
+def _print(*args):
+    print(*args)
 
 class Progressor(object):
     '''Progress reporter suitable for calling in Library.get()
