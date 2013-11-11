@@ -1004,9 +1004,6 @@ class Progressor(object):
     last = None
     freq = 1
 
-    @staticmethod
-
-
     def __init__(self, message='Download', printf = _print):
         import time
         from collections import deque
