@@ -990,6 +990,8 @@ class RedirectStdStreams(object):
         sys.stderr = self.old_stderr
         self.devnull.close()
 
+def _print(*args):
+    print *args
 
 class Progressor(object):
     '''Progress reporter suitable for calling in Library.get()
@@ -1002,12 +1004,16 @@ class Progressor(object):
     last = None
     freq = 1
 
-    def __init__(self, message='Download'):
+    @staticmethod
+
+
+    def __init__(self, message='Download', printf = _print):
         import time
         from collections import deque
         self.start = time.clock()
         self.message = message
         self.rates = deque(maxlen=10)
+        self.printf = printf
         
 
     def progress(self, i, n):
@@ -1032,7 +1038,7 @@ class Progressor(object):
                 rate = i_rate
                 rate_type = 'i'
 
-            prtl("{}: Compressed: {} Mb. Downloaded, Uncompressed: {:6.2f}  Mb, {:5.2f} Mb / s ({})",
+            self.printf("{}: Compressed: {} Mb. Downloaded, Uncompressed: {:6.2f}  Mb, {:5.2f} Mb / s ({})",
                  self.message,int(int(n)/(1024*1024)),round(float(i)/(1024.*1024.),2), round(float(rate)/(1024*1024),2), rate_type)
             
             self.last = now
