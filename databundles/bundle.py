@@ -536,7 +536,8 @@ class BuildBundle(Bundle):
         return True
 
     def prepare(self):
-
+        from dbexceptions import NotFoundError
+        
         # with self.session: # This will create the database if it doesn't exist, but it will be empty
         if not self.database.exists():
             self.log("Creating bundle database")

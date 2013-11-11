@@ -189,7 +189,7 @@ class BundleFilesystem(Filesystem):
         if len(args) > 0 and args[0] == self.BUILD_DIR:
             raise ValueError("Adding build to existing build path "+os.path.join(*args))
         
-        args = (self.BUILD_DIR,) + args
+        args = (self.bundle.build_dir,) + args
         return self.path(*args)
 
 
