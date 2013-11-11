@@ -1565,7 +1565,7 @@ class Library(object):
         try: 
             bundle = DbBundle(abs_path)
         except DatabaseError:
-            self.logger.error("Failed to load databundle at path {}".foramt(abs_path))
+            self.logger.error("Failed to load databundle at path {}".format(abs_path))
             
 
         # Do we have it in the database? If not install it. 
