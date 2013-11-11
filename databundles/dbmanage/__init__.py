@@ -9,6 +9,7 @@ import os.path
 import yaml
 import shutil
 from databundles.run import  get_runconfig
+from databundles.util import Progressor
 from databundles import __version__
 
 def prt(template, *args, **kwargs):
@@ -30,48 +31,6 @@ def warn(template, *args, **kwargs):
     import sys
     print("WARN: "+template.format(*args, **kwargs))
 
-
-class Progressor(object):
-
-    start = None
-    last = None
-    freq = 1
-
-    def __init__(self, message='Download'):
-        import time
-        from collections import deque
-        self.start = time.clock()
-        self.message = message
-        self.rates = deque(maxlen=10)
-        
-
-    def progress(self, i, n):
-        import curses
-        import time
-        
-        import time
-        now = time.clock()
-
-        if not self.last:
-            self.last = now
-        
-        if now - self.last > self.freq:
-            diff = now - self.start 
-            i_rate = float(i)/diff
-            self.rates.append(i_rate)
-            
-            if len(self.rates) > self.rates.maxlen/2:
-                rate = sum(self.rates) / len(self.rates)
-                rate_type = 'a'
-            else:
-                rate = i_rate
-                rate_type = 'i'
-
-            prtl("{}: Compressed: {} Mb. Downloaded, Uncompressed: {:6.2f}  Mb, {:5.2f} Mb / s ({})",
-                 self.message,int(int(n)/(1024*1024)),round(float(i)/(1024.*1024.),2), round(float(rate)/(1024*1024),2), rate_type)
-            
-            self.last = now
-            
 
 
 def load_bundle(bundle_dir):

@@ -1702,11 +1702,12 @@ class Library(object):
         return out
              
     def check_dependencies(self, throw=True):
-
+        from util import Progressor
         errors = {}
         for k,v in self.dependencies.items():
-            b = self.get(v)
-             
+            self.logger.info('Download and check dependency: {}'.format(v))
+            b = self.get(v, cb=Progressor().progress)
+        
             if not b:
                 if throw:
                     raise NotFoundError("Dependency check failed for key={}, id={}".format(k, v))
