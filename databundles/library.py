@@ -1548,6 +1548,8 @@ class Library(object):
 
     def _get_dataset(self, dataset, force = False, cb=None):
 
+        from sqlite3 import  DatabaseError
+
         # Try to get the file from the cache. 
         abs_path = self.cache.get(dataset.cache_key, cb=cb)
 
@@ -1560,7 +1562,11 @@ class Library(object):
         if not abs_path or not os.path.exists(abs_path):
             return False
 
-        bundle = DbBundle(abs_path)
+        try: 
+            bundle = DbBundle(abs_path)
+        except DatabaseError:
+            self.logger.error("Failed to load databundle at path {}".foramt(abs_path))
+            
 
         # Do we have it in the database? If not install it. 
         # It should be installed if it was retrieved remotely, 
