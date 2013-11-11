@@ -533,21 +533,21 @@ class BuildBundle(Bundle):
      
             return False
         
-        try:
-            self.library.check_dependencies()
-        except NotFoundError as e:
-            self.fatal(e)
-        
         return True
 
     def prepare(self):
 
-       # with self.session: # This will create the database if it doesn't exist, but it will be empty
+        # with self.session: # This will create the database if it doesn't exist, but it will be empty
         if not self.database.exists():
             self.log("Creating bundle database")
             self.database.create()
         else:
             self.log("Bundle database already exists")
+
+        try:
+            self.library.check_dependencies()
+        except NotFoundError as e:
+            self.fatal(e)
 
 
         if self.run_args and vars(self.run_args).get('rebuild',False):
