@@ -1,11 +1,15 @@
 '''
 Create an OGR shapefile from a schema
 '''
-import ogr, osr
+import ogr, osr, gdal
 import os
 import os.path
 from databundles.orm import Column
 from databundles.dbexceptions import ConfigurationError
+from databundles.dbexceptions import ProcessError
+
+class FeatureError(ProcessError):
+    pass
 
 ogr_type_map = { 
         None: ogr.OFTString,
@@ -247,7 +251,9 @@ class TableShapefile(object):
             geometry.Transform(self.transform)
             
         feature.SetGeometryDirectly(geometry)
-        self.layer.CreateFeature(feature)
+        if self.layer.CreateFeature(feature) != 0:
+            raise FeatureError('Failed to add feature: {}: geometry={}'.format(gdal.GetLastErrorMsg(), geometry.ExportToWkt()))
+                               
         feature.Destroy()
    
 
