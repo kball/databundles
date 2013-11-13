@@ -298,8 +298,8 @@ def library_get(args, l, config):
 
 def library_load(args, l, config):       
 
-    from bundle import get_identity
-    from identity import Identity
+    from ..bundle import get_identity
+    from ..identity import Identity
     
     
     print(Identity.parse_name(args.relpath).to_dict())
