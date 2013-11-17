@@ -68,7 +68,9 @@ class SegmentedInserter(InserterInterface):
         
         if self.count > self.segment_size:
             self.segment += 1
+            self.inserter.__exit__(None,None,None)
             self.inserter = self.factory.next_inserter(self.segment)
+            self.inserter.__enter__()
             
             self.count = 0
 

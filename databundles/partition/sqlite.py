@@ -201,7 +201,7 @@ class SqlitePartition(PartitionBase):
             table = self.table
       
         for p in parts:
-            print p.identity.vname
+            self.bundle.log("Loading CSV partition: {}".format(p.identity.vname))
             self.database.load(p.database, table, logger=lr )
         
 

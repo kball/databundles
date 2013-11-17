@@ -356,9 +356,8 @@ select 'Loading CSV file','{path}';
         start = time.clock()
         count = 0
 
-        command = "{sqlite} {database}  < {sql_file} ".format(sqlite=sqlite, database=self.path, sql_file=sql_file)
-
-        proc = subprocess.Popen([sqlite,  self.path], stdout=subprocess.PIPE,  stderr=subprocess.PIPE, stdin=subprocess.PIPE)
+        proc = subprocess.Popen([sqlite,  self.path], 
+                                stdout=subprocess.PIPE,  stderr=subprocess.PIPE, stdin=subprocess.PIPE)
 
         (out, err) = proc.communicate(input=sql)
         

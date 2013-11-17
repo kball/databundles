@@ -120,7 +120,7 @@ class ValueInserter(InserterInterface):
         if self._f and not self._f.closed:
             self._f.flush()
             self._f.close()
-            
+
     def delete(self):
         import os
         if os.path.exists(self.path):

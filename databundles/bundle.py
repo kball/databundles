@@ -65,6 +65,7 @@ class Bundle(object):
         class null_args(object):
             none = None
             multi = False
+            test = False
 
         self.run_args = null_args()
         
