@@ -1334,13 +1334,14 @@ class Library(object):
         return self.__class__(self.cache, self.database.clone(), self._remote, self.sync, self.require_upload, self.host, self.port)
     
     
-    def list(self, with_meta = True):
+    def list(self, with_meta = True, add_remote=True):
         
         
         datasets = {}
 
-        if self.remote:
+        if add_remote and self.remote:
             for k,v in self.remote.list(with_metadata=with_meta).items():
+                print v
                 if v and v['identity']['id'] != 'a0':
                     v['identity']['location'] = ['R',' ']
                     v['identity']['remote_version'] = int(v['identity']['revision']) # b/c 'revision' can be overwriten by library entry

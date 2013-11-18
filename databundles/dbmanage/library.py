@@ -7,6 +7,113 @@ from ..dbmanage import prt, err, Progressor, _find, _print_info #@UnresolvedImpo
 import os
 
 
+def library_parser(cmd):
+
+    import argparse
+
+    #
+    # Library Command
+    #
+    lib_p = cmd.add_parser('library', help='Manage a library')
+    lib_p.set_defaults(command='library')
+    asp = lib_p.add_subparsers(title='library commands', help='command help')
+    lib_p.add_argument('-n','--name',  default='default',  help='Select a different name for the library')
+        
+    group = lib_p.add_mutually_exclusive_group()
+    group.add_argument('-s', '--server',  default=False, dest='is_server',  action='store_true', help = 'Select the server configuration')
+    group.add_argument('-c', '--client',  default=False, dest='is_server',  action='store_false', help = 'Select the client configuration')
+        
+        
+    sp = asp.add_parser('push', help='Push new library files')
+    sp.set_defaults(subcommand='push')
+    sp.add_argument('-w','--watch',  default=False,action="store_true",  help='Check periodically for new files.')
+    sp.add_argument('-f','--force',  default=False,action="store_true",  help='Push all files')
+    
+    sp = asp.add_parser('server', help='Run the library server')
+    sp.set_defaults(subcommand='server') 
+    sp.add_argument('-d','--daemonize', default=False, action="store_true",   help="Run as a daemon") 
+    sp.add_argument('-k','--kill', default=False, action="store_true",   help="With --daemonize, kill the running daemon process") 
+    sp.add_argument('-g','--group', default=None,   help="Set group for daemon operation") 
+    sp.add_argument('-u','--user', default=None,  help="Set user for daemon operation")  
+    sp.add_argument('-t','--test', default=False, action="store_true",   help="Run the test version of the server")   
+      
+    sp = asp.add_parser('files', help='Print out files in the library')
+    sp.set_defaults(subcommand='files')
+    sp.add_argument('-a','--all',  default='all',action="store_const", const='all', dest='file_state',  help='Print all files')
+    sp.add_argument('-n','--new',  default=False,action="store_const", const='new',  dest='file_state', help='Print new files')
+    sp.add_argument('-p','--pushed',  default=False,action="store_const", const='pushed', dest='file_state',  help='Print pushed files')
+    sp.add_argument('-u','--pulled',  default=False,action="store_const", const='pulled', dest='file_state',  help='Print pulled files')
+    sp.add_argument('-s','--synced',  default=False,action="store_const", const='synced', dest='file_state',  help='Print synced source packages')
+  
+    sp = asp.add_parser('new', help='Create a new library')
+    sp.set_defaults(subcommand='new')
+    
+    sp = asp.add_parser('drop', help='Delete all of the tables in the library')
+    sp.set_defaults(subcommand='drop')    
+    
+    sp = asp.add_parser('clean', help='Remove all entries from the library database')
+    sp.set_defaults(subcommand='clean')
+    
+    sp = asp.add_parser('purge', help='Remove all entries from the library database and delete all files')
+    sp.set_defaults(subcommand='purge')
+    
+    sp = asp.add_parser('list', help='List datasets in the library, or partitions in dataset')
+    sp.set_defaults(subcommand='list')
+    sp.add_argument('term', type=str, nargs='?', help='Name of bundle, to list partitions')
+    sp.add_argument('-l','--local_only',  default=False, action="store_true",   help='Dont include information from the remote' )
+    
+    sp = asp.add_parser('rebuild', help='Rebuild the library database from the files in the library')
+    sp.set_defaults(subcommand='rebuild')
+    sp.add_argument('-r','--remote',  default=False, action="store_true",   help='Rebuild from the remote')
+    
+    sp = asp.add_parser('backup', help='Backup the library database to the remote')
+    sp.set_defaults(subcommand='backup')
+    sp.add_argument('-f','--file',  default=None,   help="Name of file to back up to") 
+    sp.add_argument('-d','--date',  default=False, action="store_true",   help='Append the date and time, in ISO format, to the name of the file ')
+    sp.add_argument('-r','--remote',  default=False, action="store_true",   help='Also load store file to  configured remote')
+    sp.add_argument('-c','--cache',  default=False, action="store_true",   help='Also load store file to  configured cache')
+
+    sp = asp.add_parser('restore', help='Restore the library database from the remote')
+    sp.set_defaults(subcommand='restore')
+    sp.add_argument('-f','--file',  default=None,   help="Base pattern of file to restore from.") 
+    sp.add_argument('-d','--dir',  default=None,   help="Directory where backup files are stored. Will retrieve the most recent. ") 
+    sp.add_argument('-r','--remote',  default=False, action="store_true",   help='Also load file from configured remote')
+    sp.add_argument('-c','--cache',  default=False, action="store_true",   help='Also load file from configured cache')
+ 
+    sp = asp.add_parser('info', help='Display information about the library or a bundle or partition')
+    sp.set_defaults(subcommand='info')   
+    sp.add_argument('term',  nargs='?', type=str,help='Name or ID of the bundle or partition to print information for')
+    
+    sp = asp.add_parser('get', help='Search for the argument as a bundle or partition name or id. Possible download the file from the remote library')
+    sp.set_defaults(subcommand='get')   
+    sp.add_argument('term', type=str,help='Query term')
+    sp.add_argument('-o','--open',  default=False, action="store_true",  help='Open the database with sqlite')
+    sp.add_argument('-f','--force',  default=False, action="store_true",  help='Force retrieving from the remote')
+
+    sp = asp.add_parser('remove', help='Delete a file from all local caches and the local library')
+    sp.set_defaults(subcommand='remove')
+    sp.add_argument('term', type=str,help='Name or ID of the bundle or partition to remove')
+
+    sp = asp.add_parser('load', help='Search for the argument as a bundle or partition name or id. Possible download the file from the remote library')
+    sp.set_defaults(subcommand='load')   
+    sp.add_argument('relpath', type=str,help='Cache rel path of dataset to load from remote')
+
+
+    sp = asp.add_parser('find', help='Search for the argument as a bundle or partition name or id')
+    sp.set_defaults(subcommand='find')   
+    sp.add_argument('term', type=str, nargs=argparse.REMAINDER,help='Query term')
+
+
+    sp = asp.add_parser('schema', help='Dump the schema for a bundle')
+    sp.set_defaults(subcommand='schema')   
+    sp.add_argument('term', type=str,help='Query term')
+    sp.add_argument('-p','--pretty',  default=False, action="store_true",  help='pretty, formatted output')
+    group = sp.add_mutually_exclusive_group()
+    group.add_argument('-y', '--yaml',  default='csv', dest='format',  action='store_const', const='yaml')
+    group.add_argument('-j', '--json',  default='csv', dest='format',  action='store_const', const='json')
+    group.add_argument('-c', '--csv',  default='csv', dest='format',  action='store_const', const='csv')
+    
+
 def library_command(args, rc, src):
     from  ..library import new_library
 
@@ -153,7 +260,7 @@ def library_list(args, l, config):
 
     if not args.term:
 
-        for ident in sorted(l.list(), key=lambda x: x['vname']):
+        for ident in sorted(l.list(add_remote=(not args.local_only)), key=lambda x: x['vname']):
             prt("{:2s} {:10s} {}", ''.join(ident['location']), ident['vid'], ident['vname'])
     else:
         library_info(args, l, config, list_all=True)    

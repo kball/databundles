@@ -57,10 +57,14 @@ def remote_list(args, l, rc):
             
     else:
 
-        datasets = l.remote.list(with_metadata=args.meta)
+        datasets = l.remote.list(with_metadata=True)
 
         for id_, data in datasets.items():
-            prt("{:10s} {:50s} {:s}",data['identity']['vid'],data['identity']['vname'],id_)  
+
+            try:
+                prt("{:10s} {:50s} {:s}",data['identity']['vid'],data['identity']['vname'],id_)  
+            except Exception as e:
+                prt("{:10s} {:50s} {:s}",'[ERROR]','',id_)  
 
 
 def remote_find(args, l, config):

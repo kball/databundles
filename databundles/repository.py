@@ -48,17 +48,7 @@ class Repository(object):
         fs_config = repo_config.get('filestore', False)
         
         if fs_config is not False:
-            from databundles.filesystem import S3Cache
-
-            if isinstance(fs_config, basestring):
-                from filesystem import Filesystem
-                self.filestore = Filesystem._get_cache(self.bundle.config.filesystem, fs_config )
-            else:
-                self.filestore =  S3Cache(bucket=fs_config.get('bucket'), 
-                        prefix=fs_config.get('prefix', None),
-                        access_key=fs_config.get('access_key'),
-                        secret=fs_config.get('secret'))
-                
+            raise Exception("Deprecated?")
         else:
             self.filestore = None
         
@@ -239,7 +229,7 @@ class Repository(object):
             if not first:
                 raise Exception("Got no data from query: {}".format(query))
             
-            writer = csv.writer(f, quoting=csv.QUOTE_NONNUMERIC)
+            writer = csv.writer(f)
 
             writer.writerow(first.keys())
             writer.writerow(tuple(first))

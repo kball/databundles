@@ -671,6 +671,13 @@ class BuildBundle(Bundle):
                     self.filesystem.path('meta',self.SCHEMA_FILE)
                     )
         
+        # Create stat entries for all of the partitions. 
+        for p in self.partitions:
+            try:
+                p.write_stats()
+            except NotImplementedError:
+                pass
+        
         return True
     
     @property

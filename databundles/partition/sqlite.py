@@ -213,7 +213,8 @@ class SqlitePartition(PartitionBase):
         
 
     def write_stats(self):
-        
+        '''Record in the partition entry basic statistics for the partition's
+        primary table'''
         t = self.get_table()
         
         if not t:

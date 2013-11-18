@@ -123,7 +123,10 @@ class AllJSONPlugin(object):
 
             if isinstance(rv, HTTPResponse ):
                 return rv
-            
+
+            if isinstance(rv, basestring ):
+                return rv
+
             #Attempt to serialize, raises exception on failure
             try:
                 json_response = dumps(rv)
@@ -333,7 +336,10 @@ def get_dataset(did, library, pid=None):
             d['partitions'][partition.identity.id_]['file']  = { k:v for k,v in fd.items() if k in ['state'] }
 
         if remote:
-            d['partitions'][partition.identity.id_]['url'] ="{}/datasets/{}/partitions/{}/db".format(_host_port(library), gr.identity.vid_enc, partition.identity.vid_enc)
+            d['partitions'][partition.identity.id_]['urls'] ={
+             'file':"{}/datasets/{}/partitions/{}/db".format(_host_port(library), gr.identity.vid_enc, partition.identity.vid_enc),
+             'csv':"{}/datasets/{}/partitions/{}/csv".format(_host_port(library), gr.identity.vid_enc, partition.identity.vid_enc)
+            }
         
     return d
 
@@ -519,7 +525,95 @@ def get_partition_file(did, pid, library):
     
     return redirect(url)
 
+    
+@get('/datasets/<did>/partitions/<pid>/csv') 
+@CaptureException   
+def get_partition_csv(did, pid, library):
+    '''Stream as CSV, a  segment of the main table of a partition
+    
+    Query
+        n: The total number of segments to break the CSV into
+        i: Which segment to retrieve
+        header:If existent and not 'F', include the header on the first line. 
+    
+    '''
+    import unicodecsv as csv
+    from StringIO import StringIO
+     
+    did = did.replace('|','/')
+    pid = pid.replace('|','/')
+     
+    i = int(request.query.get('i',1))
+    n = int(request.query.get('n',1))
+    sep = request.query.get('sep','|')
+    
+    if i > n:
+        raise exc.BadRequest("Segment number must be less than or equal to the numebr of segments")
+    
+    if i < 1:
+        raise exc.BadRequest("Segment number starts at 1")
+    
+   
+    b =  library.get(did)
 
+    if not b:
+        raise exc.BadRequest("Didn't get bundle for {}".format(pid))
+    
+    p = b.partitions.get(pid)
+    
+    if not p:
+        raise exc.BadRequest("Partition reference {} not found in bundle".format(pid))
+    
+    table = p.table.name
+    
+    count = p.query("SELECT count(*) FROM {}".format(table)).fetchone()
+    
+    if count:
+        count = count[0]
+    else:
+        raise exc.BadRequest("Failed to get count of number of rows")
+
+    base_seg_size, rem = divmod(count, int(n))
+
+    if i == n:
+        seg_size = base_seg_size + rem
+    else:
+        seg_size = base_seg_size
+
+    cache = []
+    
+    out = StringIO()
+    writer = csv.writer(out, delimiter=sep)
+    
+    if request.query.header:
+        writer.writerow(tuple([c.name for c in p.table.columns]))
+
+
+    q = "SELECT * FROM {} LIMIT {} OFFSET {}".format(table, seg_size, base_seg_size*(i-1))
+
+    for row in p.query(q):
+        writer.writerow(tuple(row))
+
+    response.content_type = 'text/csv'
+    
+    response.headers["content-disposition"] = "attachment; filename='{}-{}-{}-{}.csv'".format(p.identity.vname,table,i,n)
+
+    info =   {
+            'q': q,
+            'i' : i,
+            'n' : n,
+            'p' : p.identity.vname,
+            'table': table,
+            'count': count,
+            'seg_size': seg_size,
+            'base_seg_size': base_seg_size,
+            'rem': rem
+            }
+    
+    return out.getvalue()
+    
+        
+    
 def _read_body(request):
     '''Read the body of a request and decompress it if required '''
     # Really important to only call request.body once! The property method isn't

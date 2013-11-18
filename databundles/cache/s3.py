@@ -320,6 +320,7 @@ class S3Cache(Cache, RemoteMarker):
         
     def list(self, path=None,with_metadata=False):
         '''Get a list of all of bundle files in the cache. Does not return partition files'''
+        import json
         
         path = self.prefix+'/'+path.strip('/') if path else self.prefix
         
@@ -334,10 +335,13 @@ class S3Cache(Cache, RemoteMarker):
             
             if with_metadata:
                 d = self.metadata(path)
+                if d and 'identity' in d:
+                    d['identity'] = json.loads(d['identity'])
             else:
                 d = {}
             
             l[path] = d
+
 
         return l
 
