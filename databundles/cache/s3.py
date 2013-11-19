@@ -120,18 +120,13 @@ class S3Cache(Cache, RemoteMarker):
 
         return m.hexdigest()
  
-    def get_stream(self, rel_path, cb=None):
+    def get_stream(self, rel_path, cb=None, return_meta=False):
         """Return the object as a stream"""
         from boto.s3.key import Key
         from boto.exception import S3ResponseError 
      
         import StringIO
 
-        #raise Exception()
-        #def log(i,n):
-        #    print i,n
-        #cb = log
-        
         b = StringIO.StringIO()
         try:
             k = self._get_boto_key(rel_path)
@@ -139,7 +134,14 @@ class S3Cache(Cache, RemoteMarker):
                 return None
             k.get_contents_to_file(b, cb=cb, num_cb=100)
             b.seek(0)
-            return b;
+            
+            if return_meta:
+                d = k.metadata
+                d['size'] = k.size
+                d['etag'] = k.etag  
+                return b,d
+            else:
+                return b
         except S3ResponseError as e:
             if e.status == 404:
                 return None
