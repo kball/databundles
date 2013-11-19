@@ -1368,13 +1368,14 @@ class Library(object):
   
     def load(self, rel_path):
         '''Load a record into the cache from the remote'''
-        from util import copy_file_or_flo
+        from util.flo import copy_file_or_flo
    
         if not self.remote.has(rel_path):
             return None
         
-        source = self.remote.get_stream(rel_path)
-        sink = self.cache.put_stream(rel_path)
+        source = self.remote.get_stream(rel_path, return_meta=True)
+        print __file__,self.cache
+        sink = self.cache.put_stream(rel_path, metadata=source.meta)
    
         try:
             copy_file_or_flo(source, sink)

@@ -193,9 +193,12 @@ class Cache(CacheInterface):
         
         if strm:
             try:
-                return json.load(strm)
+                s = strm.read()
+                if not s:
+                    return {}
+                return json.loads(s)
             except ValueError as e:
-                raise ValueError("Failed to decode json for key '{}',  {}".format(rel_path, self.path(os.path.join('meta',rel_path))))
+                raise ValueError("Failed to decode json for key '{}',  {}. {}".format(rel_path, self.path(os.path.join('meta',rel_path)), strm))
         else:
             return {}
         
