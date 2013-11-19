@@ -1605,6 +1605,8 @@ class Library(object):
                 try:
                     
                     if force or p.database.is_empty():
+                        self.logger("_get_partition deleting {} before fetch. force={}, is_empty={}"
+                                    .format((p.database.path, force, p.database.is_empty()))
                         os.remove(p.database.path)
                     
                     self._get_remote_partition(r,partition, cb=cb)
