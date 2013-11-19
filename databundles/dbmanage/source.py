@@ -235,12 +235,11 @@ def source_make(args,rc, src):
         else:
             try: 
                 Identity.parse_name(args.dir)
-
+                dir_ = None
                 name = args.dir
             except:  
                 err("Argument '{}' must be either a bundle name or a directory")
             
-        
     if not dir_:
         dir_ = rc.sourcerepo.dir
         

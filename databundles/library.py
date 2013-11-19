@@ -1938,14 +1938,16 @@ class Library(object):
      
             self.database.add_file(path, self.cache.repo_id, identity.vid,  'pulled')
             self.logger.info('Installing: {} '.format(bundle.identity.name))
-            self.database.install_bundle_file(identity, path)
-            
+            try:
+                self.database.install_bundle_file(identity, path)
+            except Exception as e:
+                self.logger.error("Failed: {}".format(e))
+                continue
+                
             for p in bundle.partitions:  
                 if self.remote.last_upstream().has(p.identity.cache_key):
                     self.database.add_remote_file(p.identity)
                     self.logger.info('            {} '.format(p.identity.name))
-
-
 
     def rebuild(self):
         '''Rebuild the database from the bundles that are already installed

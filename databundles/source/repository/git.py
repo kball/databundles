@@ -498,10 +498,10 @@ class GitRepository(RepositoryInterface):
                 deps = next_deps
 
             out = list(out)
-
-                               
+             
         else:
-            deps = all_deps[ident.name]
+            
+            deps = all_deps.get(ident.name,[])
             while len(deps) > 0:
                 out += deps
                 next_deps = []
