@@ -1457,7 +1457,7 @@ class Library(object):
         
         # Store it in the local cache. 
 
-        sink = self.cache.put_stream(identity.cache_key)
+        sink = self.cache.put_stream(identity.cache_key, metadata=source.meta)
         
         try:
             copy_file_or_flo(source, sink, cb=cb)
@@ -1497,15 +1497,15 @@ class Library(object):
 
         # Now actually get it from the remote. 
 
-        source, meta = self.remote.get_stream(p.identity.cache_key, return_meta=True)
+        source = self.remote.get_stream(p.identity.cache_key, return_meta=True)
 
         # Store it in the local cache. 
-        sink = self.cache.put_stream(p.identity.cache_key)
+        sink = self.cache.put_stream(p.identity.cache_key, metadata=source.meta)
 
         try:
             if cb:
                 def progress_cb(i):
-                    cb(i,meta['content-length'])
+                    cb(i,source.meta['content-length'])
             else:
                 progress_cb = None
                 

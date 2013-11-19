@@ -539,14 +539,17 @@ def get_partition_csv(did, pid, library):
     '''
     import unicodecsv as csv
     from StringIO import StringIO
+    from sqlalchemy import text
      
     did = did.replace('|','/')
     pid = pid.replace('|','/')
      
     i = int(request.query.get('i',1))
     n = int(request.query.get('n',1))
-    sep = request.query.get('sep','|')
+    sep = request.query.get('sep',',')
     
+    where = request.query.get('where',None)
+  
     if i > n:
         raise exc.BadRequest("Segment number must be less than or equal to the numebr of segments")
     
@@ -589,9 +592,19 @@ def get_partition_csv(did, pid, library):
         writer.writerow(tuple([c.name for c in p.table.columns]))
 
 
-    q = "SELECT * FROM {} LIMIT {} OFFSET {}".format(table, seg_size, base_seg_size*(i-1))
+    
 
-    for row in p.query(q):
+    if where:
+        q = "SELECT * FROM {} WHERE {} LIMIT {} OFFSET {} ".format(table, where, seg_size, base_seg_size*(i-1))
+     
+        params = dict(request.query.items())
+    else:
+        q = "SELECT * FROM {} LIMIT {} OFFSET {} ".format(table, seg_size, base_seg_size*(i-1))
+        params = {}
+
+    print q,params
+
+    for row in p.query(text(q), params):
         writer.writerow(tuple(row))
 
     response.content_type = 'text/csv'
