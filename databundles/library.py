@@ -1603,6 +1603,10 @@ class Library(object):
 
             if self.remote:
                 try:
+                    
+                    if force or p.database.is_empty():
+                        os.remove(p.database.path)
+                    
                     self._get_remote_partition(r,partition, cb=cb)
                 except RemoteNotFound:
                     raise NotFoundError("""Didn't find partition {} in bundle {}. Partition found in bundle, but path {} ({}?) not in local library and doesn't have it either. """

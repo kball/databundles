@@ -592,8 +592,6 @@ def get_partition_csv(did, pid, library):
         writer.writerow(tuple([c.name for c in p.table.columns]))
 
 
-    
-
     if where:
         q = "SELECT * FROM {} WHERE {} LIMIT {} OFFSET {} ".format(table, where, seg_size, base_seg_size*(i-1))
      
