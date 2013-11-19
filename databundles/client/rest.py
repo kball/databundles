@@ -148,13 +148,14 @@ class RestApi(object):
         return response.object # self._process_get_response(id_or_name, response, file_path, uncompress, cb=cb)
     
     
-    def get_stream_by_key(self, key, cb=None, return_meta=False):
+    def get_stream_by_key(self, key, cb=None):
         '''Get a stream to to the remote file. 
         
         Queries the REST api to get the URL to the file, then fetches the file
         and returns a stream, wrapping it in decompression if required. '''
         
         import requests, urllib
+        from ..util.flo import MetadataFlo
         
         r1  = self.remote.key(key).get()
 
@@ -170,13 +171,10 @@ class RestApi(object):
         if r.headers['content-encoding'] == 'gzip':
             from ..util.sgzip import GzipFile
             stream = GzipFile(stream)
+        
+        return MetadataFlo(stream,r.headers)
 
-        if return_meta:
-            response = stream, r.headers
-        else:
-            response = stream
-            
-        return response     
+
               
     def get_partition(self, d_id_or_name, p_id_or_name, file_path=None, uncompress=False, cb=False):
         '''Get a partition by name or id and either return a file object, or

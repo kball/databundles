@@ -118,16 +118,17 @@ class FsCache(Cache):
         return path
     
     
-    def get_stream(self, rel_path, cb=None):
+    def get_stream(self, rel_path, cb=None, return_meta=False):
         p = self.get(rel_path)
         
         if p:
-            return open(p) 
+            from ..util.flo import MetadataFlo
+            return MetadataFlo(open(p),self.metadata(rel_path))
      
         if not self.upstream:
             return None
 
-        return self.upstream.get_stream(rel_path, cb=cb)
+        return self.upstream.get_stream(rel_path, cb=cb, return_meta=return_meta)
         
 
         
@@ -421,13 +422,17 @@ class FsLimitedCache(FsCache):
 
         return m.hexdigest()
     
-    def get_stream(self, rel_path, cb=None):
+    def get_stream(self, rel_path, cb=None, return_meta=False):
         p = self.get(rel_path, cb=cb)
         
-        if not p:
+        if p:
+            from ..util.flo import MetadataFlo
+            return MetadataFlo(open(p),self.metadata(rel_path))
+     
+        if not self.upstream:
             return None
-        
-        return open(p)
+
+        return self.upstream.get_stream(rel_path, cb=cb, return_meta=return_meta)
         
     
     def get(self, rel_path, cb=None):
@@ -522,6 +527,37 @@ class FsLimitedCache(FsCache):
         if you dont close the stream
         """
         
+        class flo:
+            def __init__(self, this, sink, upstream, repo_path):
+                self.this = this
+                self.sink = sink
+                self.upstream = upstream
+                self.repo_path = repo_path
+            
+            @property
+            def repo_path(self):
+                return self.repo_path
+            
+            def write(self, d):
+                self.sink.write(d)
+                
+                if self.upstream:
+                    self.upstream.write(d)
+                
+            def writelines(self, lines):
+                raise NotImplemented()
+            
+            def close(self):
+                self.sink.close()
+                
+                size = os.path.getsize(self.repo_path)
+                
+                self.this.add_record(rel_path, size)
+                self.this._free_up_space(size, this_rel_path=rel_path)
+                
+                if self.upstream:
+                    self.upstream.close()
+        
         if isinstance(rel_path, Identity):
             rel_path = rel_path.cache_key
         
@@ -529,45 +565,14 @@ class FsLimitedCache(FsCache):
       
         if not os.path.isdir(os.path.dirname(repo_path)):
             os.makedirs(os.path.dirname(repo_path))
-        
-
-        sink = open(repo_path,'w+')
-        upstream = self.upstream.put_stream(rel_path) if self.upstream else None
-        
-        this = self
-        class flo:
-            def __init__(self):
-                pass
-            
-            @property
-            def repo_path(self):
-                return repo_path
-            
-            def write(self, d):
-                sink.write(d)
-                
-                if upstream:
-                    upstream.write(d)
-                
-
-            def writelines(self, lines):
-                raise NotImplemented()
-            
-            def close(self):
-                sink.close()
-                
-                size = os.path.getsize(repo_path)
-                this.add_record(rel_path, size)
-
-                this._free_up_space(size, this_rel_path=rel_path)
-                
-                if upstream:
-                    upstream.close()
-                
+     
              
-        self.put_metadata(rel_path, metadata) 
-              
-        return flo()
+        self.put_metadata(rel_path, metadata=metadata) 
+           
+        sink = open(repo_path,'w+')
+        upstream = self.upstream.put_stream(rel_path, metadata=metadata) if self.upstream else None
+       
+        return flo(self, sink, upstream, repo_path)
     
     def find(self,query):
         '''Passes the query to the upstream, if it exists'''
@@ -639,21 +644,20 @@ class FsCompressionCache(Cache):
     def _rename( rel_path):
         return rel_path+".gz" if not rel_path.endswith('.gz') else rel_path
     
-    def get_stream(self, rel_path, cb=None):
+    def get_stream(self, rel_path, cb=None, return_meta=False):
         from ..util import bundle_file_type
+        from ..util.flo import MetadataFlo
         import gzip
 
-        source = self.upstream.get_stream(self._rename(rel_path))
-   
+        source = self.upstream.get_stream(self._rename(rel_path), return_meta=return_meta)
+
         if not source:
             return None
   
         if bundle_file_type(source) == 'gzip':
-            source = self.upstream.get_stream(self._rename(rel_path), cb=cb)
             logger.debug("CC returning {} with decompression".format(rel_path)) 
-            return gzip.GzipFile(fileobj=source)
+            return MetadataFlo(gzip.GzipFile(fileobj=source), source.meta)
         else:
-            source = self.upstream.get_stream(rel_path, cb=cb)
             logger.debug("CC returning {} with passthrough".format(rel_path)) 
             return source
 

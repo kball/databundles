@@ -126,22 +126,27 @@ class S3Cache(Cache, RemoteMarker):
         from boto.exception import S3ResponseError 
      
         import StringIO
+        from ..util.flo import MetadataFlo
 
         b = StringIO.StringIO()
         try:
             k = self._get_boto_key(rel_path)
             if not k:
                 return None
+        
             k.get_contents_to_file(b, cb=cb, num_cb=100)
+           
             b.seek(0)
             
             if return_meta:
                 d = k.metadata
                 d['size'] = k.size
                 d['etag'] = k.etag  
-                return b,d
             else:
-                return b
+                d = {}
+                
+            return MetadataFlo(b,d)
+            
         except S3ResponseError as e:
             if e.status == 404:
                 return None
@@ -342,7 +347,8 @@ class S3Cache(Cache, RemoteMarker):
             else:
                 d = {}
             
-            l[path] = d
+            if path:
+                l[path] = d
 
 
         return l
