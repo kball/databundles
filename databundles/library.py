@@ -1374,7 +1374,7 @@ class Library(object):
             return None
         
         source = self.remote.get_stream(rel_path, return_meta=True)
-        print __file__,self.cache
+
         sink = self.cache.put_stream(rel_path, metadata=source.meta)
    
         try:
