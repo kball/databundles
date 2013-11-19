@@ -559,7 +559,7 @@ def get_partition_csv(did, pid, library):
     if not b:
         raise exc.BadRequest("Didn't get bundle for {}".format(pid))
     
-    p = b.partitions.get(pid)
+    p =  library.get(pid).partition
     
     if not p:
         raise exc.BadRequest("Partition reference {} not found in bundle".format(pid))
