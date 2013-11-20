@@ -204,6 +204,7 @@ class ValueInserter(ValueWriter):
                     try:
                         d = self.caster(values)
                     except Exception as e:
+                        raise
                         raise ValueError("Failed to cast row: {}: {}".format(values, str(e)))
                 else:
                     d = values

@@ -34,7 +34,7 @@ def source_parser(cmd):
     sp.add_argument('-b','--subset', nargs='?', default=None, help='Name of the subset') 
     sp.add_argument('-v','--variation', default='orig', help='Name of the variation') 
     sp.add_argument('-c','--creator',  required=True, help='Id of the creator') 
-    sp.add_argument('-n','--dry-run', default=False, help='Dry run') 
+    sp.add_argument('-n','--dryrun', default=False, help='Dry run') 
     sp.add_argument('args', nargs=argparse.REMAINDER) # Get everything else. 
 
     sp = asp.add_parser('info', help='Information about the source configuration')
@@ -66,11 +66,12 @@ def source_parser(cmd):
     sp.add_argument('-l','--library',  default='default',  help='Select a library to take references from')
     sp.add_argument('dir', type=str,nargs='?',help='Source id')      
   
-    sp = asp.add_parser('make', help='Build sources')
-    sp.set_defaults(subcommand='make')
+    sp = asp.add_parser('build', help='Build sources')
+    sp.set_defaults(subcommand='build')
     sp.add_argument('-f','--force', default=False,action="store_true", help='Build even if built or in library')
     sp.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')
     sp.add_argument('-i','--install', default=False,action="store_true", help='Install after build')
+    sp.add_argument('-n','--dryrun', default=False,action="store_true", help='Only display what would be built')
 
     sp.add_argument('dir', type=str,nargs='?',help='Directory to start search for sources in. ')      
  
@@ -132,10 +133,10 @@ def source_info(args,rc, src):
                 d = dict(repo.bundle.db_config.dict)
                 process = d['process']
 
-                prt('Created   : {}', process['dbcreated'] if process['dbcreated'] else '')
-                prt('Prepared  : {}', process['prepared'] if process['prepared'] else '')
-                prt('Built     : {}', process['built'] if process['built'] else '')
-                prt('Build time: {} s', round(float(process['buildtime']),2) if process['buildtime'] else '')
+                prt('Created   : {}', process.get('dbcreated',''))
+                prt('Prepared  : {}', process.get('prepared',''))
+                prt('Built     : {}', process.get('built',''))
+                prt('Build time: {}', str(round(float(process['buildtime']),2))+'s' if process.get('buildtime',False) else '')
 
                 
    
@@ -224,21 +225,23 @@ def source_new(args,rc, src):
 
 
     
-def source_make(args,rc, src):
+def source_build(args,rc, src):
 
     from databundles.identity import Identity
     
+    dir_ = None
+    name = None
     if args.dir:
         if os.path.exists(args.dir):
             dir_ = args.dir
             name = None
         else:
+            name = args.dir
             try: 
-                Identity.parse_name(args.dir)
-                dir_ = None
-                name = args.dir
+                Identity.parse_name(name)
             except:  
                 err("Argument '{}' must be either a bundle name or a directory")
+                return
             
     if not dir_:
         dir_ = rc.sourcerepo.dir
@@ -251,6 +254,10 @@ def source_make(args,rc, src):
 
         bundle_class = load_bundle(bundle_dir)
         bundle = bundle_class(bundle_dir)
+
+        if args.dryrun:
+            bundle.log("Would build: {}".format(bundle.identity.name))
+            return
 
         l = new_library(rc.library(args.library))
 
@@ -302,7 +309,7 @@ def source_make(args,rc, src):
     
         
     else:
-        for root, _, files in os.walk(dir):
+        for root, _, files in os.walk(dir_):
             if 'bundle.yaml' in files:
                 build(root)
 

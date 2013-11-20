@@ -600,8 +600,6 @@ def get_partition_csv(did, pid, library):
         q = "SELECT * FROM {} LIMIT {} OFFSET {} ".format(table, seg_size, base_seg_size*(i-1))
         params = {}
 
-    print q,params
-
     for row in p.query(text(q), params):
         writer.writerow(tuple(row))
 
