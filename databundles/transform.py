@@ -421,7 +421,7 @@ def {}(row):
             return f[1]({k.lower():v for k,v in row.items()})
         
         elif isinstance(row, (list,tuple)):
-            raise Exception("Casters are not implemented for lists and tuples, use zip() to create a dict")
+            raise Exception("Casters are not implemented for lists and tuples, use zip() to create a dict: dict(zip(headers,row))")
             return f[0](row) 
           
         elif isinstance(row, RowProxy):

@@ -575,8 +575,8 @@ class BuildBundle(Bundle):
                     for title, s,f  in (("Errors", errors, self.error), ("Warnings", warnings, self.warn)):
                         if s:
                             self.log("----- Schema {} ".format(title))
-                            for table, column, message in s:
-                                f("{:20s} {}".format("{}.{}".format(table.name if table else '', column.name if column else ''), message ))
+                            for table_name, column_name, message in s:
+                                f("{:20s} {}".format("{}.{}".format(table_name if table_name else '', column_name if column_name else ''), message ))
                 
                     if errors:
                         self.fatal("Schema load filed. Exiting") 

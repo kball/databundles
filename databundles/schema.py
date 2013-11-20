@@ -192,26 +192,26 @@ class Schema(object):
   
         # Postgres doesn't allow size modifiers on Text fields.
         if column.datatype == Column.DATATYPE_TEXT and column.size:
-            warnings.append((table,column,"Postgres doesn't allow a TEXT field to have a size. Use a VARCHAR instead."))
+            warnings.append((table.name,column.name,"Postgres doesn't allow a TEXT field to have a size. Use a VARCHAR instead."))
         
         # MySql requires that text columns that have a default also have a size. 
         if column.type_is_text() and  bool(column.default):
             if not column.size and not column.width:
-                warnings.append((table,column, "MySql requires a Text or Varchar field with a default to have a size."))
+                warnings.append((table.name,column.name, "MySql requires a Text or Varchar field with a default to have a size."))
                 
             if isinstance(column.default, basestring) and column.width and len(column.default) > column.width :
-                warnings.append((table,column,"Default value is longer than the width"))
+                warnings.append((table.name,column.name,"Default value is longer than the width"))
                 
             if isinstance(column.default, basestring) and column.size and len(column.default) > column.size:
-                warnings.append((table,column,"Default value is longer than the size"))
+                warnings.append((table.name,column.name,"Default value is longer than the size"))
         
         if column.default:
             try:
                 column.python_cast(column.default)
             except TypeError as e:
-                errors.append((table,column,"Bad default value '{}' for type '{}' (T); {}".format(column.default, column.datatype, e)))
+                errors.append((table.name,column.name,"Bad default value '{}' for type '{}' (T); {}".format(column.default, column.datatype, e)))
             except ValueError:
-                errors.append((table,column,"Bad default value '{}' for type '{}' (V)".format(column.default, column.datatype)))
+                errors.append((table.name,column.name,"Bad default value '{}' for type '{}' (V)".format(column.default, column.datatype)))
 
         
     @classmethod        
@@ -457,7 +457,7 @@ class Schema(object):
                 except: table = None 
                 
                 if table:
-                    errors.append((table,None,"Table already exists"))
+                    errors.append((table.name,None,"Table already exists"))
                     return warnings, errors 
    
                 try:
@@ -1034,8 +1034,6 @@ class {name}(Base):
         '''Update the schema from an interator that returns rows. '''
         
         memo = None
-        
-        raise Exception("HERE")
         
         for row in itr:
             memo = self.intuit(dict(row), memo)

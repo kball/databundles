@@ -420,7 +420,7 @@ class GitRepository(RepositoryInterface):
         return self.impl.push(username=username, password=password)
     
     def pull(self, username="Noone", password="None"):
-        '''Push any changes to the repository to the origin server'''
+        '''Pull any changes to the repository from the origin server'''
         self.bundle.log("Pull from remote: {}".format(self.name))
         return self.impl.pull(username=username, password=password)
     
