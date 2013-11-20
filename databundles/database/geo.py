@@ -92,21 +92,14 @@ def _on_connect_geo(dbapi_con, con_record):
     #dbapi_con.execute('PRAGMA synchronous = OFF')
     
     try:
-        
-        with RedirectStdStreams():  # Spatialite prints its version header always, this supresses it. 
-            dbapi_con.enable_load_extension(True)
-            dbapi_con.execute("select load_extension('/usr/lib/libspatialite.so')")
-        return
+        dbapi_con.execute('select spatialite_version()')
     except:
-        pass
-   
-    # HACK FIXME This is really not the right way to do it....
+        dbapi_con.enable_load_extension(True)
+         
     try:
-       
         with RedirectStdStreams():  # Spatialite prints its version header always, this supresses it. 
-            dbapi_con.enable_load_extension(True)
-            dbapi_con.execute("select load_extension('/usr/lib/libspatialite.so.3')")
-        return
+            dbapi_con.execute("select load_extension('/usr/lib/libspatialite.so')")
     except:
-        pass
-    
+        with RedirectStdStreams():  # Spatialite prints its version header always, this supresses it. 
+            dbapi_con.execute("select load_extension('/usr/lib/libspatialite.so.3')")
+
