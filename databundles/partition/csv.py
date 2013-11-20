@@ -48,12 +48,15 @@ class CsvPartition(PartitionBase):
             min_ = 2**63
             max_ = -2**63
             
-            for row in self.database.reader():
-                count += 1
-                v = int(row[0])
-                min_ = min(min_, v)
-                max_ = max(max_, v)
-    
+            try:
+                for row in self.database.reader():
+                    count += 1
+                    v = int(row[0])
+                    min_ = min(min_, v)
+                    max_ = max(max_, v)
+            except ValueError:
+                min_ = None
+                max_  = None
     
             self.record.count = count
             self.record.min_key = min_

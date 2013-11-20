@@ -220,6 +220,10 @@ class SqlitePartition(PartitionBase):
         if not t:
             return
 
+        if not t.primary_key:
+            from ..dbexceptions import ConfigurationError
+            raise ConfigurationError("Table {} does not have a primary key; can't compute states".format(t.name))
+        
         s = self.database.session
         self.record.count = s.execute("SELECT COUNT(*) FROM {}".format(self.table.name)).scalar()
         self.record.min_key = s.execute("SELECT MIN({}) FROM {}".format(t.primary_key.name,self.table.name)).scalar()

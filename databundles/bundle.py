@@ -661,15 +661,18 @@ class BuildBundle(Bundle):
             self._revise_schema()
         
         
-        shutil.copy(
-                    self.filesystem.path('meta',self.SCHEMA_FILE),
-                    self.filesystem.path('meta',self.SCHEMA_OLD_FILE)
-                    )
-
-        shutil.copy(
-                    self.filesystem.path('meta',self.SCHEMA_REVISED_FILE),
-                    self.filesystem.path('meta',self.SCHEMA_FILE)
-                    )
+        # Some original import files don't have a schema, particularly 
+        # imported Shapefiles
+        if os.path.exists(self.filesystem.path('meta',self.SCHEMA_FILE)):
+            shutil.copy(
+                        self.filesystem.path('meta',self.SCHEMA_FILE),
+                        self.filesystem.path('meta',self.SCHEMA_OLD_FILE)
+                        )
+    
+            shutil.copy(
+                        self.filesystem.path('meta',self.SCHEMA_REVISED_FILE),
+                        self.filesystem.path('meta',self.SCHEMA_FILE)
+                        )
         
         # Create stat entries for all of the partitions. 
         for p in self.partitions:
@@ -677,6 +680,9 @@ class BuildBundle(Bundle):
                 p.write_stats()
             except NotImplementedError:
                 pass
+            except ConfigurationError as e:
+                self.error(e.message)
+                
         
         return True
     

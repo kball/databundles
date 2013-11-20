@@ -228,7 +228,9 @@ def source_new(args,rc, src):
 def source_build(args,rc, src):
 
     from databundles.identity import Identity
-    
+    from ..source.repository import new_repository
+    repo = new_repository(rc.sourcerepo(args.name))   
+       
     dir_ = None
     name = None
     if args.dir:
@@ -254,6 +256,8 @@ def source_build(args,rc, src):
 
         bundle_class = load_bundle(bundle_dir)
         bundle = bundle_class(bundle_dir)
+
+      
 
         if args.dryrun:
             bundle.log("Would build: {}".format(bundle.identity.name))
@@ -287,10 +291,8 @@ def source_build(args,rc, src):
             if not bundle.run_install(force=True):
                 err('Install failed')
             
-       
+
     if name:
-        from ..source.repository import new_repository
-        repo = new_repository(rc.sourcerepo(args.name))        
 
         deps = repo.bundle_deps(name)
         deps.append(name)
@@ -309,10 +311,24 @@ def source_build(args,rc, src):
     
         
     else:
+        from ..util import toposort
+
+        build_dirs = {}
+
         for root, _, files in os.walk(dir_):
             if 'bundle.yaml' in files:
-                build(root)
+                bundle_class = load_bundle(root)
+                bundle = bundle_class(root)      
+                build_dirs[bundle.identity.name] = root 
 
+        for i,level in enumerate( toposort(repo.dependencies)):
+            for j, name in enumerate(level):
+                try:
+                    build_dir = build_dirs[name]
+                    #print "{:3d} {:3d} {} {}".format(i,j,name, build_dir)
+                    build(build_dir)
+                except KeyError:
+                    prt("{} not found ".format(name))
 
 def source_run(args,rc, src):
 
@@ -338,6 +354,7 @@ def source_run(args,rc, src):
                 
             elif args.repo_command == 'pull':
                 prt("--- {} {}",args.repo_command, root)
+                repo.push()
                 
             elif args.repo_command == 'install':
                 prt("--- {} {}",args.repo_command, root)    
@@ -460,8 +477,9 @@ def source_deps(args,rc, src):
         import pprint
         graph = toposort(repo.dependencies)
     
-        for v in graph:
-            pprint.pprint(v)
+        for i,level in enumerate(graph):
+            for j, name in enumerate(level):
+                print "{:3d} {:3d} {}".format(i,j,name)
             
              
             
