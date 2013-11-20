@@ -8,9 +8,8 @@ unicodecsv
 lockfile
 sh
 petl
-BeautifulSoup4
 pyparsing
 markdown
 psycopg2
 # This pysqlite clone enables load_extension. Only needed on Linux
-# -e git+https://github.com/clarinova/pysqlite.git#egg=pysqlite
+# git+https://github.com/clarinova/pysqlite.git#egg=pysqlite

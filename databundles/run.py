@@ -282,6 +282,19 @@ class RunConfig(object):
         return e
 
 
+    def python_dir(self):
+
+        fs = self.group('filesystem') 
+        
+        if not 'python' in fs:
+            return None
+        
+        root_dir = fs['root_dir'] if 'root_dir' in fs  else  '/tmp/norootdir'
+
+        python_dir = fs['python'].format(root=root_dir)
+
+      
+        return python_dir 
 
 
 def import_file(filename):

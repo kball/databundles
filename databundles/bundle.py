@@ -317,6 +317,7 @@ class BuildBundle(Bundle):
         self.logid = base64.urlsafe_b64encode(os.urandom(6)) 
         self.ptick_count = 0;
 
+        # Library for the bundle
         lib_dir = self.filesystem.path('lib')
         if os.path.exists(lib_dir):
             import sys
@@ -534,6 +535,35 @@ class BuildBundle(Bundle):
 
     def pre_prepare(self):
         from dbexceptions import NotFoundError
+        
+        if self.config.build.get('requirements',False):
+            from util.packages import install
+            import sys
+            import imp
+            
+            python_dir = self.config.config.python_dir()
+            
+            if not python_dir:
+                from dbexceptions import ConfigurationError
+                raise ConfigurationError("Can't install requirements without a configuration item for filesystems.python")
+            
+            if not os.path.exists(python_dir):
+                os.makedirs(python_dir)
+            
+                
+            sys.path.append(python_dir)
+            
+            self.log("Installing required packages in {}".format(python_dir))
+            
+            for k,v in self.config.build.requirements.items():
+                
+                try:
+                    imp.find_module(k)
+                    self.log("Required package already installed: {}->{}".format(k,v))
+                except ImportError:
+                    self.log("Installing required package: {}->{}".format(k,v))
+                    install(python_dir,k,v)
+
         
         if self.database.exists() and not vars(self.run_args).get('rebuild',False) and  self.db_config.get_value('process','prepared', False):
             self.log("Bundle has already been prepared")

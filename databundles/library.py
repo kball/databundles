@@ -142,8 +142,6 @@ def new_library(config, reset=False):
     
     return l
 
-
-    
 def copy_stream_to_file(stream, file_path):
     '''Copy an open file-list object to a file
     
