@@ -296,7 +296,7 @@ class BundleFilesystem(Filesystem):
         
         cache = self.get_cache_by_name('extracts')
 
-        tmpdir = tempfile.mkdtemp(str(uuid.uuid4()))
+        tmpdir = os.path.join(cache,'tmp',str(uuid.uuid4()))
    
         rtrn = True
    

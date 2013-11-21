@@ -7,3 +7,4 @@ setproctitle # required for --daemonize
 paste
 python-daemon
 lockfile
+decorator

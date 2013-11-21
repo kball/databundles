@@ -93,6 +93,7 @@ def _on_connect_geo(dbapi_con, con_record):
     
     try:
         dbapi_con.execute('select spatialite_version()')
+        return
     except:
         dbapi_con.enable_load_extension(True)
          
