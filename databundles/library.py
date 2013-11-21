@@ -1333,18 +1333,21 @@ class Library(object):
     
     
     def list(self, with_meta = True, add_remote=True):
-        
+        import socket
         
         datasets = {}
 
         if add_remote and self.remote:
-            for k,v in self.remote.list(with_metadata=with_meta).items():
-
-                if v and v['identity']['id'] != 'a0':
-                    v['identity']['location'] = ['R',' ']
-                    v['identity']['remote_version'] = int(v['identity']['revision']) # b/c 'revision' can be overwriten by library entry
-                    v['identity']['library_version'] = 0
-                    datasets[k] =  v['identity']
+            try:
+                for k,v in self.remote.list(with_metadata=with_meta).items():
+    
+                    if v and v['identity']['id'] != 'a0':
+                        v['identity']['location'] = ['R',' ']
+                        v['identity']['remote_version'] = int(v['identity']['revision']) # b/c 'revision' can be overwriten by library entry
+                        v['identity']['library_version'] = 0
+                        datasets[k] =  v['identity']
+            except socket.error:
+                pass
 
 
         self.database.list(datasets=datasets)
