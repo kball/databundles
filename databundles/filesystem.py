@@ -298,6 +298,9 @@ class BundleFilesystem(Filesystem):
 
         tmpdir = os.path.join(cache,'tmp',str(uuid.uuid4()))
    
+        if not os.path.isdir(tmpdir):
+            os.makedirs(tmpdir)
+   
         rtrn = True
    
         try:
