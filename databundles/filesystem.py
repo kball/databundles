@@ -296,7 +296,7 @@ class BundleFilesystem(Filesystem):
         
         cache = self.get_cache_by_name('extracts')
 
-        tmpdir = os.path.join(cache,'tmp',str(uuid.uuid4()))
+        tmpdir = os.path.join(cache.cache_dir,'tmp',str(uuid.uuid4()))
    
         if not os.path.isdir(tmpdir):
             os.makedirs(tmpdir)
