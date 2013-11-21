@@ -536,6 +536,8 @@ class BuildBundle(Bundle):
     def pre_prepare(self):
         from dbexceptions import NotFoundError
         
+        self.log('---- Pre-Prepare ----')
+        
         if self.config.build.get('requirements',False):
             from util.packages import install
             import sys
@@ -661,6 +663,7 @@ class BuildBundle(Bundle):
 
     def pre_build(self):
         from time import time
+        import sys
         
         if not self.database.exists():
             raise ProcessError("Database does not exist yet. Was the 'prepare' step run?")
@@ -670,6 +673,11 @@ class BuildBundle(Bundle):
                 raise ProcessError("Build called before prepare completed")
             
             self._build_time = time()
+        
+        python_dir = self.config.config.python_dir()
+        
+        if  python_dir and python_dir not in sys.path:
+            sys.path.append(python_dir)
         
         return True
         
