@@ -230,7 +230,7 @@ def is_nothing(v):
     if isinstance(v, basestring):
         v = v.strip()
     
-    if v is None or v == '':
+    if v is None or v == '' or v == '-':
         return True
     else:
         return False
