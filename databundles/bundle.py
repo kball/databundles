@@ -1096,12 +1096,18 @@ class BuildBundle(Bundle):
     
         if args.command_group == 'source':
             
+            from source.repository import new_repository
+    
+            repo = new_repository(b.config._run_config.sourcerepo('default'))   
+            repo.bundle = b
+
             if args.command == 'commit':
-                pass
+                repo.commit(args.message)
             elif args.command == 'push':
-                pass
+                repo.commit(args.message)
+                repo.push()
             elif args.command == 'pull':
-                pass
+                repo.pull()
             
             return 
     

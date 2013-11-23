@@ -395,6 +395,7 @@ class GitRepository(RepositoryInterface):
         return self.impl.add(path)
     
     def commit(self, message):
+        self.bundle.log("Commit {}".format(self.name))
         return self.impl.commit(message=message)
  
     def stash(self):

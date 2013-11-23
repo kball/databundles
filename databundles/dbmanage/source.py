@@ -276,12 +276,7 @@ def source_build(args,rc, src):
                 return
 
             repo.bundle = bundle
-         
-            bundle.clean()
-            # Re-create after cleaning is important for something ... 
-            bundle = bundle_class(bundle_dir)
 
-            
             if args.stash:
                 prt("{} Stashing ", bundle.identity.name)
                 repo.stash()
@@ -290,6 +285,12 @@ def source_build(args,rc, src):
             if args.pull:
                 prt("{} Pulling ", bundle.identity.name)
                 repo.pull()
+              
+            bundle.clean()
+            # Re-create after cleaning is important for something ... 
+            # Also need to re=create after the pull, since the underlying
+            # code may have been updated. 
+            bundle = bundle_class(bundle_dir)
                 
 
             prt("{} Building ", bundle.identity.name)
@@ -371,7 +372,7 @@ def source_run(args,rc, src):
                 
             elif args.repo_command == 'pull':
                 prt("--- {} {}",args.repo_command, root)
-                repo.push()
+                repo.pull()
                 
             elif args.repo_command == 'install':
                 prt("--- {} {}",args.repo_command, root)    
