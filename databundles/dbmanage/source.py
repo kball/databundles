@@ -255,6 +255,22 @@ def source_build(args,rc, src):
         
     def build(bundle_dir):
         from databundles.library import new_library
+        from databundles.source.repository.git import GitShellService
+        
+        # Stash must happen before pull, and pull must happen
+        # before the class is loaded in load_bundle, otherwize the class
+        # can't be updated by the pull. And, we have to use the GitShell
+        # sevice directly, because thenew_repository route will ooad the bundle
+        
+        gss = GitShellService(bundle_dir)
+        
+        if args.stash:
+            prt("{} Stashing ", bundle_dir)
+            gss.stash()
+            
+        if args.pull:
+            prt("{} Pulling ", bundle_dir)
+            gss.pull()
 
         # Import the bundle file from the directory
 
@@ -276,20 +292,12 @@ def source_build(args,rc, src):
                 return
 
             repo.bundle = bundle
-
-            if args.stash:
-                prt("{} Stashing ", bundle.identity.name)
-                repo.stash()
+             
+            if args.clean: 
+                bundle.clean()
                 
-            
-            if args.pull:
-                prt("{} Pulling ", bundle.identity.name)
-                repo.pull()
-              
-            bundle.clean()
             # Re-create after cleaning is important for something ... 
-            # Also need to re=create after the pull, since the underlying
-            # code may have been updated. 
+
             bundle = bundle_class(bundle_dir)
                 
 

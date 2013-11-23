@@ -20,9 +20,9 @@ logger.setLevel(logging.DEBUG)
 class GitShellService(object):
     '''Interact with GIT services using the shell commands'''
 
-    def __init__(self,repo, dir_):
+    def __init__(self,dir_):
         import os
-        self.repo = repo
+      
         self.dir_ = dir_
 
         if self.dir_:
@@ -278,7 +278,7 @@ class GitRepository(RepositoryInterface):
             raise ValueError("B parameter must be a build bundle ")
         
     
-        self._impl = GitShellService(self,b.bundle_dir)
+        self._impl = GitShellService(b.bundle_dir)
 
     
     @property
