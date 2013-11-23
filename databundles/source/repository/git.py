@@ -20,10 +20,10 @@ logger.setLevel(logging.DEBUG)
 class GitShellService(object):
     '''Interact with GIT services using the shell commands'''
 
-    def __init__(self,repo, dir):
+    def __init__(self,repo, dir_):
         import os
         self.repo = repo
-        self.dir_ = dir
+        self.dir_ = dir_
 
         if self.dir_:
             self.saved_path = os.getcwd()
@@ -73,10 +73,19 @@ class GitShellService(object):
         
         return True        
   
+    def stash(self):
+        
+        o = git.stash()
+        
+        if o.exit_code != 0:
+            raise RepositoryException("Failed to stash in  git repo: {}".format( o))
+        
+        return True   
+  
     def commit(self,message="."):
         
         try:
-            o = git.commit(a=True, m=message)
+            git.commit(a=True, m=message)
         except ErrorReturnCode_1:
             pass
 
@@ -91,7 +100,7 @@ class GitShellService(object):
                     return True
       
             return False
-        except ErrorReturnCode_128 as e:
+        except ErrorReturnCode_128:
             logger.error("Needs_commit failed in {}".format(os.getcwd()))
             return False
     
@@ -105,7 +114,7 @@ class GitShellService(object):
     
             return True
             
-        except ErrorReturnCode_128 as e:
+        except ErrorReturnCode_128:
             logger.error("Needs_push failed in {}".format(os.getcwd()))
             return False
      
@@ -136,9 +145,9 @@ class GitShellService(object):
         
         import StringIO
         sio = StringIO.StringIO('bingo')
-        def _rcv(chr,stdin):
-            sio.write(chr)
-            if chr == '\n' or chr == ':':
+        def _rcv(chr_,stdin):
+            sio.write(chr_)
+            if chr == '\n' or chr_ == ':':
                 # This is a total hack, but there is no other way to detect when the line is
                 # done being displayed that looking for the last character, which is not a \n
                 if not sio.getvalue().endswith('http:') and not sio.getvalue().endswith('https:'):
@@ -149,8 +158,6 @@ class GitShellService(object):
             
     def push(self, username="Noone", password="None"):
         '''Push to  remote'''
-        import sys, os
-        from sh import ErrorReturnCode_128 #@UnresolvedImport
 
         def line_proc(line,stdin):
 
@@ -180,8 +187,6 @@ class GitShellService(object):
 
     def pull(self, username="Noone", password="None"):
         '''pull to  remote'''
-        import sys, os
-        from sh import ErrorReturnCode_128 #@UnresolvedImport
 
         def line_proc(line,stdin):
 
@@ -214,7 +219,7 @@ class GitShellService(object):
         from databundles.dbexceptions import ConflictError
        
         if not os.path.exists(dir_):
-            p = git.clone(url,dir_)
+            git.clone(url,dir_)
         else:
             raise ConflictError("{} already exists".format(dir_))
         
@@ -227,19 +232,23 @@ class GitRepository(RepositoryInterface):
 
     SUFFIX = '-dbundle'
 
-    def __init__(self,service, dir, **kwargs):
+    def __init__(self,service, dir, bundle_dir = None, **kwargs):
         
         self.service = service
-        self.dir_ = dir
+        self.dir_ = dir # Needs to be 'dir' for **config, from yaml file, to work
         self._bundle = None
         self._bundle_dir = None
         self._impl = None
+
+        if bundle_dir:
+            self.bundle_dir = bundle_dir
         
         self._dependencies = None
         
     
     @property
     def dir(self):
+        '''The directory of ... '''
         return self.dir_
     
     def source_path(self, ident):
@@ -255,7 +264,6 @@ class GitRepository(RepositoryInterface):
     @property
     def bundle(self):
         if not self._bundle:
-            from databundles.dbexceptions import ConfigurationError
             raise ConfigurationError("Must assign bundle to repostitory before this operation")        
         
         return self._bundle
@@ -276,13 +284,12 @@ class GitRepository(RepositoryInterface):
     @property
     def bundle_dir(self):
         if not self._bundle and not self._bundle_dir:
-            from databundles.dbexceptions import ConfigurationError
             raise ConfigurationError("Must assign bundle or bundle_dir to repostitory before this operation")             
     
         if self._bundle_dir:
             return self._bundle_dir
         else:
-            return self.bundle_dir
+            return self.bundle.bundle_dir
         
     @bundle_dir.setter
     def bundle_dir(self, bundle_dir):
@@ -290,7 +297,7 @@ class GitRepository(RepositoryInterface):
         
         # Import the bundle file from the directory
         from databundles.run import import_file
-        import imp, os
+        import os
         rp = os.path.realpath(os.path.join(bundle_dir, 'bundle.py'))
         mod = import_file(rp)
      
@@ -301,7 +308,6 @@ class GitRepository(RepositoryInterface):
     @property
     def bundle_ident(self):
         if not self._bundle:
-            from databundles.dbexceptions import ConfigurationError
             raise ConfigurationError("Must assign bundle or bundle_dir to repostitory before this operation")             
     
         return self._bundle.identity
@@ -390,6 +396,10 @@ class GitRepository(RepositoryInterface):
     
     def commit(self, message):
         return self.impl.commit(message=message)
+ 
+    def stash(self):
+        return self.impl.stash()
+    
     
     def needs_commit(self):
         return self.impl.needs_commit()
@@ -404,7 +414,6 @@ class GitRepository(RepositoryInterface):
         '''Locate the source for the named bundle from the library and retrieve the 
         source '''
         import os
-        from urlparse import urlparse
 
         d = os.path.join(self.dir, path)
        
@@ -440,14 +449,13 @@ class GitRepository(RepositoryInterface):
         from collections import defaultdict
         import os
         from databundles.identity import Identity
-        from databundles.util import toposort
         from databundles.run import import_file
         
         if not self._dependencies:
             
             depset = defaultdict(set)
         
-            for root, dirs, files in os.walk(self.dir_):
+            for root, _, files in os.walk(self.dir_):
                 if 'bundle.yaml' in files:
 
                     rp = os.path.realpath(os.path.join(root, 'bundle.py'))
@@ -456,7 +464,7 @@ class GitRepository(RepositoryInterface):
                     bundle = mod.Bundle(root)
                     deps =  bundle.library.dependencies
 
-                    for k,v in deps.items():
+                    for _,v in deps.items():
                         ident = Identity.parse_name(v) # Remove revision 
                         #print "XXX {:50s} {:30s} {}".format(v, ident.name, ident.to_dict())
                         depset[bundle.identity.name].add(ident.name)            
@@ -476,7 +484,6 @@ class GitRepository(RepositoryInterface):
 
         if reverse:
 
-            first = True
             out = set()
             
             def reverse_set(name):

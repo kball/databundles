@@ -66,7 +66,7 @@ class RunConfig(object):
                     loaded = True
                     self.config.loaded.append(f)
                     self.config.update_yaml(f)
-                except TypeError as e:
+                except TypeError:
                     pass # Empty files will produce a type error
 
         if not loaded:
@@ -242,8 +242,7 @@ class RunConfig(object):
 
         @property
         def dir(self):   
-            from source.repository import new_repository
-            
+
             fs = self.this.group('filesystem') 
             root_dir = fs['root_dir'] if 'root_dir' in fs  else  '/tmp/norootdir'
                     
@@ -301,19 +300,18 @@ def import_file(filename):
     ''' '''
     import imp
     (path, name) = os.path.split(filename)
-    (name, ext) = os.path.splitext(name)
+    (name, _) = os.path.splitext(name)
     (_, modname) = os.path.split(path)
 
-    (file, filename, data) = imp.find_module(name, [path])
+    (file_, filename, data) = imp.find_module(name, [path])
 
-    return imp.load_module(modname, file, filename, data)
+    return imp.load_module(modname, file_, filename, data)
        
             
 if __name__ == '__main__':
     '''When dbundle is run, this routine will load the bundle module from a file
     wire it into the namespace and run it with the arguments passed into dbundle. '''
-    import sys, os, imp, pprint
-
+    import sys
     args = list(sys.argv)
 
     bundle_file = sys.argv[1]

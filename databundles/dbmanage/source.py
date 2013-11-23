@@ -67,6 +67,8 @@ def source_parser(cmd):
   
     sp = asp.add_parser('build', help='Build sources')
     sp.set_defaults(subcommand='build')
+    sp.add_argument('-p','--pull', default=False,action="store_true", help='Git pull before build')
+    sp.add_argument('-s','--stash', default=False,action="store_true", help='Git stash before build')
     sp.add_argument('-f','--force', default=False,action="store_true", help='Build even if built or in library')
     sp.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')
     sp.add_argument('-i','--install', default=False,action="store_true", help='Install after build')
@@ -228,6 +230,7 @@ def source_build(args,rc, src):
 
     from databundles.identity import Identity
     from ..source.repository import new_repository
+    
     repo = new_repository(rc.sourcerepo(args.name))   
        
     dir_ = None
@@ -251,6 +254,8 @@ def source_build(args,rc, src):
         
     def build(bundle_dir):
         from databundles.library import new_library
+        from databundles.source.repository.git import GitRepository
+
         # Import the bundle file from the directory
 
         bundle_class = load_bundle(bundle_dir)
@@ -263,13 +268,32 @@ def source_build(args,rc, src):
         elif bundle.is_built and not args.force and not args.clean:
             prt("{} Bundle is already built",bundle.identity.name)
         else:
-            prt("{} Building ", bundle.identity.name)
+
+
+
             if args.dryrun:
+                prt("{} Would build but in dry run ", bundle.identity.name)
                 return
 
+            repo.bundle = bundle
+         
             bundle.clean()
             # Re-create after cleaning is important for something ... 
             bundle = bundle_class(bundle_dir)
+
+            
+            if args.stash:
+                prt("{} Stashing ", bundle.identity.name)
+                repo.stash()
+                pass
+            
+            if args.pull:
+                prt("{} pulling ", bundle.identity.name)
+                repo.pull()
+                pass
+
+            prt("{} Building ", bundle.identity.name)
+
     
             if not bundle.run_prepare():
                 err("{} Prepare failed", bundle.identity.name)
@@ -288,6 +312,8 @@ def source_build(args,rc, src):
         deps.append(name)
 
         build_dirs = {}
+        
+        # Find all of the dependencies for the named bundle, and make those first. 
         for root, _, files in os.walk(dir_):
             if 'bundle.yaml' in files:
                 bundle_class = load_bundle(root)
@@ -312,16 +338,16 @@ def source_build(args,rc, src):
                 bundle = bundle_class(root)      
                 build_dirs[bundle.identity.name] = root 
 
-        for i,level in enumerate( toposort(repo.dependencies)):
-            for j, name in enumerate(level):
+        for level in toposort(repo.dependencies):
+            for name in level:
                 try:
                     build_dir = build_dirs[name]
                     #print "{:3d} {:3d} {} {}".format(i,j,name, build_dir)
                     build(build_dir)
                 except KeyError:
                     pass
-                
 
+            
 def source_run(args,rc, src):
 
     from databundles.source.repository.git import GitRepository
@@ -466,7 +492,7 @@ def source_deps(args,rc, src):
 
         
     else:
-        import pprint
+
         graph = toposort(repo.dependencies)
     
         for i,level in enumerate(graph):
