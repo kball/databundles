@@ -34,7 +34,7 @@ class GitShellService(object):
     def __del__( self ): # Should be ContextManager, but not right model ... 
         import os
         if self.saved_path:
-            os.chdir( self.save_path )
+            os.chdir( self.saved_path )
         
     def init(self):
         o = git.init()
