@@ -232,7 +232,7 @@ class GitRepository(RepositoryInterface):
 
     SUFFIX = '-dbundle'
 
-    def __init__(self,service, dir, bundle_dir = None, **kwargs):
+    def __init__(self,service, dir, bundle_dir = None, **kwargs):  # @ReservedAssignment
         
         self.service = service
         self.dir_ = dir # Needs to be 'dir' for **config, from yaml file, to work

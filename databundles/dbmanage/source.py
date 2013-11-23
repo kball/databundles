@@ -7,6 +7,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 from ..dbmanage import prt, err, warn
 from ..dbmanage import _library_list, _source_list, load_bundle, _print_bundle_list
+
 import os
 import yaml
 import shutil
@@ -254,7 +255,6 @@ def source_build(args,rc, src):
         
     def build(bundle_dir):
         from databundles.library import new_library
-        from databundles.source.repository.git import GitRepository
 
         # Import the bundle file from the directory
 
@@ -265,11 +265,11 @@ def source_build(args,rc, src):
 
         if l.get(bundle.identity.vid)  and not args.force:
             prt("{} Bundle is already in library", bundle.identity.name)
+            return
         elif bundle.is_built and not args.force and not args.clean:
             prt("{} Bundle is already built",bundle.identity.name)
+            return
         else:
-
-
 
             if args.dryrun:
                 prt("{} Would build but in dry run ", bundle.identity.name)
@@ -285,16 +285,15 @@ def source_build(args,rc, src):
             if args.stash:
                 prt("{} Stashing ", bundle.identity.name)
                 repo.stash()
-                pass
+                
             
             if args.pull:
-                prt("{} pulling ", bundle.identity.name)
+                prt("{} Pulling ", bundle.identity.name)
                 repo.pull()
-                pass
+                
 
             prt("{} Building ", bundle.identity.name)
 
-    
             if not bundle.run_prepare():
                 err("{} Prepare failed", bundle.identity.name)
             

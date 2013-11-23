@@ -10,36 +10,23 @@ import yaml
 import shutil
 from databundles.run import  get_runconfig
 from databundles.util import Progressor
-
 from databundles import __version__
-
-
-command = None
-subcommand = None
+import logging
+from ..util import get_logger
+     
+logger = None # Set in main
 
 def prt(template, *args, **kwargs):
-    global command
-    global subcommand
-    
-    print("== {}:{}".format(command, subcommand),template.format(*args, **kwargs))
+    global logger
 
-def prtl(template, *args, **kwargs):
-    # would like to use print( ..., end='\r') here, but it doesn't seem to work. 
-    import sys
-    global command
-    global subcommand
-    
-    sys.stdout.write("== {}:{}".format(command, subcommand))
-    sys.stdout.write('%s\r' % template.format(*args, **kwargs) )
-    sys.stdout.flush()
+    logger.info(template.format(*args, **kwargs))
 
 
 def err(template, *args, **kwargs):
     import sys
-    global command
-    global subcommand
+    global logger
     
-    print("== {}:{}".format(command, subcommand),"ERROR: "+template.format(*args, **kwargs))
+    logger.error(template.format(*args, **kwargs))
     sys.exit(1)
 
 def warn(template, *args, **kwargs):
@@ -47,8 +34,7 @@ def warn(template, *args, **kwargs):
     global command
     global subcommand
     
-    print("== {}:{}".format(command, subcommand),"WARN: "+template.format(*args, **kwargs))
-
+    logger.warning(template.format(*args, **kwargs))
 
 
 def load_bundle(bundle_dir):
@@ -158,7 +144,7 @@ def _find(args, l, config, remote):
 
 def _source_list(dir_):
     lst = {}
-    for root, dirs, files in os.walk(dir_):
+    for root, _, files in os.walk(dir_):
         if 'bundle.yaml' in files:
             bundle_class = load_bundle(root)
             bundle = bundle_class(root)
@@ -447,11 +433,11 @@ def main():
         rc = None
         src = None
         
-    global command
-    global subcommand
-    command = args.command
-    subcommand = args.subcommand    
-        
+    global logger
+
+    logger = get_logger("{}.{}".format(args.command,args.subcommand  ))
+    logger.setLevel(logging.INFO) 
+
     if not f:
         err("Error: No command: "+args.command)
     else:
@@ -461,5 +447,3 @@ def main():
             prt('\nExiting...')
             pass
         
-
- 
