@@ -228,7 +228,11 @@ def source_new(args,rc, src):
 
     
 def source_build(args,rc, src):
-
+    '''Build a single bundle, or a set of bundles in a directory. The build process
+    will build all dependencies for each bundle before buildng the bundle. '''
+    
+    
+    
     from databundles.identity import Identity
     from ..source.repository import new_repository
     
@@ -236,6 +240,7 @@ def source_build(args,rc, src):
        
     dir_ = None
     name = None
+    
     if args.dir:
         if os.path.exists(args.dir):
             dir_ = args.dir

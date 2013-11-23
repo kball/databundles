@@ -1094,7 +1094,7 @@ class BuildBundle(Bundle):
                 print b.schema.as_markdown()
             return
     
-        if args.command_group == 'source':
+        if 'command_group' in args and args.command_group == 'source':
             
             from source.repository import new_repository
     
