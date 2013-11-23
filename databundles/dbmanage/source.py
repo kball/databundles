@@ -13,7 +13,6 @@ import shutil
 
 def source_command(args, rc, src):
 
-
     globals()['source_'+args.subcommand](args, rc,src)
 
 def source_parser(cmd):
@@ -257,39 +256,30 @@ def source_build(args,rc, src):
         bundle_class = load_bundle(bundle_dir)
         bundle = bundle_class(bundle_dir)
 
-      
-
-        if args.dryrun:
-            bundle.log("Would build: {}".format(bundle.identity.name))
-            return
-
         l = new_library(rc.library(args.library))
 
-    
         if l.get(bundle.identity.vid)  and not args.force:
-            bundle.log("Bundle {} is already in library".format(bundle.identity.name))
-
+            prt("{} Bundle is already in library", bundle.identity.name)
         elif bundle.is_built and not args.force and not args.clean:
-            bundle.log("Bundle {} is already built".format(bundle.identity.name))
+            prt("{} Bundle is already built",bundle.identity.name)
         else:
-            bundle.log("-------------")
-            bundle.log("Building {} ".format(bundle.identity.name))
-            bundle.log("-------------")
+            prt("{} Building ", bundle.identity.name)
+            if args.dryrun:
+                return
 
             bundle.clean()
+            # Re-create after cleaning is important for something ... 
             bundle = bundle_class(bundle_dir)
     
             if not bundle.run_prepare():
-                err("Prepare failed")
+                err("{} Prepare failed", bundle.identity.name)
             
             if not bundle.run_build():
-                err("Build failed")
+                err("{} Build failed", bundle.identity.name)
             
-
-            
-        if args.install:
+        if args.install and not args.dryrun:
             if not bundle.run_install(force=True):
-                err('Install failed')
+                err('{} Install failed', bundle.identity.name)
             
 
     if name:
@@ -306,7 +296,8 @@ def source_build(args,rc, src):
                 
         for n in deps:
             dir_ = build_dirs[n]
-            prt("{:50s} {}".format(n, dir_))
+            prt('')
+            prt("{} Building in {}".format(n, dir_))
             build(dir_)
     
         
@@ -328,7 +319,8 @@ def source_build(args,rc, src):
                     #print "{:3d} {:3d} {} {}".format(i,j,name, build_dir)
                     build(build_dir)
                 except KeyError:
-                    prt("{} not found ".format(name))
+                    pass
+                
 
 def source_run(args,rc, src):
 

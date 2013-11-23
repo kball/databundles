@@ -13,24 +13,41 @@ from databundles.util import Progressor
 
 from databundles import __version__
 
+
+command = None
+subcommand = None
+
 def prt(template, *args, **kwargs):
-    print(template.format(*args, **kwargs))
+    global command
+    global subcommand
+    
+    print("== {}:{}".format(command, subcommand),template.format(*args, **kwargs))
 
 def prtl(template, *args, **kwargs):
     # would like to use print( ..., end='\r') here, but it doesn't seem to work. 
     import sys
+    global command
+    global subcommand
+    
+    sys.stdout.write("== {}:{}".format(command, subcommand))
     sys.stdout.write('%s\r' % template.format(*args, **kwargs) )
     sys.stdout.flush()
 
 
 def err(template, *args, **kwargs):
     import sys
-    print("ERROR: "+template.format(*args, **kwargs))
+    global command
+    global subcommand
+    
+    print("== {}:{}".format(command, subcommand),"ERROR: "+template.format(*args, **kwargs))
     sys.exit(1)
 
 def warn(template, *args, **kwargs):
     import sys
-    print("WARN: "+template.format(*args, **kwargs))
+    global command
+    global subcommand
+    
+    print("== {}:{}".format(command, subcommand),"WARN: "+template.format(*args, **kwargs))
 
 
 
@@ -429,6 +446,11 @@ def main():
     else:
         rc = None
         src = None
+        
+    global command
+    global subcommand
+    command = args.command
+    subcommand = args.subcommand    
         
     if not f:
         err("Error: No command: "+args.command)
