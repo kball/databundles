@@ -232,7 +232,6 @@ def source_build(args,rc, src):
     will build all dependencies for each bundle before buildng the bundle. '''
     
     
-    
     from databundles.identity import Identity
     from ..source.repository import new_repository
     
@@ -319,46 +318,48 @@ def source_build(args,rc, src):
                 err('{} Install failed', bundle.identity.name)
             
 
-    if name:
+    build_dirs = {}
+    
+    # Find all of the dependencies for the named bundle, and make those first. 
+    for root, _, files in os.walk(rc.sourcerepo.dir):
+        if 'bundle.yaml' in files:
+            bundle_class = load_bundle(root)
+            bundle = bundle_class(root)      
+            build_dirs[bundle.identity.name] = root 
 
+
+    if name:
         deps = repo.bundle_deps(name)
         deps.append(name)
-
-        build_dirs = {}
-        
-        # Find all of the dependencies for the named bundle, and make those first. 
-        for root, _, files in os.walk(dir_):
-            if 'bundle.yaml' in files:
-                bundle_class = load_bundle(root)
-                bundle = bundle_class(root)      
-                build_dirs[bundle.identity.name] = root 
-                
-        for n in deps:
-            dir_ = build_dirs[n]
-            prt('')
-            prt("{} Building in {}".format(n, dir_))
-            build(dir_)
-    
         
     else:
-        from ..util import toposort
 
-        build_dirs = {}
+        deps = []
 
+        # Walk the subdirectory for the files to build, and
+        # add all of their dependencies
         for root, _, files in os.walk(dir_):
             if 'bundle.yaml' in files:
+                
                 bundle_class = load_bundle(root)
-                bundle = bundle_class(root)      
-                build_dirs[bundle.identity.name] = root 
+                bundle = bundle_class(root)    
 
-        for level in toposort(repo.dependencies):
-            for name in level:
-                try:
-                    build_dir = build_dirs[name]
-                    #print "{:3d} {:3d} {} {}".format(i,j,name, build_dir)
-                    build(build_dir)
-                except KeyError:
-                    pass
+                for dep in repo.bundle_deps(bundle.identity.name):
+                    if dep not in deps:
+                        deps.append(dep)
+                        
+                deps.append(bundle.identity.name)
+    
+
+    for n in deps:
+        try:
+            dir_ = build_dirs[n]
+        except KeyError:
+            err("Failed to find directory for bundle {}".format(n))
+
+        prt('')
+        prt("{} Building in {}".format(n, dir_))
+        build(dir_)
 
             
 def source_run(args,rc, src):
@@ -469,7 +470,8 @@ def source_sync(args,rc, src):
 
             ident = new_identity(e)
 
-            l.database.add_file(e['clone_url'], repo.service.ident, ident.id_, state='synced', type_='source', data=e)
+            l.database.add_file(e['clone_url'], repo.service.ident, ident.id_, 
+                                state='synced', type_='source', source_url = e['clone_url'], data=e)
             
             prt("Added {:15s} {}",ident.id_,e['clone_url'] )
 
