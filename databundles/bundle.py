@@ -676,12 +676,15 @@ class BuildBundle(Bundle):
     def build(self):
         return False
     
+    
+    
     def post_build(self):
         '''After the build, update the configuration with the time required for the build, 
         then save the schema back to the tables, if it was revised during the build.  '''
         from datetime import datetime
         from time import time
         import shutil
+        
           
         with self.session:
             self.db_config.set_value('process', 'built', datetime.now().isoformat())
@@ -704,17 +707,28 @@ class BuildBundle(Bundle):
                         self.filesystem.path('meta',self.SCHEMA_FILE)
                         )
         
+
+        self.post_build_write_stats()
+
+    
+        return True
+    
+    def post_build_write_stats(self):
+        from sqlalchemy.exc import OperationalError
+        
         # Create stat entries for all of the partitions. 
         for p in self.partitions:
             try:
+                self.log("Writting stats for: {}".format(p.identity.name))
                 p.write_stats()
             except NotImplementedError:
-                pass
+                self.log("Can't write stats (unimplemented) for partition: {}".format(p.identity.name))
             except ConfigurationError as e:
                 self.error(e.message)
-                
-        
-        return True
+            except OperationalError as e:
+                self.error("Failed to write stats for partition {}: {}".format(p.identity.name, e.message))
+                raise
+                    
     
     @property
     def is_built(self):

@@ -4,11 +4,8 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 class BundleError(Exception):
+    pass
     
-    def __init__(self, value):
-        self.message = value
-    def __str__(self):
-        return repr(self.message)
 
 class ProcessError(BundleError):
     '''Error in the configuration files'''

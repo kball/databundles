@@ -158,6 +158,17 @@ def _host_port(library):
     return  'http://{}{}'.format(library.host, ':'+str(library.port) if library.port != 80 else '')
 
 
+@get('/')
+def get_root(library):
+    
+    hp = _host_port(library)
+    
+    return {
+           'datasets' : "{}/datasets".format(hp),
+           'find': "{}/datasets/find".format(hp),
+           }
+    
+
 @get('/datasets')
 def get_datasets(library):
     '''Return all of the dataset identities, as a dict, 
@@ -168,12 +179,17 @@ def get_datasets(library):
     l = library
   
     return { i.identity.cache_key : { 
-                                     'identity': i.identity.to_dict() ,
-                                     'urls': {
-                                              'info': "{}/datasets/{}".format(_host_port(library), i.identity.vid_enc),
-                                              'file': "{}/datasets/{}/db".format(_host_port(library), i.identity.vid_enc)
-                                              }
-                                     } 
+                 'identity': i.identity.to_dict() ,
+                 'urls': {
+                          'partitions': "{}/datasets/{}".format(_host_port(library), i.identity.vid_enc),
+                          'db': "{}/datasets/{}/db".format(_host_port(library), i.identity.vid_enc)
+                          },
+                  'schema':{
+                    'json':'{}/datasets/{}/schema.json'.format(_host_port(library), i.identity.vid_enc),
+                    'yaml':'{}/datasets/{}/schema.yaml'.format(_host_port(library), i.identity.vid_enc),
+                    'csv':'{}/datasets/{}/schema.csv'.format(_host_port(library), i.identity.vid_enc),
+                  }
+                 } 
             for i in library.datasets}
    
 @get('/datasets/find/<term>')
@@ -337,8 +353,12 @@ def get_dataset(did, library, pid=None):
 
         if remote:
             d['partitions'][partition.identity.id_]['urls'] ={
-             'file':"{}/datasets/{}/partitions/{}/db".format(_host_port(library), gr.identity.vid_enc, partition.identity.vid_enc),
-             'csv':"{}/datasets/{}/partitions/{}/csv".format(_host_port(library), gr.identity.vid_enc, partition.identity.vid_enc)
+             'db':"{}/datasets/{}/partitions/{}/db".format(_host_port(library), gr.identity.vid_enc, partition.identity.vid_enc),
+             'csv': {
+                'csv':"{}/datasets/{}/partitions/{}/csv".format(_host_port(library), gr.identity.vid_enc, partition.identity.vid_enc),
+                'parts':"{}/datasets/{}/partitions/{}/csv/parts".format(_host_port(library), gr.identity.vid_enc, partition.identity.vid_enc)
+              }
+                                        
             }
         
     return d
@@ -525,7 +545,56 @@ def get_partition_file(did, pid, library):
     
     return redirect(url)
 
+def process_did(did, library):
+    from ..identity import ObjectNumber, DatasetNumber
     
+    did = did.replace('|','/')
+
+    try:
+        d_on = ObjectNumber.parse(did)
+    except ValueError:
+        raise exc.BadRequest("Could not parse dataset id".format(did))
+    
+    if not isinstance(d_on, DatasetNumber):
+        raise exc.BadRequest("Not a valid dataset number {}".format(did))
+    
+    b =  library.get(did)
+
+    if not b:
+        raise exc.BadRequest("Didn't get bundle for {}".format(did))
+    
+    
+    return did, d_on, b
+    
+def process_pid(did, pid, library):
+    from ..identity import ObjectNumber, PartitionNumber
+    
+    pid = pid.replace('|','/')
+
+    try:
+        p_on = ObjectNumber.parse(pid)
+    except ValueError:
+        raise exc.BadRequest("Could not parse dataset id".format(did))
+    
+    if not isinstance(p_on, PartitionNumber):
+        raise exc.BadRequest("Not a valid partition number {}".format(did))
+    
+    b =  library.get(did)
+
+    if not b:
+        raise exc.BadRequest("Didn't get bundle for {}".format(did))
+    
+    p_orm = b.partitions.find_id(pid)
+
+    if not p_orm:
+        raise exc.BadRequest("Partition reference {} not found in bundle {}".format(pid, did))
+    
+
+    return pid, p_on, p_orm
+    
+ 
+    
+
 @get('/datasets/<did>/partitions/<pid>/csv') 
 @CaptureException   
 def get_partition_csv(did, pid, library):
@@ -541,9 +610,11 @@ def get_partition_csv(did, pid, library):
     from StringIO import StringIO
     from sqlalchemy import text
      
-    did = did.replace('|','/')
-    pid = pid.replace('|','/')
-     
+    did, d_on, b = process_did(did, library)
+    pid, p_on, p_orm  = process_pid(did, pid, library)
+    
+    p = library.get(pid).partition # p_orm is a database entry, not a partition
+  
     i = int(request.query.get('i',1))
     n = int(request.query.get('n',1))
     sep = request.query.get('sep',',')
@@ -551,21 +622,10 @@ def get_partition_csv(did, pid, library):
     where = request.query.get('where',None)
   
     if i > n:
-        raise exc.BadRequest("Segment number must be less than or equal to the numebr of segments")
+        raise exc.BadRequest("Segment number must be less than or equal to the number of segments")
     
     if i < 1:
         raise exc.BadRequest("Segment number starts at 1")
-    
-   
-    b =  library.get(did)
-
-    if not b:
-        raise exc.BadRequest("Didn't get bundle for {}".format(pid))
-    
-    p =  library.get(pid).partition
-    
-    if not p:
-        raise exc.BadRequest("Partition reference {} not found in bundle".format(pid))
     
     table = p.table.name
     
@@ -583,14 +643,11 @@ def get_partition_csv(did, pid, library):
     else:
         seg_size = base_seg_size
 
-    cache = []
-    
     out = StringIO()
     writer = csv.writer(out, delimiter=sep)
     
     if request.query.header:
         writer.writerow(tuple([c.name for c in p.table.columns]))
-
 
     if where:
         q = "SELECT * FROM {} WHERE {} LIMIT {} OFFSET {} ".format(table, where, seg_size, base_seg_size*(i-1))
@@ -606,23 +663,43 @@ def get_partition_csv(did, pid, library):
     response.content_type = 'text/csv'
     
     response.headers["content-disposition"] = "attachment; filename='{}-{}-{}-{}.csv'".format(p.identity.vname,table,i,n)
-
-    info =   {
-            'q': q,
-            'i' : i,
-            'n' : n,
-            'p' : p.identity.vname,
-            'table': table,
-            'count': count,
-            'seg_size': seg_size,
-            'base_seg_size': base_seg_size,
-            'rem': rem
-            }
     
     return out.getvalue()
     
         
+@get('/datasets/<did>/partitions/<pid>/csv/parts') 
+@CaptureException   
+def get_partition_csv_parts(did, pid, library):
+    '''Return a set of URLS for optimal CSV parts of a partition'''
     
+
+    did, d_on, b = process_did(did, library)
+    pid, p_on, p_orm  = process_pid(did, pid, library)
+    
+    p = library.get(pid).partition # p_orm is a database entry, not a partition
+    
+    TARGET_ROW_COUNT = 50000
+    
+    table = p.table.name
+    
+    count = p.query("SELECT count(*) FROM {}".format(table)).fetchone()
+    
+    if count:
+        count = count[0]
+    else:
+        raise exc.BadRequest("Failed to get count of number of rows")
+
+    part_count, rem = divmod(count, TARGET_ROW_COUNT)
+    
+    template = "{}/datasets/{}/partitions/{}/csv".format(_host_port(library), b.identity.vid_enc, p.identity.vid_enc)
+    
+    parts = []
+    for i in range(1, part_count+1):
+        parts.append(template +"?i={}&n={}".format(i,part_count))
+    
+    return parts
+    
+        
 def _read_body(request):
     '''Read the body of a request and decompress it if required '''
     # Really important to only call request.body once! The property method isn't
@@ -674,13 +751,6 @@ def get_test_echo(arg):
 def put_test_echo():
     '''just echo the argument'''
     return  (request.json, dict(request.query.items()))
-
-
-@get('/test/info')
-def get_test_info(library):
-    '''Info about the server'''
-    return  str(type(library))
-
 
 
 @get('/test/exception')

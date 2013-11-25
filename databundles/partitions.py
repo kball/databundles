@@ -87,7 +87,6 @@ class Partitions(object):
     def __iter__(self):
         return iter(self.all)
 
-            
 
     
     def get(self, id_):
@@ -151,6 +150,20 @@ class Partitions(object):
                 return partition
             
         return None
+
+    def find_id(self, id_):
+        '''Find a partition from an id or vid'''
+        
+        from databundles.orm import Partition as OrmPartition
+        from sqlalchemy import or_
+
+        q = (self.bundle.database.session.query(OrmPartition)
+             .filter(or_(
+                         OrmPartition.id_==str(id_).encode('ascii'),
+                          OrmPartition.vid==str(id_).encode('ascii')
+                         )))       
+
+        return q.first()
 
     def find(self, pid=None, use_library=False, **kwargs):
         '''Return a Partition object from the database based on a PartitionId.
@@ -253,8 +266,7 @@ class Partitions(object):
 
             if pid.segment is not Identity.ANY:
                 q = q.filter(OrmPartition.segment==pid.segment)
-       
-        
+
             if pid.table is not Identity.ANY:
             
                 if pid.table is None:
@@ -267,14 +279,12 @@ class Partitions(object):
                     
                     q = q.filter(OrmPartition.t_id==tr.id_)
  
-
         ds = self.bundle.dataset
         
         q = q.filter(OrmPartition.d_vid == ds.vid)
 
         q = q.order_by(OrmPartition.vid.asc()).order_by(OrmPartition.segment.asc())
 
- 
         return q
 
     def _new_orm_partition(self, pid,  **kwargs):

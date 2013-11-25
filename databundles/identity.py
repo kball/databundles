@@ -375,9 +375,7 @@ class ObjectNumber(object):
         else:
             self.primary = primary
             self.suffix = suffix
-    
-    
-  
+
     @classmethod
     def base62_encode(cls, num):
         """Encode a number in Base X

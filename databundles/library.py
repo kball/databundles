@@ -1536,18 +1536,15 @@ class Library(object):
         # Get a reference to the dataset, partition and relative path
         # from the local database. 
 
-        try:
-            dataset, partition = self.get_ref(bp_id)
-    
-            if partition:
-                return self._get_partition(dataset, partition, force, cb=cb)
-            elif dataset:
-                return self._get_dataset(dataset, force, cb=cb)
-            else:
-                return False
-        except Exception as e:
-            print 'ERROR: Failed to get bundle for id {} '.format(bp_id)
-            raise
+        dataset, partition = self.get_ref(bp_id)
+
+        if partition:
+            return self._get_partition(dataset, partition, force, cb=cb)
+        elif dataset:
+            return self._get_dataset(dataset, force, cb=cb)
+        else:
+            return False
+
 
     def _get_dataset(self, dataset, force = False, cb=None):
 
@@ -1600,20 +1597,25 @@ class Library(object):
         
         rp = self.cache.get(p.identity.cache_key, cb=cb)
 
-        if not os.path.exists(p.database.path) or p.database.is_empty() or force:
+
+        if not rp or not os.path.exists(p.database.path) or p.database.is_empty() or force:
 
             if self.remote:
                 try:
                     
-                    if force or p.database.is_empty():
+                    if os.path.exists(p.database.path) and (force or p.database.is_empty()) :
                         self.logger.info("_get_partition deleting {} before fetch. force={}, is_empty={}"
                                     .format(p.database.path, force, p.database.is_empty()))
+                       
                         os.remove(p.database.path)
                     
                     self._get_remote_partition(r,partition, cb=cb)
                 except RemoteNotFound:
                     raise NotFoundError("""Didn't find partition {} in bundle {}. Partition found in bundle, but path {} ({}?) not in local library and doesn't have it either. """
                                    .format(p.identity.name,r.identity.name,p.database.path, rp))
+                except OSError:
+                    raise NotFoundError("""Didn't find partition {} for bundle {}. Missing path {} ({}?) not found """
+                                   .format(p.identity.name,r.identity.name,p.database.path, rp))                    
              
             else:
                 raise NotFoundError("""Didn't find partition {} in bundle {}. Partition found in bundle, but path {} ({}?) not in local library and remote not set. """
