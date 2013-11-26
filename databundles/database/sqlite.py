@@ -244,8 +244,10 @@ class SqliteDatabase(RelationalDatabase):
         
         from sqlalchemy import create_engine  
         
-        engine = create_engine(self.dsn, echo=True)
+        engine = create_engine(self.dsn, echo=False)
         connection = engine.connect()
+
+        connection.execute("PRAGMA user_version = {}".format(self.SCHEMA_VERSION))
 
     MIN_NUMBER_OF_TABLES = 1
     def is_empty(self):
@@ -259,9 +261,12 @@ class SqliteDatabase(RelationalDatabase):
             else:
                 return False
         else:
+            
+            print __file__, self.path, self.version
+            
             tables = self.inspector.get_table_names()
-          
-            if tables and len(tables) > self.MIN_NUMBER_OF_TABLES:
+
+            if tables and len(tables) < self.MIN_NUMBER_OF_TABLES:
                 return True
             else:
                 return False
@@ -459,12 +464,12 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
         self.require_path()
   
         SqliteDatabase._create(self) # Creates the database file
-  
+        
         if RelationalDatabase._create(self):
             
             RelationalBundleDatabaseMixin._create(self)
-
-            self.session.execute("PRAGMA user_version = {}".format(self.SCHEMA_VERSION))
+            
+            
 
             self.post_create()
           
@@ -568,6 +573,9 @@ def _on_connect_update_schema(conn):
     '''Perform on-the-fly schema updates based on the user version'''
 
     version = conn.execute('PRAGMA user_version').fetchone()[0]
+
+    if version:
+        version = int(version)
 
     if version < 10:
         

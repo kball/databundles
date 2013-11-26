@@ -88,8 +88,10 @@ class RelationalDatabase(DatabaseInterface):
         except:
             return False
         
+
         if self.is_empty():
             return False
+        
         
         return True
     
@@ -103,6 +105,7 @@ class RelationalDatabase(DatabaseInterface):
     def _create(self):
         """Create the database from the base SQL"""
         from databundles.orm import  Config
+        
         if not self.exists():    
 
             self.require_path()

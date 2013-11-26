@@ -273,9 +273,11 @@ def _print_info(l,d,p, list_partitions=False):
         prt("P Is Local  : {}",(l.cache.has(p.cache_key) is not False) if p else '')
         prt("P Rel Path  : {}",p.cache_key)
         prt("P Abs Path  : {}",l.cache.path(p.cache_key) if l.cache.has(p.cache_key) else '' )   
-  
+
         if remote_p:
-            prt("P Web Path  : {}",remote_p['url'])
+            prt("P Web Path  : {}",remote_p['urls']['file'])
+            
+
 
 def main():
     import argparse
