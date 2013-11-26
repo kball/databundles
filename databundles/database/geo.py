@@ -61,6 +61,8 @@ class FeatureInserter(InserterInterface):
     
 class GeoDb(PartitionDb):
     
+    MIN_NUMBER_OF_TABLES = 5 # Used in is_empty
+    
     def __init__(self, bundle, partition, base_path, **kwargs):
         ''''''    
 

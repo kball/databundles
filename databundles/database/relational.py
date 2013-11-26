@@ -77,6 +77,10 @@ class RelationalDatabase(DatabaseInterface):
         
         return True
     
+    @property
+    def version(self):
+        raise NotImplemented()
+    
     def exists(self):
         
         try:

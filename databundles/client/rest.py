@@ -148,7 +148,7 @@ class RestApi(object):
         return response.object # self._process_get_response(id_or_name, response, file_path, uncompress, cb=cb)
     
     
-    def get_stream_by_key(self, key, cb=None):
+    def get_stream_by_key(self, key, cb=None, return_meta=True):
         '''Get a stream to to the remote file. 
         
         Queries the REST api to get the URL to the file, then fetches the file

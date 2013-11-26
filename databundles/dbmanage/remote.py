@@ -38,7 +38,7 @@ def remote_info(args, l, rc):
     else:
         prt(str(l.remote))
 
-def remote_list(args, l, rc):
+def remote_list(args, l, rc, return_meta=False):
         
     if args.datasets:
         # List just the partitions in some data sets. This should probably be combined into info. 
@@ -57,7 +57,7 @@ def remote_list(args, l, rc):
             
     else:
 
-        datasets = l.remote.list(with_metadata=True)
+        datasets = l.remote.list(with_metadata=return_meta)
 
         for id_, data in datasets.items():
 

@@ -138,7 +138,7 @@ class SqliteAttachmentMixin(object):
 class SqliteDatabase(RelationalDatabase):
 
     EXTENSION = '.db'
-    SCHEMA_VERSION = 11
+    SCHEMA_VERSION = 12
 
     def __init__(self, dbname, memory = False,  **kwargs):   
         ''' '''
@@ -184,6 +184,16 @@ class SqliteDatabase(RelationalDatabase):
                 os.makedirs(os.path.dirname(self.base_path))
             
     
+    @property
+    def version(self):
+        v =  self.connection.execute('PRAGMA user_version').fetchone()[0]
+    
+        try:
+            return int(v)
+        except:
+            return 0
+    
+        
     def _get_engine(self, connect_listener):
         '''return the SqlAlchemy engine for this database'''
         from sqlalchemy import create_engine  
@@ -237,15 +247,25 @@ class SqliteDatabase(RelationalDatabase):
         engine = create_engine(self.dsn, echo=True)
         connection = engine.connect()
 
+    MIN_NUMBER_OF_TABLES = 1
     def is_empty(self):
         
         if not os.path.exists(self.path):
             return True
         
-        if not 'config' in self.inspector.get_table_names():
-            return True
+        if  self.version >= 12:
+            if not 'config' in self.inspector.get_table_names():
+                return True
+            else:
+                return False
         else:
-            return False
+            tables = self.inspector.get_table_names()
+          
+            if tables and len(tables) > self.MIN_NUMBER_OF_TABLES:
+                return True
+            else:
+                return False
+            
 
     @property
     def dbapi_connection(self):
@@ -542,8 +562,6 @@ def _on_connect_bundle(dbapi_con, con_record):
     '''
     dbapi_con.execute('PRAGMA cache_size = 500000')
     dbapi_con.execute('PRAGMA foreign_keys = ON')
-
-
 
 
 def _on_connect_update_schema(conn):
