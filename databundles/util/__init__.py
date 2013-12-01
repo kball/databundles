@@ -762,6 +762,7 @@ def _log_rate(d, message=None, prt=None):
         # Prints the processing rate in 1,000 records per sec.
         rate = int( d[0]/(time.clock()-d[1]))
         prt(message+': '+str(rate)+'/s '+str(d[0]/1000)+"K ") 
+
     
 
         

@@ -460,20 +460,33 @@ class BuildBundle(Bundle):
             sys.stdout.write("\n")
             self.ptick_count = 0
 
-    def init_log_rate(self, N=5000, message=''):
+    def init_log_rate(self, N=None, message='', print_rate=None):
         """Initialze the log_rate function. Returnas a partial function to call for
-        each event"""
+        each event
+        
+        If N is not specified but print_rate is specified, the initial N is set to 100, 
+        and after the first message, the N value is adjusted to emit print_rate messages
+        per second
+        
+        """
+
+        if print_rate and not N:
+            N=100
 
         import functools, time
         d =  [0,  # number of items processed
-                time.clock(), # start time. This one gets replaced after first message
+                time.time(), # start time. This one gets replaced after first message
                 N, # ticker to next message
                 N,  #frequency to log a message
-                message
+                message, 
+                print_rate
                 ]
 
         f = functools.partial(self._log_rate, d)
         f.always = self.log
+        
+        print d
+        
         return f
 
     
@@ -487,11 +500,17 @@ class BuildBundle(Bundle):
 
         if d[2] <= 0:
             
-            d[2] = d[3]
-
             # Prints the processing rate in 1,000 records per sec.
-            self.log(message+': '+str(int( d[0]/(time.clock()-d[1])))+'/s '+str(d[0]/1000)+"K ") 
-
+            rate = int( d[0]/(time.time()-d[1]))
+            self.log(message+': '+str(rate)+'/s '+str(d[0]/1000)+"K ") 
+            
+            # Adjust the frequency to there is 1 message every 10 seconds. 
+            if d[5]:
+                d[3] = rate * d[5]
+            
+            d[2] = d[3]
+            
+              
         d[0] += 1
         d[2] -= 1
 
