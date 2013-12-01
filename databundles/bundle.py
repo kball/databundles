@@ -473,6 +473,9 @@ class BuildBundle(Bundle):
         if print_rate and not N:
             N=100
 
+        if not N:
+            N = 5000
+
         import functools, time
         d =  [0,  # number of items processed
                 time.time(), # start time. This one gets replaced after first message
