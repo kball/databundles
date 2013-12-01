@@ -526,6 +526,8 @@ class BuildBundle(Bundle):
 
     ### Prepare is run before building, part of the devel process.  
 
+
+
     def pre_prepare(self):
 
         self.log('---- Pre-Prepare ----')
@@ -559,7 +561,7 @@ class BuildBundle(Bundle):
                     install(python_dir,k,v)
 
         
-        if self.database.exists() and not vars(self.run_args).get('rebuild',False) and  self.db_config.get_value('process','prepared', False):
+        if self.is_prepared:
             self.log("Bundle has already been prepared")
             #raise ProcessError("Bundle has already been prepared")
      
@@ -650,6 +652,12 @@ class BuildBundle(Bundle):
             self._revise_schema()
                     
         return True
+
+    @property
+    def is_prepared(self):
+        return ( self.database.exists() 
+                 and not vars(self.run_args).get('rebuild',False) 
+                 and  self.db_config.get_value('process','prepared', False))
    
     ### Build the final package
 
@@ -1142,9 +1150,12 @@ class BuildBundle(Bundle):
                   'extract' : ['clean', 'prepare', 'build']
                   }
     
-            phases = ph.get(args.command,[]) + [args.command]
         else:
-            phases = args.command
+            ph = {
+                  'build' : [ 'prepare'],
+                  }
+    
+        phases = ph.get(args.command,[]) + [args.command]
     
         if args.test:
             print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"

@@ -83,7 +83,7 @@ def _new_library(config):
     cache = new_cache(config['filesystem'])
     
     database = LibraryDb(**dict(config['database']))    
-    
+
     database.create()
     
     remote = new_cache(config['remote']) if 'remote' in config else None
@@ -367,12 +367,14 @@ class LibraryDb(object):
     def exists(self):
         from databundles.orm import Dataset
         from sqlalchemy.exc import  ProgrammingError, OperationalError
-        self.engine
         
+
         if self.driver == 'sqlite' and not os.path.exists(self.dbname):
                 return False
 
-        
+     
+        self.engine
+
         try: 
             try: rows = self.engine.execute("SELECT * FROM datasets WHERE d_vid = '{}' ".format(ROOT_CONFIG_NAME_V)).fetchone()
             except Exception as e:
@@ -1823,7 +1825,7 @@ class Library(object):
         '''Return an array of all of the dataset records in the library database'''
         from databundles.orm import Dataset
        
-        return [d for d in self.database.session.query(Dataset).all()]
+        return [d for d in self.database.session.query(Dataset).all() if d.vid != ROOT_CONFIG_NAME_V]
 
   
 
@@ -1854,7 +1856,7 @@ class Library(object):
             dataset, partition = self.database.get_id(file_.ref)
             
             if not dataset:
-                raise Exception("Didn't get id from database for file ref: {}".format(file_.ref))
+                raise Exception("Didn't get id from database for file ref: {}, type {}".format(file_.ref, file_.type_))
             
             if partition:
                 identity = partition
@@ -1970,8 +1972,14 @@ class Library(object):
         self.database.create()
    
         bundles = []
+        
         for r,d,f in os.walk(self.cache.cache_dir): #@UnusedVariable
+            
+            if '/meta/' in r:
+                continue
+
             for file_ in f:
+            
                 
                 if file_.endswith(".db"):
                     path_ = os.path.join(r,file_)

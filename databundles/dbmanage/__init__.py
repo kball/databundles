@@ -443,6 +443,7 @@ def main():
     logger = get_logger("{}.{}".format(args.command,args.subcommand  ))
     logger.setLevel(logging.INFO) 
 
+
     if not f:
         err("Error: No command: "+args.command)
     else:

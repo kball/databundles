@@ -329,6 +329,10 @@ def library_push(args, l, config):
     if len(files_):
         prt("-- Pushing to {}",l.remote)
         for f in files_:
+            
+            if f.type_ not in ('partition','bundle'):
+                continue
+            
             prt("Pushing: {}",f.path)
             try:
                 l.push(f)

@@ -52,7 +52,7 @@ def get_logger(name, file_name = None):
         if file_name:
             ch = logging.FileHandler(file_name)
         else:
-            ch = logging.StreamHandler()
+            ch = logging.StreamHandler(stream=sys.stdout)
         ch.setFormatter(formatter)
         #ch.setLevel(logging.DEBUG)
         logger.addHandler(ch)

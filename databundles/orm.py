@@ -372,18 +372,17 @@ class Column(Base):
         return self.types[self.datatype][1]
  
     def python_cast(self,v):
-       if self.type_is_time():
-           import dateutil.parser
-           dt = dateutil.parser.parse(v)
+        if self.type_is_time():
+            import dateutil.parser
+            dt = dateutil.parser.parse(v)
            
-           if self.datatype == Column.DATATYPE_TIME:
-               dt = dt.time()
-           
-           if not isinstance(dt, self.python_type):
-               raise TypeError('{} was parsed to {}, expected {}'.format(v, type(dt), self.python_type))
+            if self.datatype == Column.DATATYPE_TIME:
+                dt = dt.time()
+            if not isinstance(dt, self.python_type):
+                raise TypeError('{} was parsed to {}, expected {}'.format(v, type(dt), self.python_type))
                
-       else:
-           return self.python_type(v)
+        else:
+            return self.python_type(v)
 
     @property
     def schema_type(self):

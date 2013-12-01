@@ -173,13 +173,14 @@ def get_root(library):
 def get_datasets(library):
     '''Return all of the dataset identities, as a dict, 
     indexed by id'''
-    from databundles.cache import RemoteMarker
-    
-    remote = library.remote.get_upstream(RemoteMarker)
-    l = library
-  
+
     return { i.identity.cache_key : { 
                  'identity': i.identity.to_dict() ,
+                 'refs': {
+                    'path': i.identity.path,
+                    'cache_key': i.identity.cache_key,
+                    'source_path': i.identity.source_path
+                 }, 
                  'urls': {
                           'partitions': "{}/datasets/{}".format(_host_port(library), i.identity.vid_enc),
                           'db': "{}/datasets/{}/db".format(_host_port(library), i.identity.vid_enc)
@@ -295,7 +296,7 @@ def post_dataset(did,library):
 
     library.put(b)
 
-    library.run_dumper_thread()
+    #library.run_dumper_thread()
 
     return b.identity.to_dict()
   
@@ -310,8 +311,6 @@ def get_dataset(did, library, pid=None):
 
     did = did.replace('|','/')
 
-
-
     gr =  library.get(did)
      
     if not gr:
@@ -324,9 +323,9 @@ def get_dataset(did, library, pid=None):
     
     # Get direct access to the cache that implements the remote, so
     # we can get a URL with path()
-    remote = library.remote.get_upstream(RemoteMarker)
-    if remote:
-        d['dataset']['url'] = "{}/datasets/{}/db".format(_host_port(library), gr.identity.vid_enc)
+    #remote = library.remote.get_upstream(RemoteMarker)
+
+    d['dataset']['url'] = "{}/datasets/{}/db".format(_host_port(library), gr.identity.vid_enc)
     
     if file:
         d['dataset']['file'] = file.to_dict()
@@ -351,15 +350,15 @@ def get_dataset(did, library, pid=None):
             fd = file.to_dict()
             d['partitions'][partition.identity.id_]['file']  = { k:v for k,v in fd.items() if k in ['state'] }
 
-        if remote:
-            d['partitions'][partition.identity.id_]['urls'] ={
-             'db':"{}/datasets/{}/partitions/{}/db".format(_host_port(library), gr.identity.vid_enc, partition.identity.vid_enc),
-             'csv': {
-                'csv':"{}/datasets/{}/partitions/{}/csv".format(_host_port(library), gr.identity.vid_enc, partition.identity.vid_enc),
-                'parts':"{}/datasets/{}/partitions/{}/csv/parts".format(_host_port(library), gr.identity.vid_enc, partition.identity.vid_enc)
-              }
-                                        
-            }
+
+        d['partitions'][partition.identity.id_]['urls'] ={
+         'db':"{}/datasets/{}/partitions/{}/db".format(_host_port(library), gr.identity.vid_enc, partition.identity.vid_enc),
+         'csv': {
+            'csv':"{}/datasets/{}/partitions/{}/csv".format(_host_port(library), gr.identity.vid_enc, partition.identity.vid_enc),
+            'parts':"{}/datasets/{}/partitions/{}/csv/parts".format(_host_port(library), gr.identity.vid_enc, partition.identity.vid_enc)
+          }
+                                    
+        }
         
     return d
 
@@ -403,16 +402,8 @@ def get_dataset_file(did, library):
     
     if not dataset:
         raise exc.NotFound("No dataset found for identifier '{}' ".format(did))
-    
-    remote = library.remote.get_upstream(RemoteMarker)
-    
-    if not remote:
-        raise exc.InternalError("No remote configured")
-   
-  
-    url =  remote.path(dataset.cache_key)   
-    
-    return redirect(url)
+
+    return redirect(_download_redirect(dataset, library))
   
 def _get_ct(typ):
     ct = ({'application/json':'json',
@@ -429,23 +420,42 @@ def _get_ct(typ):
         
     return ct
     
+@get('/files/<key:path>') 
+@CaptureException   
+def get_file(key, library):
+
+    path = library.cache.get(key)
+    metadata = library.cache.metadata(key)
+
+    if not path:
+        raise exc.NotFound("No file for key: {} ".format(key))
+
+    if 'etag' in metadata:
+        del metadata['etag']
+
+    return static_file(path, root='/', download=key.replace('/','-'))
+
 @get('/key/<key:path>') 
 @CaptureException   
 def get_key(key, library):
     from databundles.cache import RemoteMarker
     
-    remote = library.remote.get_upstream(RemoteMarker)
-    
-    if not remote:
+
+    if not library.remote:
         raise exc.InternalError("No remote configured")
    
-    try:
+    else:
+        remote = library.remote.get_upstream(RemoteMarker)
         
-        url =  remote.path(key)   
-        logger.info("Redirect download: {}->{}".format(key, url))
-    except AttributeError:
-        raise exc.NotFound("No object for key: {}".format(key))
-    return redirect(url)    
+        try:
+        
+            url =  remote.path(key)   
+            logger.info("Redirect download: {}->{}".format(key, url))
+            
+        except AttributeError:
+            raise exc.NotFound("No object for key: {}".format(key))
+        
+        return redirect(url)    
    
 @get('/ref/<ref:path>') 
 @CaptureException   
@@ -535,15 +545,8 @@ def get_partition_file(did, pid, library):
     if not p:
         raise exc.NotFound("No partition found for identifier '{}' ".format(pid))
 
-    remote = library.remote.get_upstream(RemoteMarker)
-    
-    if not remote:
-        raise exc.InternalError("No remote configured")
-   
-  
-    url =  remote.path(p.identity.cache_key)   
-    
-    return redirect(url)
+    return redirect(_download_redirect(p.identity, library))
+
 
 def process_did(did, library):
     from ..identity import ObjectNumber, DatasetNumber
@@ -739,6 +742,24 @@ def _read_body(request):
             chunk =  body.read(chunksize) #@UndefinedVariable   
 
     return file_
+
+def _download_redirect(identity, library):
+    from databundles.cache import RemoteMarker
+    
+    if library.remote:
+    
+        remote = library.remote.get_upstream(RemoteMarker)
+        
+        if not remote:
+            raise exc.InternalError("Library remote diesn not have a proper upstream")
+       
+        url =  remote.path(identity.cache_key)   
+    
+    else:
+        url = "{}/files/{}".format(_host_port(library), identity.cache_key)
+
+    
+    return url
 
 #### Test Code
 

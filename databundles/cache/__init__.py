@@ -189,6 +189,9 @@ class Cache(CacheInterface):
     def metadata(self,rel_path):
         import json
 
+        if rel_path.startswith('meta'):
+            return None
+
         strm = self.get_stream(os.path.join('meta',rel_path))
         
         if strm:

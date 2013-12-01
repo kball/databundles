@@ -169,7 +169,7 @@ class RestApi(object):
         stream = r.raw
               
         if r.headers['content-encoding'] == 'gzip':
-            from ..util.sgzip import GzipFile
+            from databundles.util.sgzip import GzipFile
             stream = GzipFile(stream)
         
         return MetadataFlo(stream,r.headers)

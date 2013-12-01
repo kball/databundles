@@ -131,6 +131,23 @@ class FsCache(Cache):
         return self.upstream.get_stream(rel_path, cb=cb, return_meta=return_meta)
         
 
+    def metadata(self,rel_path):
+        import json
+
+        if rel_path.startswith('meta'):
+            return None
+
+        path = self.get(os.path.join('meta',rel_path))
+        
+        if path and os.path.exists(path):
+            try:
+                with open(path) as f:
+                    return json.load(f)
+            except ValueError as e:
+                raise ValueError("Failed to decode json for key '{}',  {}".format(rel_path, self.path(os.path.join('meta',rel_path))))
+        else:
+            return {}
+
         
     def has(self, rel_path, md5=None, use_upstream=True):
         from ..util import md5_for_file

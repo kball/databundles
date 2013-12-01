@@ -1,5 +1,14 @@
 from . import CacheInterface, RemoteInterface, RemoteMarker, new_cache
 
+# Setup a default logger. The logger is re-assigned by the
+# bundle when the bundle instantiates the logger. 
+import logging #@UnusedImport
+import logging.handlers #@UnusedImport
+from ..util import  get_logger
+
+logger = get_logger(__name__)
+#logger.setLevel(logging.DEBUG) 
+
 class RestRemote(RemoteInterface):
 
     def __init__(self,  host,  port = None, upstream=None, **kwargs):           
@@ -87,8 +96,10 @@ class RestRemote(RemoteInterface):
         # Store the bundle into the S3 cache. 
 
         if not self.last_upstream().has(rel_path, md5=metadata['md5'], use_upstream=True):
+            logger.debug("PUTTING %s to upstream, %s", str(rel_path),self.upstream)
             r =  self.upstream.put(source, rel_path, metadata=metadata)
         else:
+            logger.debug("Upstream has path %s, returning path", str(rel_path))
             r = self.upstream.path(rel_path)
             
   
