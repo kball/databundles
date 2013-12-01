@@ -261,9 +261,7 @@ class SqliteDatabase(RelationalDatabase):
             else:
                 return False
         else:
-            
-            print __file__, self.path, self.version
-            
+
             tables = self.inspector.get_table_names()
 
             if tables and len(tables) < self.MIN_NUMBER_OF_TABLES:

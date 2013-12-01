@@ -170,9 +170,11 @@ def _library_list(l):
     return lst
         
          
-def _print_bundle_list(subset_names=None,*args):
+def _print_bundle_list(*args,**kwargs):
     '''Create a nice display of a list of source packages'''
     from collections import defaultdict
+    
+    subset_names = kwargs.get('subset_names', None)
     
     lists = []
     names = set()

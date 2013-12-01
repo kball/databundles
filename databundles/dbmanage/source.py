@@ -153,8 +153,7 @@ def source_list(args,rc, src, names=None):
 
     l_lst = defaultdict(dict, _library_list(l))
     s_lst = defaultdict(dict, _source_list(dir_))
- 
-   
+
     _print_bundle_list(s_lst, l_lst, subset_names=names)
 
             
@@ -420,13 +419,13 @@ def source_find(args,rc, src):
             repo.bundle_dir = root
             if args.commit:
                 if repo.needs_commit():
-                    print(root)
+                    prt(root)
             elif args.push:
                 if repo.needs_push():
-                    print(root)
+                    prt(root)
             elif args.init:
                 if repo.needs_init():
-                    print(root)
+                    prt(root)
             else:
                 err("Must specify either --push or --commit")
                 
@@ -483,23 +482,13 @@ def source_deps(args,rc, src):
 
     if args.ref:
 
-        if args.direction == 'f':
-            deps = repo.bundle_deps(args.ref)
-            
-            if args.detail:
-                source_list(args,rc, src, names=deps)    
-            else:
-                for b in deps:
-                    prt(b)                   
-            
-        else:
-            deps = repo.bundle_deps(args.ref, reverse=True)
+        deps = repo.bundle_deps(args.ref, reverse=bool(args.direction == 'r'))
 
-            if args.detail:
-                source_list(args,rc, src, names=deps)    
-            else:
-                for b in deps:
-                    prt(b)    
+        if args.detail:
+            source_list(args,rc, src, names=deps)    
+        else:
+            for b in deps:
+                prt(b)    
 
         
     else:
@@ -508,7 +497,7 @@ def source_deps(args,rc, src):
     
         for i,level in enumerate(graph):
             for j, name in enumerate(level):
-                print "{:3d} {:3d} {}".format(i,j,name)
+                prt("{:3d} {:3d} {}",i,j,name)
             
              
             
