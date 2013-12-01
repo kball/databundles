@@ -155,7 +155,7 @@ def source_list(args,rc, src, names=None):
     s_lst = defaultdict(dict, _source_list(dir_))
  
    
-    _print_bundle_list(s_lst, l_lst, names=names)
+    _print_bundle_list(s_lst, l_lst, subset_names=names)
 
             
 def source_clone(args,rc, src):   
