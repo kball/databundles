@@ -439,23 +439,21 @@ def get_file(key, library):
 @CaptureException   
 def get_key(key, library):
     from databundles.cache import RemoteMarker
-    
 
-    if not library.remote:
-        raise exc.InternalError("No remote configured")
-   
-    else:
+    
+    if library.remote:
+    
         remote = library.remote.get_upstream(RemoteMarker)
         
-        try:
-        
-            url =  remote.path(key)   
-            logger.info("Redirect download: {}->{}".format(key, url))
-            
-        except AttributeError:
-            raise exc.NotFound("No object for key: {}".format(key))
-        
-        return redirect(url)    
+        if not remote:
+            raise exc.InternalError("Library remote diesn not have a proper upstream")
+       
+        url =  remote.path(key)   
+    
+    else:
+        url = "{}/files/{}".format(_host_port(library), key)
+
+ 
    
 @get('/ref/<ref:path>') 
 @CaptureException   
@@ -744,6 +742,7 @@ def _read_body(request):
     return file_
 
 def _download_redirect(identity, library):
+    '''This is very similar to get_key'''
     from databundles.cache import RemoteMarker
     
     if library.remote:
