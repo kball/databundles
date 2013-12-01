@@ -446,7 +446,7 @@ def get_key(key, library):
         remote = library.remote.get_upstream(RemoteMarker)
         
         if not remote:
-            raise exc.InternalError("Library remote diesn not have a proper upstream")
+            raise exc.InternalError("Library remote does not have a proper upstream")
        
         url =  remote.path(key)   
     
@@ -454,6 +454,7 @@ def get_key(key, library):
         url = "{}/files/{}".format(_host_port(library), key)
 
  
+    return url
    
 @get('/ref/<ref:path>') 
 @CaptureException   
