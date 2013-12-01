@@ -454,7 +454,7 @@ def get_key(key, library):
         url = "{}/files/{}".format(_host_port(library), key)
 
  
-    return url
+    return redirect(url)
    
 @get('/ref/<ref:path>') 
 @CaptureException   

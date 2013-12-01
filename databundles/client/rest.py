@@ -164,6 +164,7 @@ class RestApi(object):
         if not location:
             raise_for_status(r1)
 
+
         r = requests.get(location, verify=False, stream=True)
               
         stream = r.raw
