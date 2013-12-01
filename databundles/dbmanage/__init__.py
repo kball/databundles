@@ -170,7 +170,7 @@ def _library_list(l):
     return lst
         
          
-def _print_bundle_list(*args):
+def _print_bundle_list(names=None,*args):
     '''Create a nice display of a list of source packages'''
     from collections import defaultdict
     
@@ -221,7 +221,8 @@ def _print_bundle_list(*args):
                   rev_flag(v,'R')
                  ]
         
-        prt("{} {:35s}",''.join(flags), k, v['source_dir'])
+        if names is None or k in names: 
+            prt("{} {:35s}",''.join(flags), k, v['source_dir'])
 
        
 def _print_info(l,d,p, list_partitions=False):
