@@ -158,8 +158,6 @@ def source_list(args,rc, src, names=None):
         l_lst = defaultdict(dict, { k:v for k,v in _library_list(l).items() if k in names})
         s_lst = defaultdict(dict, { k:v for k,v in _source_list(dir).items() if k in names})
 
-    print s_lst, l_lst
-
     _print_bundle_list(s_lst, l_lst)
 
             
