@@ -469,7 +469,7 @@ class BuildBundle(Bundle):
         per second
         
         """
-
+        from collections import deque
         if print_rate and not N:
             N=100
 
@@ -482,7 +482,8 @@ class BuildBundle(Bundle):
                 N, # ticker to next message
                 N,  #frequency to log a message
                 message, 
-                print_rate
+                print_rate,
+                deque([], maxlen=4) # Deque for averaging last N rates
                 ]
 
         f = functools.partial(self._log_rate, d)
@@ -498,17 +499,24 @@ class BuildBundle(Bundle):
         """
         
         import time 
+        
 
         if d[2] <= 0:
             
+            # Average the rate over the length of the deque. 
+            d[6].append(int( d[3]/(time.time()-d[1])))
+            rate = sum(d[6])/len(d[6])
+            
             # Prints the processing rate in 1,000 records per sec.
-            rate = int( d[3]/(time.time()-d[1]))
             self.log(message+': '+str(rate)+'/s '+str(d[0]/1000)+"K ") 
             
             d[1] = time.time()
-            # Adjust the frequency to there is 1 message every 10 seconds. 
+            
+            # If the print_rate was specified, adjuect the number of records to
+            # aaproximate that rate. 
             if d[5]:
-                d[3] = rate * d[5]
+                target_rate =  rate * d[5]
+                d[3] = int((target_rate + d[3]) / 2)
  
             d[2] = d[3]
             

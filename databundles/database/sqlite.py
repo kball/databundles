@@ -410,6 +410,7 @@ class BundleLockContext(object):
     def __enter__( self ):
         from sqlalchemy.orm import sessionmaker
         from databundles.dbexceptions import Locked
+        import lockfile
         
         if self._bundle._session:
             logger.debug("Failing to acquire lock on {}, bundle already has session".format(self._bundle.dsn))
@@ -419,7 +420,13 @@ class BundleLockContext(object):
         self._session =  Session()
 
         logger.debug("Acquiring lock on {}".format(self._bundle.dsn))
-        self._lock.acquire()
+        
+        while True:
+            try:
+                self._lock.acquire(5)
+                break
+            except lockfile.LockTimeout as e:
+                logger.warn(e.message)
 
         self._bundle._session = self._session
         return self._session
