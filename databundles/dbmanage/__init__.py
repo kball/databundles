@@ -278,7 +278,7 @@ def _print_info(l,d,p, list_partitions=False):
         prt("P Abs Path  : {}",l.cache.path(p.cache_key) if l.cache.has(p.cache_key) else '' )   
 
         if remote_p:
-            prt("P Web Path  : {}",remote_p['urls']['file'])
+            prt("P Web Path  : {}",remote_p['urls']['db'])
             
 
 

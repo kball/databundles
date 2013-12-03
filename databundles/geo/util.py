@@ -527,7 +527,9 @@ def segment_points(areas,table_name=None,  query_template=None, places_query=Non
     transform = osr.CoordinateTransformation(source_srs, dest_srs)
     
     if query_template is None:
-        query_template =  "SELECT * FROM {table_name} WHERE {bb_clause} AND ({target_col} IS NULL OR {target_col} = 'NONE' OR {target_col} = '-') "
+        # Took the 'empty_clause' out because it is really slow if there is no index. 
+        empty_clause = "AND ({target_col} IS NULL OR {target_col} = 'NONE' OR {target_col} = '-')"
+        query_template =  "SELECT * FROM {table_name} WHERE {bb_clause}  "
     
     if places_query is None:
         places_query = "SELECT *, AsText(geometry) AS wkt FROM {} ORDER BY area ASC".format(areas.identity.table)
@@ -551,6 +553,8 @@ def segment_points(areas,table_name=None,  query_template=None, places_query=Non
         query = query_template.format(bb_clause=bb, table_name = table_name, target_col=area['type'])      
         
         def is_in(x, y):
+            """Clients call this closure to make the determination if the
+            point is in the area"""
             p = ogr.Geometry(ogr.wkbPoint)
             p.SetPoint_2D(0, x, y)
 

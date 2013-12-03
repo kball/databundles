@@ -59,7 +59,8 @@ def remote_list(args, l, rc, return_meta=False):
 
         datasets = l.remote.list(with_metadata=return_meta)
 
-        for id_, data in datasets.items():
+
+        for id_, data in sorted(datasets.items(), key = lambda x: x[1]['identity']['vname']):
 
             try:
                 prt("{:10s} {:50s} {:s}",data['identity']['vid'],data['identity']['vname'],id_)  

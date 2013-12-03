@@ -487,9 +487,7 @@ class BuildBundle(Bundle):
 
         f = functools.partial(self._log_rate, d)
         f.always = self.log
-        
-        print d
-        
+       
         return f
 
     
@@ -504,13 +502,14 @@ class BuildBundle(Bundle):
         if d[2] <= 0:
             
             # Prints the processing rate in 1,000 records per sec.
-            rate = int( d[0]/(time.time()-d[1]))
+            rate = int( d[3]/(time.time()-d[1]))
             self.log(message+': '+str(rate)+'/s '+str(d[0]/1000)+"K ") 
             
+            d[1] = time.time()
             # Adjust the frequency to there is 1 message every 10 seconds. 
             if d[5]:
                 d[3] = rate * d[5]
-            
+ 
             d[2] = d[3]
             
               
@@ -893,7 +892,11 @@ class BuildBundle(Bundle):
         
         b = self.library.get(self.identity.name)
         
-        self.log('Copy bundle')
+        self.log('Copy bundle from {} to {} '.format(b.database.path, self.database.path))
+        
+        if not os.path.isdir(os.path.dirname(self.database.path)):
+            os.makedirs(os.path.dirname(self.database.path))
+            
         shutil.copy(b.database.path, self.database.path)
          
         # Restart with the new bundle database.
@@ -901,14 +904,15 @@ class BuildBundle(Bundle):
         
         for newp in newb.partitions:
             self.log('Copy partition: {}'.format(newp.identity.name))
-            oldp = b.partitions.find(newp.identity.name)
+
+            b = self.library.get(newp.identity.vname)
             
             dir_ = os.path.dirname(newp.database.path);
             
             if not os.path.isdir(dir_):
                 os.makedirs(dir_)
             
-            shutil.copy(oldp.database.path, newp.database.path)
+            shutil.copy(b.partition.database.path, newp.database.path)
 
     def parse_args(self,argv):
 
@@ -1191,11 +1195,20 @@ class BuildBundle(Bundle):
                 print b.schema.as_csv()
             else:
                 b.log("----Info ---")
+                b.log("VID  : "+b.identity.vid)
                 b.log("Name : "+b.identity.name)
                 b.log("VName: "+b.identity.vname)
+                b.log("Parts: {}".format(b.partitions.count))
                 
-                for partition in b.partitions:
-                    b.log("Partition: "+partition.name)
+                if b.config.build.dependencies:
+                    b.log("---- Dependencies ---")
+                    for k,v in b.config.build.dependencies.items():
+                        b.log("    {}: {}".format(k,v))
+
+                if b.partitions.count < 5:
+                    b.log("---- Partitions ---")
+                    for partition in b.partitions:
+                        b.log("    "+partition.name)
                 
             return
         

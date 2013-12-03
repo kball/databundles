@@ -110,8 +110,10 @@ def source_info(args,rc, src):
         from ..identity import new_identity
         l = library.new_library(rc.library(args.library))  
         found = False      
+        
         for r in l.database.get_file_by_type('source'):
             ident = new_identity(r.data)
+            
             if args.term == ident.name or args.term == ident.vname:
                 found = r
                 break

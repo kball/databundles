@@ -1326,9 +1326,7 @@ class Library(object):
 
         self.needs_update = False
     
-    def __del__(self):
-        pass
-    
+
     def clone(self):
         
         return self.__class__(self.cache, self.database.clone(), self._remote, self.sync, self.require_upload, self.host, self.port)
@@ -1494,7 +1492,8 @@ class Library(object):
             raise NotFoundError("Failed to find partition {} in bundle {}"
                                 .format(identity.name, bundle.identity.name))
 
-        if os.path.exists(p.database.path):
+        if os.path.exists(p.database.path) and not p.database.is_empty():
+            
             from databundles.dbexceptions import ConflictError
             raise ConflictError("Trying to get {}, but file {} already exists".format(identity.vname, p.database.path))
 
@@ -1609,7 +1608,7 @@ class Library(object):
                         self.logger.info("_get_partition deleting {} before fetch. force={}, is_empty={}"
                                     .format(p.database.path, force, p.database.is_empty()))
                      
-                        raise Exception()
+                        
                         os.remove(p.database.path)
                 
                     self._get_remote_partition(r,partition, cb=cb)
