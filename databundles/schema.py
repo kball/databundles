@@ -281,7 +281,8 @@ class Schema(object):
         table = self.get_table_from_database(db, name_or_id, d_vid = d_vid, session=session)
 
         
-        at = SATable(table.dataset.id_+'_'+table.name if  use_id else table.name, metadata)
+        at = SATable(table.vid.replace('/','_')+'_'+table.name if  use_id 
+                     else table.name, metadata)
  
         indexes = {}
         uindexes = {}

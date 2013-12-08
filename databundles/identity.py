@@ -209,6 +209,11 @@ class Identity(object):
         return '-'.join(self._name_parts(use_revision=False))
 
     @property
+    def name_enc(self):
+        """The name of the bundle, excluding the revision, encoded"""
+        return self.name.replace('.','_')
+
+    @property
     def vname(self):
         """The name of the bundle, including the revision"""
         return '-'.join(self._name_parts(use_revision = True if self.revision else False))

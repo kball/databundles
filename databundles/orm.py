@@ -446,8 +446,9 @@ class Column(Base):
         self.id = str(con.rev(None))
 
     def to_dict(self):
-        return {k:v for k,v in self.__dict__.items() if k in ['id','vid','sequence_id', 't_vid', 'name', 'description', 'keywords', 'datatype', 'size', 'is_primary_kay', 'data']}
-    
+        x =  {k:v for k,v in self.__dict__.items() if k in ['id','vid','sequence_id', 't_vid', 'name', 'description', 'keywords', 'datatype', 'size', 'is_primary_key', 'data']}
+        x['schema_type'] = self.schema_type
+        return x
     
     @staticmethod
     def mangle_name(name):
@@ -533,8 +534,28 @@ class Table(Base):
         self.init_on_load()
     
     def to_dict(self):
-        return {k:v for k,v in self.__dict__.items() if k in ['id','vid', 'sequence_id', 'name', 
+        return {k:v for k,v in self.__dict__.items() if k in ['id_','vid', 'sequence_id', 'name', 
                                                               'vname', 'description', 'keywords', 'data']}
+    
+    @property
+    def help(self):
+        
+       
+        x =  """
+------ Table: {name} ------  
+id   : {id_}
+vid  : {vid}   
+name : {name} 
+Columns:      
+""".format(**self.to_dict())
+        
+        for c in self.columns:
+            # ['id','vid','sequence_id', 't_vid', 'name', 'description', 'keywords', 'datatype', 'size', 'is_primary_kay', 'data']}
+
+            x += "   {sequence_id:3d} {name:12s} {schema_type:8s} {description}\n".format(**c.to_dict())
+         
+        return x   
+        
     
     @orm.reconstructor
     def init_on_load(self):

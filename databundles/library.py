@@ -163,6 +163,7 @@ class LibraryDb(object):
     Dbci = namedtuple('Dbc', 'dsn_template sql') #Database connection information 
    
     DBCI = {
+            'postgis':Dbci(dsn_template='postgresql+psycopg2://{user}:{password}@{server}{colon_port}/{name}',sql='support/configuration-pg.sql'),
             'postgres':Dbci(dsn_template='postgresql+psycopg2://{user}:{password}@{server}{colon_port}/{name}',sql='support/configuration-pg.sql'), # Stored in the databundles module. 
             'sqlite':Dbci(dsn_template='sqlite:///{name}',sql='support/configuration-sqlite.sql'),
             'mysql':Dbci(dsn_template='mysql://{user}:{password}@{server}{colon_port}/{name}',sql='support/configuration-sqlite.sql')
@@ -186,6 +187,11 @@ class LibraryDb(object):
         self._session = None
         self._engine = None
         self._connection  = None
+        
+        if self.driver in ['postgres','postgis']:
+            self._schema = 'library'
+        else:
+            self._schema = None
            
                 
         self.logger = databundles.util.get_logger(__name__)
@@ -228,6 +234,9 @@ class LibraryDb(object):
         if not self._connection:
             self._connection = self.engine.connect()
 
+            if self.driver in ('postgres','postgis') and self._schema:
+                self._connection.execute("SET search_path TO library")
+
         return self._connection
 
     @property
@@ -235,7 +244,7 @@ class LibraryDb(object):
         '''Return an SqlAlchemy MetaData object, bound to the engine'''
         
         from sqlalchemy import MetaData   
-        metadata = MetaData(bind=self.engine)
+        metadata = MetaData(bind=self.engine, schema = self._schema)
 
         metadata.reflect(self.engine)
 
@@ -284,6 +293,10 @@ class LibraryDb(object):
         if not self._session:  
             self.Session = sessionmaker(bind=self.engine)
             self._session = self.Session()
+            # set the search path
+            if self.driver in ('postgres','postgis') and self._schema:
+                self._session.execute("SET search_path TO library")
+         
 
         return self._session
    
@@ -355,7 +368,7 @@ class LibraryDb(object):
 
         if self._session:    
             self._session.bind.dispose()
-            self.Session.close_all()
+            #self.Session.close_all() # Also tries to commit the unmanaged session
             self.engine.dispose() 
             self._session = None
             self._engine = None
@@ -367,25 +380,23 @@ class LibraryDb(object):
     def exists(self):
         from databundles.orm import Dataset
         from sqlalchemy.exc import  ProgrammingError, OperationalError
-        
 
         if self.driver == 'sqlite' and not os.path.exists(self.dbname):
                 return False
 
-     
         self.engine
 
         try: 
-            try: rows = self.engine.execute("SELECT * FROM datasets WHERE d_vid = '{}' ".format(ROOT_CONFIG_NAME_V)).fetchone()
+            try: rows = self.connection.execute("SELECT * FROM datasets WHERE d_vid = '{}' ".format(ROOT_CONFIG_NAME_V)).fetchone()
             except Exception as e:
+                raise 
                 rows = False
 
             if not rows:
                 return False
             else:
                 return True
-        except:
-            raise
+        except Exception as e:
             return False
 
     
@@ -422,7 +433,6 @@ class LibraryDb(object):
     def create(self):
         """Create the database from the base SQL"""
 
-        
         if not self.exists():  
             self.enable_delete = True  
             self.create_tables()
@@ -479,7 +489,7 @@ class LibraryDb(object):
 
     def drop(self):
         s = self.session
-
+        
         self._drop(s)
         s.commit()
 
@@ -504,10 +514,15 @@ class LibraryDb(object):
         self.drop()
 
         for table in tables:
-            table.__table__.create(bind=self.engine)
-
+            it = table.__table__
+            if self._schema:
+                #raise Exception()
+                it.schema = self._schema
+                
+            it.create(bind=self.engine)
+        
         self.session.commit()
-
+        
     def install_bundle_file(self, identity, bundle_file):
         """Install a bundle in the database, starting from a file that may
         be a partition or a bundle"""
@@ -682,8 +697,8 @@ class LibraryDb(object):
         from databundles.orm import Table, Column
         
         def like_or_eq(c,v):
-            
-            if '%' in v:
+
+            if v and '%' in v:
                 return c.like(v)
             else:
                 return c == v
@@ -764,7 +779,7 @@ class LibraryDb(object):
         query = query.distinct().order_by(Dataset.revision.desc())
 
         out = []
-        
+
         try:
             for r in query.all():
                
@@ -785,8 +800,8 @@ class LibraryDb(object):
                 except: pass
                 
                 out.append(o)
-        except:
-
+        except Exception as e:
+            self.logger.error("Exception while querrying in {}, schema {}".format(self.dsn, self._schema))
             raise
 
         return out
@@ -1585,7 +1600,7 @@ class Library(object):
     def _get_partition(self,  dataset, partition, force = False, cb=None):
         from databundles.dbexceptions import NotFoundError
         from databundles.client.exceptions import NotFound as RemoteNotFound
-
+        
         r = self._get_dataset(dataset, cb=cb)
 
         if not r:
@@ -1613,15 +1628,18 @@ class Library(object):
                 
                     self._get_remote_partition(r,partition, cb=cb)
                 except RemoteNotFound:
-                    raise NotFoundError("""Didn't find partition {} in bundle {}. Partition found in bundle, but path {} ({}?) not in local library and doesn't have it either. """
+                    raise NotFoundError(("Didn't find partition {} in bundle {}. Partition found in bundle, "+
+                    "but path {} ({}?) not in local library and doesn't have it either. ")
                                    .format(p.identity.name,r.identity.name,p.database.path, rp))
                 except OSError:
                     raise NotFoundError("""Didn't find partition {} for bundle {}. Missing path {} ({}?) not found """
                                    .format(p.identity.name,r.identity.name,p.database.path, rp))                    
              
             else:
-                raise NotFoundError("""Didn't find partition {} in bundle {}. Partition found in bundle, but path {} ({}?) not in local library and remote not set. """
-                               .format(p.identity.name, r.identity.name,p.database.path, rp))
+                raise NotFoundError(("Didn't find partition {} in bundle {}. Partition "+
+                                    "found in bundle, but path {} ({}?) not in local "+
+                                    "library and remote not set. force={}, is_empty={}").format(
+                            p.identity.name, r.identity.name,p.database.path, rp, force, p.database.is_empty()))
         
         
             # Ensure the file is in the local library. 
@@ -2016,6 +2034,16 @@ class Library(object):
 
         self.database.commit()
         return bundles
+
+    @property
+    def info(self):
+        return """
+------ Library {name} ------
+Database: {database}
+Cache:    {cache}
+Remote:   {remote}
+        """.format(name=self.name, database=self.database.dsn, 
+                   cache=self.cache, remote=self.remote if self.remote else '')
 
 def _pragma_on_connect(dbapi_con, con_record):
     '''ISSUE some Sqlite pragmas when the connection is created'''

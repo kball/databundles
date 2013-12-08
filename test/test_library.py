@@ -151,6 +151,8 @@ class Test(TestBase):
       
         l = self.get_library()
      
+        print l.info
+     
         l.put(self.bundle)
         l.put(self.bundle)
  
@@ -196,10 +198,14 @@ class Test(TestBase):
 
         self.assertEquals('source-dataset-subset-variation-ca0d',r[0]['identity']['name'])  
     
-        r = l.find(QueryCommand().table(name='tone').partition(any=True))
+        r = l.find(QueryCommand().table(name='tone').partition(format='db', grain=None))
+
         self.assertEquals('source-dataset-subset-variation-ca0d.tone',r[0]['partition']['name'])
         
-        r = l.find(QueryCommand().table(name='tthree').partition(any=True))
+        r = l.find(QueryCommand().table(name='tthree').partition(format='db', segment=None))
+        self.assertEquals('source-dataset-subset-variation-ca0d.tthree',r[0]['partition']['name'])
+
+        r = l.find(QueryCommand().table(name='tthree').partition(format='db', segment="1"))
         self.assertEquals('source-dataset-subset-variation-ca0d.tthree.1',r[0]['partition']['name'])
         
         #
@@ -222,7 +228,7 @@ class Test(TestBase):
         l.put(self.bundle)
     
         r = l.find(QueryCommand().table(name='tone').partition(any=True))
-        self.assertEquals(1, len(r))
+        self.assertEquals(12, len(r))
        
         ds_names = [ds.identity.name for ds in l.datasets]
         self.assertIn('source-dataset-subset-variation-ca0d', ds_names)
@@ -435,8 +441,8 @@ class Test(TestBase):
 
     def test_partitions(self):
         from databundles.partition import PartitionIdentity
-
-      
+        from sqlalchemy.exc import IntegrityError
+        
         l = self.get_library()
         
         l.purge()
@@ -464,11 +470,9 @@ class Test(TestBase):
                 part = self.bundle.partitions.new_db_partition(pid)
                 part.create()
                 
-                parts = self.bundle.partitions.find_orm(pid).all()
+                parts = self.bundle.partitions._find_orm(pid).all()
                 self.assertIn(pid.name, [p.name for p in parts])
-                self.bundle.database.session.commit()
-            except: 
-                self.bundle.database.session.rollback()
+            except IntegrityError: 
                 pass
     
     

@@ -350,12 +350,21 @@ def get_dataset(did, library, pid=None):
             fd = file.to_dict()
             d['partitions'][partition.identity.id_]['file']  = { k:v for k,v in fd.items() if k in ['state'] }
 
+        csv_link = "{}/datasets/{}/partitions/{}/csv".format(_host_port(library), gr.identity.vid_enc, partition.identity.vid_enc)
+
+        if partition.identity.format == 'csv':
+            db_link = csv_link
+            parts_link = None
+        else:
+            db_link = "{}/datasets/{}/partitions/{}/db".format(_host_port(library), gr.identity.vid_enc, partition.identity.vid_enc)
+            parts_link = "{}/datasets/{}/partitions/{}/csv/parts".format(_host_port(library), gr.identity.vid_enc, partition.identity.vid_enc)
+
 
         d['partitions'][partition.identity.id_]['urls'] ={
-         'db':"{}/datasets/{}/partitions/{}/db".format(_host_port(library), gr.identity.vid_enc, partition.identity.vid_enc),
+         'db': db_link,
          'csv': {
-            'csv':"{}/datasets/{}/partitions/{}/csv".format(_host_port(library), gr.identity.vid_enc, partition.identity.vid_enc),
-            'parts':"{}/datasets/{}/partitions/{}/csv/parts".format(_host_port(library), gr.identity.vid_enc, partition.identity.vid_enc)
+            'csv':csv_link,
+            'parts': parts_link
           }
                                     
         }
@@ -619,7 +628,7 @@ def get_partition_csv(did, pid, library):
   
     i = int(request.query.get('i',1))
     n = int(request.query.get('n',1))
-    sep = request.query.get('sep',',')
+    sep = request.query.get('sep','|')
     
     where = request.query.get('where',None)
   
@@ -668,6 +677,7 @@ def get_partition_csv(did, pid, library):
     
     return out.getvalue()
     
+    
         
 @get('/datasets/<did>/partitions/<pid>/csv/parts') 
 @CaptureException   
@@ -678,26 +688,42 @@ def get_partition_csv_parts(did, pid, library):
     did, d_on, b = process_did(did, library)
     pid, p_on, p_orm  = process_pid(did, pid, library)
     
-    p = library.get(pid).partition # p_orm is a database entry, not a partition
-    
-    TARGET_ROW_COUNT = 50000
-    
-    table = p.table.name
-    
-    count = p.query("SELECT count(*) FROM {}".format(table)).fetchone()
-    
-    if count:
-        count = count[0]
-    else:
-        raise exc.BadRequest("Failed to get count of number of rows")
-
-    part_count, rem = divmod(count, TARGET_ROW_COUNT)
-    
-    template = "{}/datasets/{}/partitions/{}/csv".format(_host_port(library), b.identity.vid_enc, p.identity.vid_enc)
+    b = library.get(pid)
+    p = b.partition # p_orm is a database entry, not a partition
     
     parts = []
-    for i in range(1, part_count+1):
-        parts.append(template +"?i={}&n={}".format(i,part_count))
+    
+    csv_parts = p.get_csv_parts()
+    
+    if len(csv_parts):
+        # This partition has defined CSV parts, so we should link to those. 
+        
+        for csv_p in csv_parts:
+            parts.append("{}/datasets/{}/partitions/{}/db"
+                         .format(_host_port(library), b.identity.vid_enc, csv_p.identity.vid_enc))
+        
+        pass
+    else:
+        # This partition does not have CSV parts, so we'll have to make them. 
+        
+        TARGET_ROW_COUNT = 50000
+        
+        table = p.table.name
+        
+        count = p.query("SELECT count(*) FROM {}".format(table)).fetchone()
+        
+        if count:
+            count = count[0]
+        else:
+            raise exc.BadRequest("Failed to get count of number of rows")
+    
+        part_count, rem = divmod(count, TARGET_ROW_COUNT)
+        
+        template = "{}/datasets/{}/partitions/{}/csv".format(_host_port(library), b.identity.vid_enc, p.identity.vid_enc)
+        
+        
+        for i in range(1, part_count+1):
+            parts.append(template +"?i={}&n={}".format(i,part_count))
     
     return parts
     

@@ -29,6 +29,11 @@ def new_database(config, bundle=None, class_=None):
         from .relational import RelationalDatabase #@UnresolvedImport
         return RelationalDatabase(**config)
     
+    elif k == ('postgis',None):   
+        from .postgis import PostgisDatabase #@UnresolvedImport
+        return PostgisDatabase(**config)
+    
+    
     elif k == ('sqlite','bundle'):
         from .sqlite import SqliteBundleDatabase #@UnresolvedImport
         return SqliteBundleDatabase(bundle=bundle, **config)

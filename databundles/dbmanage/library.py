@@ -290,12 +290,6 @@ def library_remove(args, l, config):
         k = b.identity.cache_key
         prt("Deleting bundle {}", k)
         l.remove(b)  
-    
-    
-    
-    
-
-    
 
 def library_info(args, l, config, list_all=False):    
 

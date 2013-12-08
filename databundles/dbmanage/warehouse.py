@@ -52,6 +52,9 @@ def warehouse_parser(cmd):
     whsp = whp.add_parser('drop', help='Drop the warehouse database')
     whsp.set_defaults(subcommand='drop')   
  
+    whsp = whp.add_parser('create', help='Create required tables')
+    whsp.set_defaults(subcommand='create')   
+ 
     whsp = whp.add_parser('list', help='List the datasets inthe warehouse')
     whsp.set_defaults(subcommand='list')   
     whsp.add_argument('term', type=str, nargs='?', help='Name of bundle, to list partitions')
@@ -98,16 +101,46 @@ class Resolver(ResolverInterface):
         return self.library.get_ref(name)
 
     def url(self, name):
+        
+        dsi = self.library.remote.get_ref(name)
+
+        if not dsi:
+            return None
+
+        import pprint
+        
+        pprint.pprint(dsi)
+
+        if dsi['ref_type'] == 'partition':
+            # For a partition reference, we get back a dataset structure, which could
+            # have many partitions, but if we asked for a parttion, will get only one. 
+
+            return dsi['partitions'].values()[0]['urls']['db']
+        else:
+            return dsi['dataset']['url']
+
+    def csv_parts(self, name):
+        
         dsi = self.library.remote.get_ref(name)
 
         if not dsi:
             return None
 
         if dsi['ref_type'] == 'partition':
-            return dsi['partitions'].items()[0][1]['url']
-        else:
-            return dsi['dataset']['url']
+            # For a partition reference, we get back a dataset structure, which could
+            # have many partitions, but if we asked for a parttion, will get only one. 
 
+            parts_url =  dsi['partitions'].values()[0]['urls']['csv']['parts']
+            
+            import requests
+            
+            r = requests.get(parts_url)
+
+            return r.json()
+            
+        else:
+            from ..dbexceptions import BadRequest
+            raise BadRequest("Didn't get any csvparts")
     
 def warehouse_install(args, w,config):
     from ..library import new_library
@@ -136,6 +169,15 @@ def warehouse_drop(args, w,config):
     w.database.enable_delete = True
     w.library.clean()
     w.drop()
+ 
+def warehouse_create(args, w,config):
+    
+    w.database.enable_delete = True
+    w.library.clean()
+    w.drop()
+    
+    w.library.database.create()
+    
     
 def warehouse_list(args, w, config):    
 

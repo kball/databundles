@@ -107,7 +107,7 @@ class SqlitePartition(PartitionBase):
         return rows_per_seg
         
 
-    def csvize(self, logger=None, store_library=False, write_header=False):
+    def csvize(self, logger=None, store_library=False, write_header=False, rows_per_seg=None):
         '''Convert this partition to CSV files that are linked to the partition'''
         
         self.table = self.get_table()
@@ -115,7 +115,8 @@ class SqlitePartition(PartitionBase):
         if self.record_count:
             self.write_stats()
 
-        rows_per_seg = self.optimal_rows_per_segment()
+        if not rows_per_seg:
+            rows_per_seg = self.optimal_rows_per_segment()
   
         
         if logger:

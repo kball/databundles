@@ -103,7 +103,7 @@ class PartitionIdentity(Identity):
             self.id_ = None
 
        
-    def to_dict(self, include_parent=True):
+    def to_dict(self, include_parent=True, clean=True):
         '''Returns the identity as a dict. values that are empty are removed'''
         
         if include_parent:
@@ -118,7 +118,10 @@ class PartitionIdentity(Identity):
         d['format'] = self.format
         d['segment'] = self.segment
 
-        return { k:v for k,v in d.items() if v}
+        if clean:
+            return { k:v for k,v in d.items() if v}
+        else:
+            return d
     
     def _partition_name_parts(self, use_format=False):
         import re
@@ -353,5 +356,25 @@ class PartitionBase(PartitionInterface):
             raise
         
         
-    
+    @property
+    def help(self):
+        """Returns a human readable string of useful information"""
+        
+        info = dict(self.identity.to_dict(clean=False).items())
+        info['path'] = self.database.path
+        info['tables'] = ','.join(self.tables)
+
+        return """
+------ Partition: {name} ------
+id    : {id}
+vid   : {vid}
+name  : {name}
+vname : {vname}
+path  : {path}
+table : {table}
+tables: {tables}
+time  : {time}
+space : {space}
+grain : {grain}
+        """.format(**info)
         

@@ -107,14 +107,22 @@ class Bundle(object):
 
     def get_dataset(self, session):
         '''Return the dataset'''
+        from sqlalchemy.orm.exc import NoResultFound
         
         from databundles.orm import Dataset
 
+       
         if self._dataset_id:
-            return (session.query(Dataset).filter(Dataset.vid == self._dataset_id).one())
+            try:
+                return (session.query(Dataset).filter(Dataset.vid == self._dataset_id).one())
+            except NoResultFound:
+                from dbexceptions import NotFoundError
+                raise NotFoundError("Failed to find dataset for id {} in {} "
+                                    .format(self._dataset_id, self.database.dsn))
+    
         else:
             return (session.query(Dataset).one())
-        
+
     @property
     def dataset(self):
         '''Return the dataset'''
@@ -611,7 +619,7 @@ class BuildBundle(Bundle):
         try:
             self.library.check_dependencies()
         except NotFoundError as e:
-            self.fatal(e)
+            self.fatal(e.message)
 
 
         if self.run_args and vars(self.run_args).get('rebuild',False):

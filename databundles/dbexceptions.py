@@ -3,9 +3,18 @@
 Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
+
+import textwrap
+
 class BundleError(Exception):
-    pass
-    
+    def __init__(self, message, *args, **kwargs):
+
+        # Call the base class constructor with the parameters it needs
+        Exception.__init__(self,textwrap.fill(message, 80), *args, **kwargs)
+
+
+class BadRequest(BundleError):
+    '''The functioncall or request was malformed or incorrect'''
 
 class ProcessError(BundleError):
     '''Error in the configuration files'''
@@ -31,12 +40,12 @@ class NoLock(BundleError):
 class Locked(BundleError):
     '''Error in the configuration files'''
 
-class QueryError(Exception):
+class QueryError(BundleError):
     """Error while executing a query"""
     
 
-class ConflictError(Exception):
+class ConflictError(BundleError):
     """COnflict with existing resource"""
     
-class FatalError(Exception):
+class FatalError(BundleError):
     """A Fatal Bundle Error, generated in testing instead of a system exit. """

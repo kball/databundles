@@ -20,42 +20,31 @@ class PostgresWarehouse(RelationalWarehouse):
 
         return template.format(table = table, url = url)
      
-    def _install_partition(self, bundle, partition):
+    def _install_partition(self, partition):
 
         from databundles.client.exceptions import NotFound
         
         self.logger.log('install_partition {}'.format(partition.identity.name))
 
         pdb = partition.database
-     
-        tables = partition.data.get('tables',[])
 
-        for table_name in tables:
+        for table_name in partition.data.get('tables',[]):
             table, meta = self.create_table(partition.identity.as_dataset.vid, table_name, use_id = True)
-            break; # This code actually only allows one table. 
 
-        # Look for the segmented CSV files coresponding to the Sqlite partition
-        ident = partition.identity    
-        ident.format = 'csv'
-        ident.segment = partition.identity.ANY
-
-        try:
-            for p in bundle.partitions.find_all(ident):
-                self._install_csv_partition(table, p)
-        except NotFound:
-            self.logger.log('install_partition {} Failed'.format(partition.identity.name))
-
-    def _install_csv_partition(self, table, p):
-        import threading
-        from databundles.client.exceptions import NotFound
-        self.logger.log('install_partition {}'.format(p.identity.name))
+            try:
+                urls = self.resolver.csv_parts(partition.identity.vid)
+            except NotFound:
+                self.logger.error("install_partition {} CSV install failed because partition was not found on remote server"
+                                  .format(partition.identity.name))
+                raise 
+         
+            for url in urls:
+                self._install_csv_url(table, url)
         
-        try:
-            url = self.resolver.url(p.identity.vid)
-        except NotFound:
-            self.logger.error("install_partition {} CSV install failed because partition was not found on remote server".format(p.identity.name))
-            raise 
-     
+    def _install_csv_url(self, table, url):
+        
+        self.logger.log('install_csv_url {}'.format(url))
+
         cmd =  self._copy_command(table.name, url)
         self.logger.log('installing with command: {} '.format(cmd))
         r = self.database.connection.execute(cmd)
@@ -70,7 +59,7 @@ class PostgresWarehouse(RelationalWarehouse):
         try: self.logger.log("Install result (c): {}".format(r.fetchall()))
         except: pass
 
-        self.logger.log('installed_partition {}'.format(p.identity.name)) 
+        self.logger.log('installed_csv_url {}'.format(url)) 
         
         
     def remove_by_name(self,name):

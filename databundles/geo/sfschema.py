@@ -7,6 +7,13 @@ import os.path
 from databundles.orm import Column
 from databundles.dbexceptions import ConfigurationError
 from databundles.dbexceptions import ProcessError
+from databundles.util import get_logger
+
+import logging #@UnusedImport
+import logging.handlers #@UnusedImport
+
+logger = get_logger(__name__)
+logger.setLevel(logging.INFO) 
 
 class FeatureError(ProcessError):
     pass
@@ -163,8 +170,15 @@ class TableShapefile(object):
                 return (row[self.geo_col_pos[0]], row[self.geo_col_pos[1]])
             
         else:
+            
             if isinstance(row, dict):
-                return (row[self.geo_col_names[0]], None)
+                
+                if self.geo_col_names[0] in row:
+                    return (row[self.geo_col_names[0]], None)
+                elif self.geo_col_names[0].upper() in row:
+                    return (row[self.geo_col_names[0].upper()], None)
+                else:
+                    raise KeyError("{} not in row".format(self.geo_col_names[0]))
             else:
                 return (row[self.geo_col_pos[0]], None)
         
@@ -176,7 +190,7 @@ class TableShapefile(object):
             geometry = ogr.Geometry(ogr.wkbPoint)
             geometry.SetPoint_2D(0, x, y )
                 
-        elif self.geo_col_names[0] == 'geometry':
+        elif self.geo_col_names[0].lower() == 'geometry':
             # ? Not sure what this is?
             geometry = ogr.CreateGeometryFromWkt(x)
         elif self.geo_col_names[0] == 'wkt':
@@ -190,8 +204,7 @@ class TableShapefile(object):
             if not geometry.TransformTo(self.srs):
                 raise Exception("Failed to transform Geometry")
         else:
-            
-            raise Exception("Didn't get a geometry object: x="+str(x)+" type="+str(self.type)+" gcn="+self.geo_col_names[0])
+            raise Exception("Didn't get a geometry object for name {}".format(self.geo_col_names[0]))
             
         return geometry
             

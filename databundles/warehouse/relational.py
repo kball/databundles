@@ -73,6 +73,7 @@ class RelationalWarehouse(WarehouseInterface):
             self._install_bundle(b)
         else:
             self.logger.log('dataset already installed {}'.format(d.vname))
+            return
         
         if p:
             b = self.resolver.get(d.vid)
@@ -86,13 +87,13 @@ class RelationalWarehouse(WarehouseInterface):
         partition = bundle.partitions.partition(p.id_)
     
         if partition.record.format == 'geo':
-            self._install_geo_partition(bundle,  partition)
+            self._install_geo_partition(partition)
             
         elif partition.record.format == 'hdf':
-            self._install_hdf_partition(bundle,  partition)
+            self._install_hdf_partition(partition)
             
         else:
-            self._install_partition(bundle, partition)
+            self._install_partition(partition)
 
 
     def _install_bundle(self, bundle):
@@ -107,7 +108,10 @@ class RelationalWarehouse(WarehouseInterface):
     def table_meta(self, d_vid, table_name,use_id=True):
         from ..schema import Schema
 
-        meta, table = Schema.get_table_meta_from_db(self.library.database, table_name, d_vid = d_vid,  use_id=use_id, 
+        meta, table = Schema.get_table_meta_from_db(self.library.database, 
+                                                    table_name, 
+                                                    d_vid = d_vid,  
+                                                    use_id=use_id, 
                                                     session=self.library.database.session)        
     
         return meta, table
@@ -179,12 +183,11 @@ class RelationalWarehouse(WarehouseInterface):
         #
         # Use ogr2ogr to copy. 
         #
-        print "GEO Partition ", partition.database.path   
-        
-    
+        raise NotImplemented()
+
     def _install_hdf_partition(self, partition):
         
-        print "HDF Partition ", partition.database.path   
+        raise NotImplemented()
           
     def remove_by_name(self,name):
         from ..orm import Dataset

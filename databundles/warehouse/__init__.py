@@ -34,13 +34,17 @@ def new_warehouse(config):
     
     elif service == 'postgres':
         from .postgres import PostgresWarehouse  #@UnresolvedImport
-
         return PostgresWarehouse(database=database,storage=storage, library=library)
+    
+    elif service == 'postgis':
+        from .postgis import PostgisWarehouse  #@UnresolvedImport
+        return PostgisWarehouse(database=database,storage=storage, library=library)
+    
     else:
         from .relational import RelationalWarehouse #@UnresolvedImport
         return RelationalWarehouse(database,storage=storage, library=library)
         
-   
+
     
 class ResolverInterface(object):   
     

@@ -444,11 +444,15 @@ class BundleLockContext(object):
             return False
         else:
             logger.debug("Release lock and commit session {}".format(repr(self._session)))
-            self._session.commit()
-            
-            self._lock.release()
-            self._bundle._session.close()
-            self._bundle._session = None
+            try:
+                self._session.commit()
+            except:
+                self._session.rollback()
+                raise
+            finally:
+                self._lock.release()
+                self._bundle._session.close()
+                self._bundle._session = None
             
             return True
             
