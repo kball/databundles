@@ -918,16 +918,14 @@ class {name}(Base):
         # Need to expire the unmanaged cache, or the regeneration of the schema in _revise_schema will 
         # use the cached schema object rather than the ones we just updated. 
         self.bundle.database.unmanaged_session.expire_all()
-        
-
-    def extract_query(self, source_table, extract_table, extra_columns=None):
-     
-        st = self.table(source_table)
-        
+    
+    
+    def extract_columns(self, extract_table, extra_columns=None):
+            
         et = self.table(extract_table)
 
         if not et:
-            raise Exception("Didn't find table {} for source {}".format(extract_table, source_table))
+            raise Exception("Didn't find extract table {}".format(extract_table))
 
         lines = []
         for col in et.columns: 
@@ -940,8 +938,14 @@ class {name}(Base):
             
         if extra_columns:
             lines = lines + extra_columns
+           
+        return ',\n'.join(lines) 
+        
+    def extract_query(self, source_table, extract_table, extra_columns=None):
+
+        st = self.table(source_table)
             
-        return  "SELECT " + ',\n'.join(lines) + " FROM {} ".format(st.name)
+        return  "SELECT {} FROM {}".format(self.extract_columns(self, extract_table, extra_columns),st.name)
      
 
     def intuit(self, row, memo):

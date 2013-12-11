@@ -355,6 +355,14 @@ class PartitionBase(PartitionInterface):
         except:
             raise
         
+
+    def dbm(self, suffix = None):
+        '''Return a DBMDatabase replated to this partition'''
+        
+        from ..database.dbm import Dbm
+        
+        return Dbm(self.bundle, base_path=self.path, suffix=suffix)
+        
         
     @property
     def help(self):

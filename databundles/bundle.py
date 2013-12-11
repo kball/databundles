@@ -500,16 +500,18 @@ class BuildBundle(Bundle):
         return f
 
     
-    def _log_rate(self,d, message=''):
+    def _log_rate(self,d, message=None):
         """Log a message for the Nth time the method is called.
         
         d is the object returned from init_log_rate
         """
         
         import time 
-        
 
         if d[2] <= 0:
+            
+            if message is None:
+                message = d[4]
             
             # Average the rate over the length of the deque. 
             d[6].append(int( d[3]/(time.time()-d[1])))
@@ -1216,7 +1218,7 @@ class BuildBundle(Bundle):
                 b.log("VName: "+b.identity.vname)
                 b.log("Parts: {}".format(b.partitions.count))
                 
-                if b.config.build.dependencies:
+                if b.config.build.get('dependencies',False):
                     b.log("---- Dependencies ---")
                     for k,v in b.config.build.dependencies.items():
                         b.log("    {}: {}".format(k,v))

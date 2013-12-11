@@ -10,6 +10,9 @@ about:
     title: This is the Title
     url: http://theurl.com
 build:
+    dependencies:
+        geocoder: clarinova.com-geocode-casnd-429e.segments
+        places: clarinova.com-places-casnd-7ba4.places
     geoheaderFile: meta/schema.csv
 extracts:
 -   description: 'This is a multi-line description for the extract of {p_name}, with

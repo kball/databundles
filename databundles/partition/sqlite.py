@@ -30,7 +30,12 @@ class SqlitePartition(PartitionBase):
         return self._database
 
 
-
+    def detach(self, name=None):
+        return self.database.detach(name)
+     
+    def attach(self,id_, name=None):
+        return self.database.attach(id_,name)
+    
     def query(self,*args, **kwargs):
         """Convience function for self.database.query()"""
      
@@ -83,7 +88,8 @@ class SqlitePartition(PartitionBase):
         '''Delete all of the records in the tables declared for this oartition'''
         
         for table in self.data.get('tables',[]):
-            self.database.query("DELETE FROM {}".format(table))
+            try: self.database.query("DELETE FROM {}".format(table))
+            except: pass
         
 
     def optimal_rows_per_segment(self, size = 100*1024*1024, max=200000):
@@ -209,8 +215,8 @@ class SqlitePartition(PartitionBase):
     @property
     def rows(self):
         
-        pk = self.table.primary_key.name
-        return self.database.query("SELECT * FROM {} ORDER BY {} ".format(self.table.name,pk))
+        pk = self.get_table().primary_key.name
+        return self.database.query("SELECT * FROM {} ORDER BY {} ".format(self.get_table().name,pk))
         
 
     def write_stats(self):

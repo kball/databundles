@@ -3,6 +3,7 @@
 '''
 
 from ..util import  lru_cache
+import osr
 
 class Geocoder(object):
 
@@ -425,4 +426,98 @@ class Geocoder(object):
         
         return self._address_geocode_parts(ps.number, ps.street_name, ps.street_type, ps.city, ps.state)
 
+class PlaceCoder(object):
+    
+    def __init__(self, library, **kwargs):
+        from databundles.dbexceptions import ConfigurationError
+        
+        placeds_name = 'places'
+            
+        try:
+            self.places_partition = library.dep(placeds_name).partition
+         
+        except ConfigurationError:
+            raise ConfigurationError(("MISSING DEPENDENCY: To get addresses or codes, the configuration  "+
+                "must specify a dependency with a set named '{0}', in build.dependencies.{0}"+
+                "See https://github.com/clarinova/databundles/wiki/Error-Messages#geogeocodergeocoder__init__")
+                .format(placeds_name))
+
+
+        self._load_wgs_envelope()
+    
+    
+    def _load_wgs_envelope(self):
+        from ..util.sortedcollection import SortedCollection
+        from operator import itemgetter
+        import json
+        import pprint
+        import ogr
+       
+        dest_srs = osr.SpatialReference()
+        dest_srs.ImportFromEPSG(4326) # WGS 84
+    
+        source_srs = self.places_partition.get_srs()
+        
+        self.wgs_transform = osr.CoordinateTransformation(source_srs, dest_srs)
+        
+        places = {}
+        self.envelopes = []
+        for row in self.places_partition.query("SELECT *, AsText(geometry) AS wkt FROM places"):
+
+            d = dict(row)
+
+            g = ogr.CreateGeometryFromWkt(d['wkt'])
+            g.Transform(self.wgs_transform)
+
+            d['geometry'] = g
+
+            places[row['places_id']] = d
+            
+            wgs_env = g.GetEnvelope()
+
+            # This envelope is for the Analysis area, 
+            # It is aligned to a bounding box that is larger than 
+            # the region, because it contains the analysis area BB, 
+            # which is expressed in UTM. 
+            # wgs_env = json.loads(row['wgsenvelope'])
+
+            d = (row['places_id'],) + tuple(wgs_env)
+            self.envelopes.append(d)
+
+        self.places = places
+
+        self.lonrc = SortedCollection(self.envelopes,key=itemgetter(1)) 
+        self.lonlc = SortedCollection(self.envelopes,key=itemgetter(2)) 
+        self.latdc = SortedCollection(self.envelopes,key=itemgetter(3))
+        self.latuc = SortedCollection(self.envelopes,key=itemgetter(4))
+ 
+    def _is_in_wgs(self, lat, lon, place):
+        import ogr
+
+        p = ogr.Geometry(ogr.wkbPoint)
+        p.SetPoint_2D(0, lon, lat)
+
+        if place['geometry'].Contains(p):
+            return True
+        else:
+            return False
+
+    def lookup_wgs(self, lat, lon):
+
+        s1 =  set([ x[0] for x in self.latdc[:self.latdc.find_le_index(lat)] ])
+        s2 =  set([ x[0] for x in self.latuc[self.latuc.find_ge_index(lat):] ])
+
+        s3 =  set([ x[0] for x in self.lonlc[self.lonlc.find_ge_index(lon):] ])
+        s4 =  set([ x[0] for x in self.lonrc[:self.lonrc.find_le_index(lon)] ])
+
+        places = []
+
+        for p in  [ self.places[x] for x in s1&s2&s3&s4 ]:
+            
+            if self._is_in_wgs(lat, lon, p):
+                places.append(p)
+                
+        return places
+            
+        
     

@@ -22,8 +22,9 @@ class Test(TestBase):
         pass
 
     def test_basic(self):
-        from pprint import pprint
-        from databundles.geo.geocoder import Geocoder               
+
+        from databundles.geo.geocoder import Geocoder 
+        
         g = Geocoder(self.bundle.library)               
                      
         filename = "good_segments"
@@ -99,6 +100,26 @@ class Test(TestBase):
                                                                         multi_cities, int(multi_cities/i * 100), 
                                                                         multi_addr, int(multi_addr/i * 100),
                                                                         no_response, int(no_response/i * 100) ))
+
+    def test_place_coder(self):
+        from databundles.geo.geocoder import PlaceCoder
+        
+        pc = PlaceCoder(self.bundle.library)
+
+        places = self.bundle.library.dep('places').partition
+
+        for place in places.rows:
+
+            try:
+                in_places =  [ x['name'] for x in pc.lookup_wgs(place['lat'], place['lon'])]
+            except ValueError:
+                continue
+
+            # Some of the centroids aren't in the regions, since there are complicated region 
+            # shapes, and some cities hold parcels in the east county. 
+            
+            if not place['name'] in in_places:
+                print place['type'], place['name'], in_places
 
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']

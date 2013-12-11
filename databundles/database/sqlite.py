@@ -14,7 +14,7 @@ import logging
 logger = get_logger(__name__)
 #logger.setLevel(logging.DEBUG)
 logger.debug("Init database logger")
-  
+
 class SqliteAttachmentMixin(object):
     
     
