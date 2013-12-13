@@ -227,7 +227,9 @@ class SqliteDatabase(RelationalDatabase):
         if not self._connection:
             
             if not os.path.exists(self.path) and check_exists:
-                raise Exception("Trying to make a connection to a sqlite database that does not exist. check_exists={}".format(check_exists))
+                raise Exception("Trying to make a connection to a sqlite database "+
+                                "that does not exist. check_exists={} path={}"
+                                .format(check_exists, self.path))
 
             try:
     

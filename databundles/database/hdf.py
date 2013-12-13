@@ -39,5 +39,4 @@ class HdfDb(Hdf5File, DatabaseInterface):
    
     def add_post_create(self, f):
         pass
- 
-   
+    

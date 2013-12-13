@@ -7,13 +7,13 @@ Revised BSD License, included in this distribution as LICENSE.txt
 from ..partition import PartitionIdentity
 from osgeo import gdal, gdal_array, osr
 from osgeo.gdalconst import GDT_Float32, GDT_Byte, GDT_Int16
-from numpy  import *
+import numpy as np
 
 class OutOfBounds(Exception): pass
 
 class Kernel(object):
 
-    def __init__(self, size):
+    def __init__(self, size, matrix=None):
         self.size = size
         
         if size%2 == 0:
@@ -27,9 +27,12 @@ class Kernel(object):
             self.center = 1
             
         self.offset = (self.size - 1) / 2 
-                        
-        self.matrix = ones((self.size, self.size))
-        
+         
+        if matrix is None:               
+            self.matrix = np.ones((self.size, self.size))
+        else:
+            self.matrix = matrix
+            
         self._dindices = None
 
     def limit(self):
@@ -39,7 +42,7 @@ class Kernel(object):
         # This assumes that there is a radial gradient. 
         row_max = self.matrix[self.center][0]
 
-        for (y_m,x_m), value in ndenumerate(self.matrix):
+        for (y_m,x_m), value in np.ndenumerate(self.matrix):
             if self.matrix[y_m][x_m] > row_max:
                 self.matrix[y_m][x_m] = 0
                 
@@ -49,7 +52,7 @@ class Kernel(object):
         # Get the max value for the edge of the enclosed circle. 
         # This assumes that there is a radial gradient. 
         
-        for (x_m,y_m), value in ndenumerate(self.matrix):
+        for (x_m,y_m), value in np.ndenumerate(self.matrix):
             if math.sqrt( (x_m-self.center)**2 + (y_m-self.center)**2 ) > float(self.size) / 2.:
                 self.matrix[y_m][x_m] = 0
 
@@ -69,7 +72,7 @@ class Kernel(object):
        
     def quantize(self, bins=255):
         from util import jenks_breaks
-        hist, edges = histogram(self.matrix.compressed(),bins=bins)
+        hist, edges = np.histogram(self.matrix.compressed(),bins=bins)
       
         print "Hist", hist
         print "Edges",edges
@@ -82,16 +85,17 @@ class Kernel(object):
         print "Uniques", l
         
         print self.matrix.compressed()
-        digits = digitize(self.matrix.ravel(), breaks)
+        digits = np.digitize(self.matrix.ravel(), breaks)
         
         print self.matrix.size
         print digits.size
         print self.matrix.shape[0]
         
-        s = ma.array(reshape(digits, self.matrix.shape), mask=self.matrix.mask)
+        s = np.ma.array(np.reshape(digits, self.matrix.shape), mask=self.matrix.mask)
         
         print s
       
+
     def bounds(self, a, point):
         
         y_max, x_max = a.shape
@@ -149,12 +153,13 @@ class Kernel(object):
     @property     
     def dindices(self):
         '''Return the indices of the matrix, sorted by distance from the center'''
+        import math
         
         if self._dindices is None:
             indices = []
             c = self.center
     
-            for i, v in ndenumerate(self.matrix):
+            for i, v in np.ndenumerate(self.matrix):
                 indices.append(i)
                 
             self._dindices = sorted(indices, key=lambda i: math.sqrt( (i[0]-c)**2 + (i[1]-c)**2 ))
@@ -210,7 +215,7 @@ class Kernel(object):
         over some of the cells, rather than all of them. '''
         from ..geo import Point
         if indices is None:
-            it = nditer(a,flags=['multi_index'] )
+            it = np.nditer(a,flags=['multi_index'] )
             while not it.finished:
                 (m,  y_start, y_end, x_start, x_end) = self.bounds(a, Point(it.multi_index[1], it.multi_index[0]))
                 yield  it.multi_index[0], it.multi_index[1], a[y_start:y_end, x_start:x_end], m
@@ -222,19 +227,18 @@ class Kernel(object):
         
     def apply_add(self,a,point,y=None):
         from ..geo import Point
-        import numpy as np
+
         if y is not None:
             point = Point(point, y)
         return self.apply(a,point, f=lambda x,y: np.add(x,y))
     
     def apply_min(self,a,point):
-        import numpy.ma as ma
-        import numpy as np
-        f = lambda a,b: where(a<b, a, b)
+
+        f = lambda a,b: np.where(a<b, a, b)
         return self.apply(a,point, f=f)        
     
     def apply_max(self,a,point):
-        import numpy as np
+  
         return self.apply(a,point, f=np.max)        
         
 class ConstantKernel(Kernel):
@@ -247,9 +251,9 @@ class ConstantKernel(Kernel):
         self.value  = value
         
         if value:
-            self.matrix = ones((size, size))*value
+            self.matrix = np.ones((size, size))*value
         else:
-            self.matrix = ones((size, size))
+            self.matrix = np.ones((size, size))
             self.matrix /= sum(self.matrix) # Normalize the sum of all cells in the matrix to 1
             
         self.offset = (self.matrix.shape[0] - 1) / 2 
@@ -277,11 +281,11 @@ class GaussianKernel(Kernel):
         """
 
         
-        x = arange(0, size, 1, float32)
-        y = x[:,newaxis]
+        x = np.arange(0, size, 1, np.float32)
+        y = x[:,np.newaxis]
         x0 = y0 = size // 2
-        ar = array(exp(-4*log(2) * ((x-x0)**2 + (y-y0)**2) / fwhm**2))
-        m =  ma.masked_less(ar, ar[0,x0+1]).filled(0) #mask less than the value at the edge to make it round. 
+        ar = np.array(np.exp(-4*np.log(2) * ((x-x0)**2 + (y-y0)**2) / fwhm**2))
+        m =  np.ma.masked_less(ar, ar[0,x0+1]).filled(0) #mask less than the value at the edge to make it round. 
 
         m /= sum(m) # Normalize the sum of all cells in the matrix to 1
       
@@ -298,12 +302,12 @@ class DistanceKernel(Kernel):
         self.inverted = False
         
         #self.matrix = ma.masked_array(zeros((size,size)), mask=True, dtype=float)
-        self.matrix = zeros((size,size), dtype=float)
+        self.matrix = np.zeros((size,size), dtype=float)
         
         row_max = size - self.center - 1 # Max value on a horix or vert edge
      
-        for (y_m,x_m), value in ndenumerate(self.matrix):
-                r  = sqrt( (y_m-self.center)**2 + (x_m-self.center)**2)
+        for (y_m,x_m), value in np.ndenumerate(self.matrix):
+                r  = np.sqrt( (y_m-self.center)**2 + (x_m-self.center)**2)
                 self.matrix[y_m,x_m] = r
                     
 class MostCommonKernel(ConstantKernel):
@@ -340,10 +344,10 @@ class MostCommonKernel(ConstantKernel):
         if source is None:
             source = a
 
-        d1 = ravel(source[y_start:y_end, x_start:x_end])
+        d1 = np.ravel(source[y_start:y_end, x_start:x_end])
 
-        bc = bincount(d1, minlength=10)
-        am = argmax(bc)
+        bc = np.bincount(d1, minlength=10)
+        am = np.argmax(bc)
         
         if am != a[point[0], point[1]]:
             print am
@@ -351,5 +355,32 @@ class MostCommonKernel(ConstantKernel):
 
         a[y_start:y_end, x_start:x_end] = 1        
                     
+class ArrayKernel(Kernel):
+    '''Convert an arbitary ( hopefully small ) numpy array 
+    into a kernel'''
+    
+    def __init__(self, a , const = None):
+        
+        y,x = a.shape
+        
+        size = max(x,y)
+        
+        if size % 2 == 0:
+            size += 1
+            
+        pad_y = size - y
+        pad_x = size - x
+        
+        b = np.pad(a,((0,pad_y),(0,pad_x)), 'constant', constant_values=((0,0),(0,0)))  # @UndefinedVariable
+           
+        if const:
+            b *= const
+              
+        super(ArrayKernel, self).__init__(size, b) 
 
-                 
+        # original shape. 
+        self.oshape = a.shape
+        
+        
+        
+        

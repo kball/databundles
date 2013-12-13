@@ -101,7 +101,7 @@ class GitHubService(ServiceInterface,GitServiceMarker):
                 ident['clone_url'] = e['clone_url']
                 out.append(ident)
 
-            if i < 29:
+            if i < 29: # WTF is this? Page limit?
                 break
             
 
@@ -109,7 +109,7 @@ class GitHubService(ServiceInterface,GitServiceMarker):
   
     def repo_url(self, name):
         
-        return self.urls['repogit'].format(name=name)
+        return self.urls['repogit'].format(name=name).replace('api.github','github')
     
     @property
     def ident(self):

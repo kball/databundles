@@ -288,12 +288,8 @@ class PartitionBase(PartitionInterface):
     def get(self):
         '''Fetch this partition from the library or remote if it does not exist'''
         import os
-        if not os.path.exists(self.database.path):
-            self.bundle.library.get(self.identity.vid)
-            return True
-        else:
-            return False
-    
+        return self.bundle.library.get(self.identity.vid).partition
+
     @property
     def path(self):
         '''Return a pathname for the partition, relative to the containing 

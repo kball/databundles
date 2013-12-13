@@ -153,7 +153,7 @@ def draw_edges(a):
 class AnalysisArea(object):
     
     SCALE = 10 # Default cell size
-    MAJOR_GRID = 100 # All boundary dimensions must be even moduloo this. 
+    MAJOR_GRID = 100 # All boundary dimensions must be even modulo this. 
     
     MAX_CELLS = 75 * 1000 * 1000
     
@@ -177,10 +177,14 @@ class AnalysisArea(object):
         self.northmin = northmin
         self.northmax = northmax
  
+        self.mideast = int( (self.eastmax - self.eastmin) / 2) +  self.eastmin
+        self.midnorth = int( (self.northmax - self.northmin) / 2) +  self.northmin
+ 
         self.lonmin = lonmin
         self.lonmax = lonmax
         self.latmin = latmin
         self.latmax = latmax
+
         
         self.srid = srid
         self.srswkt = srswkt
@@ -257,7 +261,7 @@ class AnalysisArea(object):
         return self._scale
 
     def translate_to_array(self, x, y):
-        """Translate state plane coordinates to arry_coordinates"""
+        """Translate state plane coordinates to array_coordinates"""
         
         return Point(
                          int((x-self.eastmin)/self._scale),
@@ -331,6 +335,13 @@ class AnalysisArea(object):
         return (""" {lat_name} >= {latmin} AND {lat_name} <= {latmax} AND
         {lon_name} >= {lonmin} AND {lon_name} <= {lonmax}"""
         .format( lat_name=lat_name, lon_name=lon_name,**self.__dict__))
+        
+    def is_in_utm(self, x, y):
+        """Return true if the (lat, lon) is inside the area"""
+        return (y < self.northmax and
+                y > self.northmin and
+                x < self.eastmax and
+                x > self.eastmin )     
         
 
     @property
@@ -414,8 +425,11 @@ class AnalysisArea(object):
     
         driver = gdal.GetDriverByName(driver) 
  
+        x = int(self.size_x*over_sample)
+        y = int(self.size_y*over_sample)
+
         out = driver.Create(file_, 
-                            int(self.size_x*over_sample), int(self.size_y*over_sample),
+                            x,y,
                             bands, 
                             data_type, 
                             options = options)  
@@ -512,9 +526,19 @@ class AnalysisArea(object):
         return AnalysisArea( 
                   name,
                   geoid , # 'name' is used twice, pick the first. 
-                  srid=int(envelope_srs.GetAuthorityCode('PROJCS')),                       
+                  srid=int(envelope_srs.GetAuthorityCode('GEOGCS')),                       
                   srswkt=envelope_srs.ExportToWkt(),
                   **d)
+
+
+    @classmethod
+    def new_from_geometry(cls,g, name=None, geoid=None):
+        
+        e = g.GetEnvelope()
+        srs = g.GetSpatialReference()  
+
+        return cls.new_from_envelope(srs, e, name, geoid)
+
 
     @property
     def ll_envelope(self):

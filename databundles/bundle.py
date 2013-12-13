@@ -606,6 +606,14 @@ class BuildBundle(Bundle):
      
             return False
         
+        b = self.library.get(self.identity.id_)
+        
+        if b and b.identity.revision >= self.identity.revision:
+            self.fatal(("Can't build this version. Library has version {} "
+                        " which is greater than or equal this version {}")
+                       .format(b.identity.revision, self.identity.revision))
+            return False
+
         return True
 
     def prepare(self):
@@ -622,7 +630,6 @@ class BuildBundle(Bundle):
             self.library.check_dependencies()
         except NotFoundError as e:
             self.fatal(e.message)
-
 
         if self.run_args and vars(self.run_args).get('rebuild',False):
             with self.session:
@@ -718,11 +725,11 @@ class BuildBundle(Bundle):
         if  python_dir and python_dir not in sys.path:
             sys.path.append(python_dir)
         
+
         return True
         
     def build(self):
         return False
-    
     
     
     def post_build(self):
