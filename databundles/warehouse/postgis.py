@@ -3,25 +3,23 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from ..dbexceptions import DependencyError
 from postgres import PostgresWarehouse #@UnresolvedImport
-from ..library import LibraryDb
 from sh import ogr2ogr #@UnresolvedImport
-import subprocess
-
 
 class PostgisWarehouse(PostgresWarehouse):
     
 
     def create(self):
         super(PostgisWarehouse, self).create()
-        
-        self.database.create()
-        
+
         self.database.connection.execute('CREATE EXTENSION IF NOT EXISTS postgis')
         self.database.connection.execute('CREATE EXTENSION IF NOT EXISTS postgis_topology;')
-        self.database.connection.execute('CREATE SCHEMA IF NOT EXISTS library;')
-          
+
+        # Actually only for Amazon RDS
+        try:  self.database.connection.execute('CREATE EXTENSION IF NOT EXISTS fuzzystrmatch')
+        except: pass
+
+
     def _install_geo_partition(self, partition):
         
         from databundles.client.exceptions import NotFound
@@ -30,10 +28,10 @@ class PostgisWarehouse(PostgresWarehouse):
         
         for table_name in partition.data.get('tables',[]):
             
-            table, meta = self.create_table(partition.identity.as_dataset.vid, table_name, use_id = True)
+            table, meta = self.create_table(partition.identity, table_name)
 
             self._install_geo_partition_table(partition,table)
-        
+
     def _install_geo_partition_table(self, partition, table):
         #
         # Use ogr2ogr to copy. 
@@ -41,6 +39,8 @@ class PostgisWarehouse(PostgresWarehouse):
         import shlex
         
         db = self.database
+        
+        self.library.database.install_table(partition.get_table().vid, table.name)
         
     
         args = [
@@ -71,10 +71,13 @@ class PostgisWarehouse(PostgresWarehouse):
                     self.logger.log("Loading {}%".format(pct))  
 
 
-        # Need to sxlex it b/c the "PG:" part gets bungled otherwise. 
+
+        self.logger.log("Loading with: ogr2ogr {}".format(' '.join(args)))
+        
+        # Need to shlex it b/c the "PG:" part gets bungled otherwise. 
         p = ogr2ogr(*shlex.split(' '.join(args)),  _err=err_output, _out=out_output, _iter=True, _out_bufsize=0)
         p.wait()
-        print 'Exit Code',p.exit_code
+
         return
         
 

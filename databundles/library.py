@@ -210,7 +210,7 @@ class LibraryDb(object):
     def engine(self):
         '''return the SqlAlchemy engine for this database'''
         from sqlalchemy import create_engine  
-        from database.sqlite import _on_connect_update_schema
+        from database.sqlite import _on_connect_update_sqlite_schema
         from sqlalchemy.pool import AssertionPool
         
         if not self._engine:
@@ -224,7 +224,7 @@ class LibraryDb(object):
             if self.driver == 'sqlite':
                 event.listen(self._engine, 'connect', _pragma_on_connect)
                 #event.listen(self._engine, 'connect', _on_connect_update_schema)
-                _on_connect_update_schema(self.connection)
+                _on_connect_update_sqlite_schema(self.connection)
 
         return self._engine
 
@@ -283,7 +283,7 @@ class LibraryDb(object):
         
         table = Table(table_name, self.metadata, autoload=True, autoload_with=self.engine)
         
-        return ValueInserter(None, table , self,**kwargs)
+        return ValueInserter(self, None, table , **kwargs)
 
     @property
     def session(self):
@@ -590,7 +590,33 @@ class LibraryDb(object):
             s.rollback()
             raise e
 
+    def install_partition(self, partition):
+        """Mark a partition record as installed"""   
+        pass 
+    
+
+    def install_table(self, table_or_vid, name=None):
+        """Mark a table record as installed"""   
+        from databundles.orm import Table
+ 
+        s = self.session
+        table = None
         
+        table = s.query(Table).filter(Table.vid == table_or_vid).one()
+        
+        if not table:
+            table = s.query(Table).filter(Table.vid == table.vid).one()
+        
+        if not name:
+            name = table.name
+        
+        table.installed = name
+
+        
+        s.merge(table)
+        s.commit()
+            
+
     def remove_bundle(self, bundle):
         '''remove a bundle from the database'''
         from identity import Identity
@@ -931,6 +957,16 @@ class LibraryDb(object):
         
         return s.query(File).filter(File.group == ticket).one()
         
+
+    def get_table(self, table_vid):
+
+        from databundles.orm import Table
+        
+        s = self.session
+        
+        return  s.query(Table).filter(Table.vid == table_vid).one()
+        
+
 
     def get_file_by_state(self, state, type_=None):
         """Return all files in the database with the given state"""
@@ -1647,6 +1683,7 @@ class Library(object):
         ds, pt= self.database.get_id(p.identity.vid)
         if not pt:
             self.database.add_file(p.database.path, self.cache.repo_id, p.identity.vid, 'pulled')   
+            self.database.install_partition(p)
         
         p.library = self  
         

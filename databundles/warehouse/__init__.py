@@ -16,9 +16,12 @@ def new_warehouse(config):
 
     service = config['service'] if 'service' in config else 'relational'
     
-    database = new_database(config['database'],'warehouse')
+    db_config = dict(config['database'].items())
+
+    database = new_database(db_config,'warehouse')
     storage = new_cache(config['storage']) if 'storage' in config else None
-    library_database = LibraryDb(**config['library']) if 'library' in config else  LibraryDb(**config['database'])
+    
+    library_database = LibraryDb(**config['library']) if 'library' in config else  LibraryDb(**db_config)
 
     library =  Library(cache = NullCache(), 
                  database = library_database, 
@@ -39,7 +42,12 @@ def new_warehouse(config):
     elif service == 'postgis':
         from .postgis import PostgisWarehouse  #@UnresolvedImport
         return PostgisWarehouse(database=database,storage=storage, library=library)
+
+    elif service == 'postgresrds':
+        from .amazonrds import PostgresRDSWarehouse  #@UnresolvedImport
+        return PostgresRDSWarehouse(database=database,storage=storage, library=library)
     
+        
     else:
         from .relational import RelationalWarehouse #@UnresolvedImport
         return RelationalWarehouse(database,storage=storage, library=library)

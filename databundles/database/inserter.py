@@ -83,7 +83,7 @@ class SegmentedInserter(InserterInterface):
 
 class ValueWriter(InserterInterface):
     '''Inserts arrays of values into  database table'''
-    def __init__(self, bundle,  db, cache_size=50000, text_factory = None, replace=False):
+    def __init__(self,  db, bundle,  cache_size=50000, text_factory = None, replace=False):
         import string 
         self.cache = []
         
@@ -149,13 +149,26 @@ class ValueWriter(InserterInterface):
  
 class ValueInserter(ValueWriter):
     '''Inserts arrays of values into  database table'''
-    def __init__(self, bundle, table, db, cache_size=50000, text_factory = None, replace=False,  skip_none=True, update_size = True): 
+    def __init__(self, db,  bundle, table, 
+                 orm_table = None,
+                 cache_size=50000, text_factory = None, 
+                 replace=False,  skip_none=True, update_size = True): 
 
-        super(ValueInserter, self).__init__(bundle, db, cache_size=cache_size, text_factory = text_factory)  
+        super(ValueInserter, self).__init__(db, bundle,  cache_size=cache_size, text_factory = text_factory)  
+   
+        if table is None and bundle is None:
+            raise ValueError("Must define either table or bundle")
    
         self.table = table
-   
-        self.orm_table = self.bundle.schema.table(table.name)
+
+        # The   _db_orm_table is added to the Sqlalchemy metadata in 
+        # RelationalDatabase.table() 
+        self.orm_table = self.table._db_orm_table
+
+        self.null_row = self.orm_table.null_dict
+    
+        self.caster = self.orm_table.caster
+
 
         self.header = [c.name for c in self.orm_table.columns]
 
@@ -168,9 +181,7 @@ class ValueInserter(ValueWriter):
  
         self.skip_none = skip_none
         
-        self.null_row = self.bundle.schema.table(table.name).null_dict
-    
-        self.caster = self.bundle.schema.table(table.name).caster
+
 
         self.update_size = update_size
 
@@ -256,12 +267,12 @@ class ValueInserter(ValueWriter):
         
         super(ValueInserter, self).__exit__(type_, value, traceback)
 
-        if self.update_size:
+        if self.update_size and self.bundle:
             self.bundle.schema.update_lengths(self.table.name, self.max_lengths)
    
 class ValueUpdater(ValueWriter, UpdaterInterface):
     '''Updates arrays of values into  database table'''
-    def __init__(self, bundle, table, db,  cache_size=50000, text_factory = None): 
+    def __init__(self,  db, bundle, table,  cache_size=50000, text_factory = None): 
         
         from sqlalchemy.sql.expression import bindparam, and_
         super(ValueUpdater, self).__init__(bundle, db, cache_size=50000, text_factory = text_factory)  

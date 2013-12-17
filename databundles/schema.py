@@ -184,8 +184,10 @@ class Schema(object):
         from databundles.orm import Column
         return (self.bundle.database.session.query(Column).all())
         
-    def get_table_meta(self, name_or_id, use_id=False, driver=None):
-        return self.get_table_meta_from_db(self.bundle.database, name_or_id, use_id, driver, session = self.bundle.database.session)
+    def get_table_meta(self, name_or_id, use_id=False, driver=None, alt_name=None):
+        return self.get_table_meta_from_db(self.bundle.database, name_or_id, use_id, driver, 
+                                           session = self.bundle.database.session,
+                                           alt_name = alt_name)
         
     @classmethod        
     def validate_column(cls, table, column, warnings, errors):  
@@ -264,7 +266,8 @@ class Schema(object):
 
         
     @classmethod
-    def get_table_meta_from_db(self,db,  name_or_id,  use_id=False, driver=None, d_vid = None, session=None ):
+    def get_table_meta_from_db(self,db,  name_or_id,  use_id=False, 
+                               driver=None, d_vid = None, session=None, alt_name=None ):
         '''
             use_id: prepend the id to the class name
         '''
@@ -280,9 +283,17 @@ class Schema(object):
         
         table = self.get_table_from_database(db, name_or_id, d_vid = d_vid, session=session)
 
+        if alt_name and use_id:
+            raise ConfigurationError("Can't specify both alt_name and use_id")
         
-        at = SATable(table.vid.replace('/','_')+'_'+table.name if  use_id 
-                     else table.name, metadata)
+        if alt_name:
+            table_name = alt_name
+        elif use_id:
+            table_name = table.vid.replace('/','_')+'_'+table.name
+        else:
+            table_name = table.name
+        
+        at = SATable( table_name, metadata)
  
         indexes = {}
         uindexes = {}

@@ -739,7 +739,43 @@ def walk_dict(d):
             yield res
 
 
-def _log_rate(d, message=None, prt=None):
+
+def init_log_rate(output_f, N=None, message='', print_rate=None):
+    """Initialze the log_rate function. Returnas a partial function to call for
+    each event
+    
+    If N is not specified but print_rate is specified, the initial N is set to 100, 
+    and after the first message, the N value is adjusted to emit print_rate messages
+    per second
+    
+    """
+    from collections import deque
+    import  time
+    from functools import partial
+    
+    if print_rate and not N:
+        N=100
+
+    if not N:
+        N = 5000
+
+    
+    d =  [0,  # number of items processed
+            time.time(), # start time. This one gets replaced after first message
+            N, # ticker to next message
+            N,  #frequency to log a message
+            message, 
+            print_rate,
+            deque([], maxlen=4) # Deque for averaging last N rates
+            ]
+
+    f = partial(_log_rate, output_f, d)
+    f.always = output_f
+   
+    return f
+
+
+def _log_rate(output_f,d, message=None):
     """Log a message for the Nth time the method is called.
     
     d is the object returned from init_log_rate
@@ -747,39 +783,33 @@ def _log_rate(d, message=None, prt=None):
     
     import time 
 
-    if not prt:
-        prt = print 
-
-    if not d[1]:
-        d[1] = time.clock()
-
-    if not message:
-        message = d[3]
-
-    d[0] += 1
-    print (d[0],d[2], d[0] % d[2])
-    if  d[0] % d[2] == 0:
-        # Prints the processing rate in 1,000 records per sec.
-        rate = int( d[0]/(time.clock()-d[1]))
-        prt(message+': '+str(rate)+'/s '+str(d[0]/1000)+"K ") 
-
-    
-
+    if d[2] <= 0:
         
-def init_log_rate(N, message=''):
-    """Initialze the log_rate function. Returnas a partial function to call for
-    each event"""
-  
-    import functools 
-    
-    d =  [0,  # number of items processed
-            None, # start time
-            N,  #frequency to log a message
-            message]
+        if message is None:
+            message = d[4]
+        
+        # Average the rate over the length of the deque. 
+        d[6].append(int( d[3]/(time.time()-d[1])))
+        rate = sum(d[6])/len(d[6])
+        
+        # Prints the processing rate in 1,000 records per sec.
+        output_f(message+': '+str(rate)+'/s '+str(d[0]/1000)+"K ") 
+        
+        d[1] = time.time()
+        
+        # If the print_rate was specified, adjuect the number of records to
+        # aaproximate that rate. 
+        if d[5]:
+            target_rate =  rate * d[5]
+            d[3] = int((target_rate + d[3]) / 2)
 
-    f = functools.partial(_log_rate, d)
-    f.always = print
-    return f
+        d[2] = d[3]
+        
+          
+    d[0] += 1
+    d[2] -= 1
+
+
 
 def daemonize(f, args,  rc, prog_name='databundles'):
         '''Run a process as a daemon'''

@@ -469,70 +469,9 @@ class BuildBundle(Bundle):
             self.ptick_count = 0
 
     def init_log_rate(self, N=None, message='', print_rate=None):
-        """Initialze the log_rate function. Returnas a partial function to call for
-        each event
+        from util import init_log_rate as ilr
         
-        If N is not specified but print_rate is specified, the initial N is set to 100, 
-        and after the first message, the N value is adjusted to emit print_rate messages
-        per second
-        
-        """
-        from collections import deque
-        if print_rate and not N:
-            N=100
-
-        if not N:
-            N = 5000
-
-        import functools, time
-        d =  [0,  # number of items processed
-                time.time(), # start time. This one gets replaced after first message
-                N, # ticker to next message
-                N,  #frequency to log a message
-                message, 
-                print_rate,
-                deque([], maxlen=4) # Deque for averaging last N rates
-                ]
-
-        f = functools.partial(self._log_rate, d)
-        f.always = self.log
-       
-        return f
-
-    
-    def _log_rate(self,d, message=None):
-        """Log a message for the Nth time the method is called.
-        
-        d is the object returned from init_log_rate
-        """
-        
-        import time 
-
-        if d[2] <= 0:
-            
-            if message is None:
-                message = d[4]
-            
-            # Average the rate over the length of the deque. 
-            d[6].append(int( d[3]/(time.time()-d[1])))
-            rate = sum(d[6])/len(d[6])
-            
-            # Prints the processing rate in 1,000 records per sec.
-            self.log(message+': '+str(rate)+'/s '+str(d[0]/1000)+"K ") 
-            
-            d[1] = time.time()
-            
-            # If the print_rate was specified, adjuect the number of records to
-            # aaproximate that rate. 
-            if d[5]:
-                target_rate =  rate * d[5]
-                d[3] = int((target_rate + d[3]) / 2)
- 
-            d[2] = d[3]
-            
-              
-        d[0] += 1
-        d[2] -= 1
+        return ilr(self.log, N=N, message=message, print_rate = print_rate)
 
 
 

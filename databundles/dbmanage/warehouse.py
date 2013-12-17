@@ -152,7 +152,7 @@ def warehouse_install(args, w,config):
 
     l = new_library(config.library(args.library))
     w.resolver = Resolver(l)
-    w.logger = Logger('Warehouse Install',init_log_rate(2000))
+    w.logger = Logger('Warehouse Install',init_log_rate(prt,N=2000))
  
     w.install_by_name(args.term )
 
@@ -160,7 +160,7 @@ def warehouse_remove(args, w,config):
     from functools import partial
     from databundles.util import init_log_rate
 
-    w.logger = Logger('Warehouse Remove',init_log_rate(2000))
+    w.logger = Logger('Warehouse Remove',init_log_rate(prt,N=2000))
     
     w.remove_by_name(args.term )
       
@@ -173,9 +173,13 @@ def warehouse_drop(args, w,config):
 def warehouse_create(args, w,config):
     
     w.database.enable_delete = True
-    w.library.clean()
-    w.drop()
+    try:
+        w.library.clean()
+        w.drop()
+    except:
+        pass # Can't clean or drop if doesn't exist
     
+    w.create()
     w.library.database.create()
     
     

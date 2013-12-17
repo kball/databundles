@@ -16,7 +16,7 @@ from .inserter import InserterInterface
 
 class ValueInserter(InserterInterface):
     '''Inserts arrays of values into  database table'''
-    def __init__(self, bundle, path, table=None, header=None, delimiter = '|', encoding='utf-8', 
+    def __init__(self, path, bundle,  table=None, header=None, delimiter = '|', encoding='utf-8', 
                  write_header = False,  buffer_size=2*1024*1024): 
      
         self.table = table
@@ -200,7 +200,7 @@ class CsvDb(DatabaseInterface):
             header = [c.name for c in self.partition.table.columns]
         
 
-        return ValueInserter(self.bundle, self.path, header=header, **kwargs)
+        return ValueInserter(self.path, self.bundle,  header=header, **kwargs)
         
     def reader(self,  encoding='utf-8', *args, **kwargs):
 

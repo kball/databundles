@@ -227,7 +227,6 @@ class Identity(object):
         
         return os.path.join(source, '-'.join(parts) )
   
-
     @property
     def source_path(self):
         '''The path of the bundle source. '''
@@ -242,8 +241,6 @@ class Identity(object):
         '''The name is a form suitable for use in a filesystem'''
         return self.path+self.PATH_EXTENSION
  
- 
-
  
  
     @classmethod

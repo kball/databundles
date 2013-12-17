@@ -13,6 +13,11 @@ class PostgresWarehouse(RelationalWarehouse):
     def __init__(self, database,  library=None, storage=None, resolver = None, logger=None):
         super(PostgresWarehouse, self).__init__(database,  library=library, storage=storage, 
                                                 resolver = resolver, logger=logger)
+    
+    def create(self):
+        self.database.create()
+        self.database.connection.execute('CREATE SCHEMA IF NOT EXISTS library;')
+        self.library.database.create()
         
     def _copy_command(self, table, url):
         
@@ -29,7 +34,7 @@ class PostgresWarehouse(RelationalWarehouse):
         pdb = partition.database
 
         for table_name in partition.data.get('tables',[]):
-            table, meta = self.create_table(partition.identity.as_dataset.vid, table_name, use_id = True)
+            sqla_table, meta = self.create_table(partition.identity, table_name)
 
             try:
                 urls = self.resolver.csv_parts(partition.identity.vid)
@@ -39,7 +44,11 @@ class PostgresWarehouse(RelationalWarehouse):
                 raise 
          
             for url in urls:
-                self._install_csv_url(table, url)
+                self._install_csv_url(sqla_table, url)
+                
+            orm_table = partition.get_table()
+            
+            self.library.database.install_table(orm_table.vid, sqla_table.name)
         
     def _install_csv_url(self, table, url):
         

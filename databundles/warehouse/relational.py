@@ -13,7 +13,6 @@ class RelationalWarehouse(WarehouseInterface):
         super(RelationalWarehouse, self).__init__(database,  library=library, storage=storage, 
                                                   resolver = resolver, logger=logger)
         
-        self.library.database.create()
         
     def __del__(self):
         pass # print self.id, 'closing Warehouse'
@@ -28,11 +27,19 @@ class RelationalWarehouse(WarehouseInterface):
         
         return r
         
-    def has(self, name_or_id):
+    def has_dataset(self, name_or_id):
+        dataset, partition = self.get(name_or_id)
+
+        return bool(dataset)    
+       
+    def has_partition(self, name_or_id):
         
         dataset, partition = self.get(name_or_id)
 
-        return bool(dataset)
+        if not bool(dataset):
+            return False
+
+        return bool(partition)
         
     def install_dependency(self, name):
         '''Install a base dependency, from its name '''
@@ -62,7 +69,7 @@ class RelationalWarehouse(WarehouseInterface):
         if not p:
             raise ValueError("Name must refer to a partition")
         
-        if not self.has(d.vid):
+        if not self.has_dataset(d.vid):
             self.logger.log('install_dataset {}'.format(name))
             
             b = self.resolver.get(d.vid)
@@ -72,13 +79,16 @@ class RelationalWarehouse(WarehouseInterface):
                   
             self._install_bundle(b)
         else:
-            self.logger.log('dataset already installed {}'.format(d.vname))
-            return
-        
+            self.logger.log('Dataset already installed {}'.format(d.vname))
+            
+       
         if p:
-            b = self.resolver.get(d.vid)
-            self.install_partition_by_name(b, p)
-        
+            if False and self.has_partition(p.vid):
+                self.logger.log('Partition already installed {}'.format(d.vname))
+            else:
+                b = self.resolver.get(d.vid)
+                self.install_partition_by_name(b, p)
+            
     
     def install_partition_by_name(self, bundle, p):
         
@@ -105,22 +115,50 @@ class RelationalWarehouse(WarehouseInterface):
 
         return table_name in self.database.inspector.get_table_names()
     
-    def table_meta(self, d_vid, table_name,use_id=True):
+    def augmented_table_name(self, d_vid, table_name):
+        return d_vid.replace('/','_')+'_'+table_name
+    
+    def is_augmented_name(self, d_vid, table_name):
+
+        return table_name.startswith(d_vid.replace('/','_')+'_')
+        
+    
+    def table_meta(self, d_vid, p_vid, table_name):
+        '''Get the metadata directly from the database. This requires that 
+        table_name be the same as the table as it is in stalled in the database'''
         from ..schema import Schema
 
         meta, table = Schema.get_table_meta_from_db(self.library.database, 
                                                     table_name, 
                                                     d_vid = d_vid,  
-                                                    use_id=use_id, 
+                                                    alt_name = self.augmented_table_name(d_vid, table_name),
                                                     session=self.library.database.session)        
     
         return meta, table
     
-    def create_table(self, d_vid, table_name, use_id = True):
+    def table(self, d_vid, p_vid, table_name):
+        '''Return an ORM table from the local schema. Unlike
+        table_meta, this pulls the data from library records, 
+        so table_name must be unaugmented. '''
+        
+        from ..schema import Schema
+        
+
+        return Schema.get_table_from_database(self.library.database, 
+                                              table_name, 
+                                              d_vid = d_vid,
+                                              session = self.library.database.session, 
+                                              )
+        
+    
+    def create_table(self, p_identity,  table_name):
         
         from ..schema import Schema
 
-        meta, table = self.table_meta(d_vid, table_name, use_id)
+        p_vid = p_identity.vid
+        d_vid = p_identity.as_dataset.vid
+
+        meta, table = self.table_meta(d_vid, p_vid,  table_name)
 
         if not self.has_table(table.name):
             table.create(bind=self.database.engine)
@@ -131,25 +169,19 @@ class RelationalWarehouse(WarehouseInterface):
         return table, meta
         
     
-    def _install_partition(self, partition):
-
+    def _install_partition_insert(self, partition):
+        from ..database.inserter import  ValueInserter
+        
         self.logger.log('install_partition {}'.format(partition.identity.name))
 
         pdb = partition.database
      
         tables = partition.data.get('tables',[])
 
-        s = self.database.session
-        
         # Create the tables
         for table_name in tables:
-            if not table_name in self.database.inspector.get_table_names():    
-                t_meta, table = partition.bundle.schema.get_table_meta(table_name, use_id=True, driver = self.database.driver) #@UnusedVariable
-                table.create(bind=self.database.engine)   
-                self.logger.log('create_table {}'.format(table_name))
-        
-        self.database.session.commit()
-        
+            self.create_table(partition.identity, table_name)
+
         if self.database.driver == 'mysql':
             cache_size = 5000
         elif self.database.driver == 'postgres':
@@ -157,27 +189,38 @@ class RelationalWarehouse(WarehouseInterface):
         else:
             cache_size = 50000
     
+        cache_size = 1000
+    
+
+        p_vid = partition.identity.vid
+        d_vid = partition.identity.as_dataset.vid
        
         for table_name in tables:
 
-            _, dest_table = partition.bundle.schema.get_table_meta(table_name, use_id=True)
+            _, dest_table = self.table_meta(d_vid, p_vid,  table_name)
             _, src_table = partition.bundle.schema.get_table_meta(table_name, use_id=False)
-            
-            caster = partition.bundle.schema.table(table_name).cast_transform()
+
+            dest_table._db_orm_table = self.table(d_vid, p_vid,  table_name)
 
             self.logger.log('populate_table {}'.format(table_name))
-            with self.database.inserter(dest_table.name, cache_size = cache_size, caster = caster) as ins:
+
+            with ValueInserter(self.database,None, dest_table,cache_size = cache_size) as ins:
    
-                try: self.database.session.execute("DELETE FROM {}".format(dest_table.name))
+                try: self.database.connection.execute('DELETE FROM "public"."{}"'.format(dest_table.name))
                 except: pass
+                   
    
                 for i,row in enumerate(pdb.session.execute(src_table.select())):
                     self.logger.progress('add_row',table_name,i)
   
                     ins.insert(row)
+                    
+                self.library.install_table(dest_table.vid, dest_table.name)
 
-        self.database.session.commit()
-        self.logger.log('done {}'.format(table_name))
+        self.logger.log('done {}'.format(partition.vname))
+
+    def _install_partition(self, partition):
+        self._install_partition_insert(partition)
 
     def _install_geo_partition(self, partition):
         #
@@ -202,25 +245,27 @@ class RelationalWarehouse(WarehouseInterface):
             self.logger.log("Dropping tables in partition {}".format(p.identity.vname))
             for table_name in p.tables: # Table name without the id prefix
                 
-                meta, table = self.table_meta(dataset.vid, table_name, use_id=True) # May have the id_prefix
+                table_name = self.augmented_table_name(p.identity.as_dataset.vid, table_name)
                 
                 try:
-                    self.database.drop_table(table.name)
-                    self.logger.log("Dropped table: {}".format(table.name))
+                    self.database.drop_table(table_name)
+                    self.logger.log("Dropped table: {}".format(table_name))
                     
                 except NoSuchTableError:
-                    self.logger.log("Table does not exist (a): {}".format(table.name))
+                    self.logger.log("Table does not exist (a): {}".format(table_name))
                     
                 except ProgrammingError:
-                    self.logger.log("Table does not exist (b): {}".format(table.name))
-            
+                    self.logger.log("Table does not exist (b): {}".format(table_name))
+
             self.library.database.remove_partition(partition)
+            
+            
         elif dataset:
             
             b = LibraryDbBundle(self.library.database, dataset.vid)
             for p in b.partitions:
                 self.remove_by_name(p.identity.vname)
-            
+
             self.logger.log('Removing bundle {}'.format(dataset.vname))
             self.library.database.remove_bundle(dataset)
         else:
@@ -232,8 +277,7 @@ class RelationalWarehouse(WarehouseInterface):
     def drop(self):
         self.database.drop()
         
-    def create(self):
-        self.database.create()
+
         
     def exists(self):
         self.database.exists()

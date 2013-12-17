@@ -503,6 +503,7 @@ class Table(Base):
     description = SAColumn('t_description',Text)
     keywords = SAColumn('t_keywords',Text)
     data = SAColumn('t_data',MutationDict.as_mutable(JSONEncodedObj))
+    installed = SAColumn('t_installed',String(100))
     
     __table_args__ = (UniqueConstraint('t_sequence_id', 't_d_vid', name='_uc_tables_1'),
                       UniqueConstraint('t_name', 't_d_vid', name='_uc_tables_2'),
@@ -535,7 +536,7 @@ class Table(Base):
     
     def to_dict(self):
         return {k:v for k,v in self.__dict__.items() if k in ['id_','vid', 'sequence_id', 'name', 
-                                                              'vname', 'description', 'keywords', 'data']}
+                                                              'vname', 'description', 'keywords', 'installed', 'data']}
     
     @property
     def help(self):
@@ -922,6 +923,7 @@ class Partition(Base):
     time = SAColumn('p_time',String(20))
     space = SAColumn('p_space',String(50))
     grain = SAColumn('p_grain',String(50))
+    variant = SAColumn('p_variant',String(50))
     format = SAColumn('p_format',String(50))
     segment = SAColumn('p_segment',Integer)
     min_key = SAColumn('p_min_key',BigInteger)
@@ -929,6 +931,7 @@ class Partition(Base):
     count = SAColumn('p_count',Integer)
     state = SAColumn('p_state',String(50))
     data = SAColumn('p_data',MutationDict.as_mutable(JSONEncodedObj))
+    installed = SAColumn('p_installed',String(100))
 
     __table_args__ = (UniqueConstraint('p_sequence_id', 'p_t_vid', name='_uc_partitions_1'),
                      )

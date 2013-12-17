@@ -5,7 +5,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 from . import DatabaseInterface #@UnresolvedImport
-from .inserter import  ValueInserter, ValueUpdater 
+from .inserter import  ValueInserter
 import os 
 import logging
 from databundles.util import get_logger
@@ -55,7 +55,7 @@ class RelationalDatabase(DatabaseInterface):
 
         self._connection = None
 
-    
+
         self._table_meta_cache = {}
 
         self.dsn_template = self.DBCI[self.driver]
@@ -161,8 +161,7 @@ class RelationalDatabase(DatabaseInterface):
     def drop_table(self, table_name, use_id = False):
         table = self.table(table_name)
         
-        table.drop(self.engine)
-        
+        table.drop(self.engine)        
 
     @property
     def connection(self, check_exists=True):
@@ -171,7 +170,7 @@ class RelationalDatabase(DatabaseInterface):
             try:
                 self._connection = self.engine.connect()
             except Exception as e:
-                self.error("Failed to open: '{}': {} ".format(self.path, e))
+                self.error("Failed to open: '{}': {} ".format(self.dsn, e))
                 raise
             
         return self._connection
@@ -192,20 +191,18 @@ class RelationalDatabase(DatabaseInterface):
     @property
     def unmanaged_session(self):
         
-        def abort_flush():
-            from databundles.dbexceptions import ConflictError
-            raise ConflictError('Unmanaged sessions are read-only. Use a managed session to write to the database')
-        
+
         if not self._unmanaged_session:
             from sqlalchemy.orm import sessionmaker
             Session = sessionmaker(bind=self.engine,autocommit=False, autoflush=False)
             self._unmanaged_session =  Session()
-            
-            self._unmanaged_session.flush = abort_flush # Monkeypatch to make read-only
 
         return self._unmanaged_session
 
-
+    @property
+    def session(self):
+        return self.unmanaged_session
+    
     @property
     def creation_session(self):
         '''Writable Session to be used during databasecreation'''
@@ -285,20 +282,29 @@ class RelationalDatabase(DatabaseInterface):
         table = self._table_meta_cache.get(table_name, False)
         
         if table is not False:
-            return table
+            r =  table
         else:
             metadata = self.metadata
             table = Table(table_name, metadata, autoload=True)
             self._table_meta_cache[table_name] = table
-            return table
+            r =  table
 
-    def inserter(self,table_name, **kwargs):
+        # This is primarily used in ValueInserter.__init__ to 
+        # allow for using an inserter on databases that aren't 
+        # attached to bundles, like Warehouses
+        r._db_orm_table  = self.bundle.schema.table(r.name)
+        
+        return r
+
+    def X_inserter(self,table_name, **kwargs):
+        '''Creates an inserter for a database, but which may not have an associated bundle, 
+        as, for instance, a warehouse. '''
+        
         from sqlalchemy.schema import Table
 
         table = Table(table_name, self.metadata, autoload=True, autoload_with=self.engine)
 
-        
-        return ValueInserter(None, table , self,**kwargs)
+        return ValueInserter(self,None, table , **kwargs)
 
 
     class csv_partition_factory(SegmentInserterFactory):

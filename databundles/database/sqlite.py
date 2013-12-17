@@ -138,7 +138,7 @@ class SqliteAttachmentMixin(object):
 class SqliteDatabase(RelationalDatabase):
 
     EXTENSION = '.db'
-    SCHEMA_VERSION = 12
+    SCHEMA_VERSION = 14
 
     def __init__(self, dbname, memory = False,  **kwargs):   
         ''' '''
@@ -214,7 +214,7 @@ class SqliteDatabase(RelationalDatabase):
             event.listen(self._engine, 'connect',connect_listener)
             #event.listen(self._engine, 'connect', _on_connect_update_schema)
 
-            _on_connect_update_schema(self.connection)
+            _on_connect_update_sqlite_schema(self.connection)
              
         return self._engine
 
@@ -239,6 +239,22 @@ class SqliteDatabase(RelationalDatabase):
                 raise
             
         return self._connection
+
+    @property
+    def unmanaged_session(self):
+        
+        def abort_flush():
+            from databundles.dbexceptions import ConflictError
+            raise ConflictError('Unmanaged sessions are read-only. Use a managed session to write to the database')
+        
+        if not self._unmanaged_session:
+            from sqlalchemy.orm import sessionmaker
+            Session = sessionmaker(bind=self.engine,autocommit=False, autoflush=False)
+            self._unmanaged_session =  Session()
+            
+            self._unmanaged_session.flush = abort_flush # Monkeypatch to make read-only
+
+        return self._unmanaged_session
 
     def _create(self):
         """Need to ensure the database exists before calling for the connection, but the
@@ -580,7 +596,7 @@ def _on_connect_bundle(dbapi_con, con_record):
     dbapi_con.execute('PRAGMA foreign_keys = ON')
 
 
-def _on_connect_update_schema(conn):
+def _on_connect_update_sqlite_schema(conn):
     '''Perform on-the-fly schema updates based on the user version'''
 
     version = conn.execute('PRAGMA user_version').fetchone()[0]
@@ -613,6 +629,22 @@ def _on_connect_update_schema(conn):
         except: pass
                 
         conn.execute('PRAGMA user_version = 11')
+        
+        
+    if  version < 13:
+        
+        try: conn.execute('ALTER TABLE partitions ADD COLUMN p_installed VARCHAR(100);')
+        except: pass
+        
+        try: conn.execute('ALTER TABLE partitions ADD COLUMN p_variant VARCHAR(50);')
+        except: pass
+         
+        try: conn.execute('ALTER TABLE tables ADD COLUMN t_installed VARCHAR(100);')
+        except: pass
+        
+        conn.execute('PRAGMA user_version = 13')        
+    
+   
 
 class BuildBundleDb(SqliteBundleDatabase):
     '''For Bundle databases when they are being built, and the path is computed from 
