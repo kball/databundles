@@ -707,7 +707,7 @@ def get_partition_csv_parts(did, pid, library):
         # This partition does not have CSV parts, so we'll have to make them. 
         
         TARGET_ROW_COUNT = 50000
-        
+     
         table = p.table.name
         
         count = p.query("SELECT count(*) FROM {}".format(table)).fetchone()
@@ -721,10 +721,12 @@ def get_partition_csv_parts(did, pid, library):
         
         template = "{}/datasets/{}/partitions/{}/csv".format(_host_port(library), b.identity.vid_enc, p.identity.vid_enc)
         
+        if part_count == 0:
+            parts.append(template)
+        else:
+            for i in range(1, part_count+1):
+                parts.append(template +"?i={}&n={}".format(i,part_count))
         
-        for i in range(1, part_count+1):
-            parts.append(template +"?i={}&n={}".format(i,part_count))
-    
     return parts
     
         
