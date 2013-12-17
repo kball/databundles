@@ -8,4 +8,4 @@ paste
 python-daemon
 lockfile
 decorator
-botle
+bottle
