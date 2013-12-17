@@ -120,6 +120,7 @@ class Resolver(ResolverInterface):
             return dsi['dataset']['url']
 
     def csv_parts(self, name):
+        import requests
         
         dsi = self.library.remote.get_ref(name)
 
@@ -131,9 +132,7 @@ class Resolver(ResolverInterface):
             # have many partitions, but if we asked for a parttion, will get only one. 
 
             parts_url =  dsi['partitions'].values()[0]['urls']['csv']['parts']
-            
-            import requests
-            
+
             r = requests.get(parts_url)
 
             return r.json()

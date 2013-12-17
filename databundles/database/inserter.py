@@ -163,7 +163,11 @@ class ValueInserter(ValueWriter):
 
         # The   _db_orm_table is added to the Sqlalchemy metadata in 
         # RelationalDatabase.table() 
-        self.orm_table = self.table._db_orm_table
+        if hasattr(self.table,'_db_orm_table'):
+            self.orm_table = self.table._db_orm_table
+        else:
+            self.orm_table = self.bundle.schema.table(table.name)
+        
 
         self.null_row = self.orm_table.null_dict
     

@@ -258,7 +258,7 @@ class Resource(object):
 
     # GET /resource
     # GET /resource/id?arg1=value1&...
-    def get(self, **kwargs):    
+    def get(self, **kwargs): 
         return self.do_method('GET', None, None, kwargs)  
       
     # POST /resource
@@ -290,6 +290,8 @@ class Resource(object):
         
 
     def _request(self, method, url, body={}, headers={}, meta={}):
+        import socket
+        
         if self.remote.auth:
             headers.update(self.remote.auth.make_headers())
         
@@ -319,10 +321,12 @@ class Resource(object):
             headers = {"Content-Type": "application/json"}
             body = json.dumps(body)
 
-
-        self.conn.request(method, url, body, headers)
-
-    
+                
+        try:   
+            self.conn.request(method, url, body, headers)
+        except IOError as e: 
+            raise IOError("Request to {} failed: {} ".format(url, e.message))
+           
 
     def _getresponse(self):
         resp = self.conn.getresponse()

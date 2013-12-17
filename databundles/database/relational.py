@@ -289,11 +289,6 @@ class RelationalDatabase(DatabaseInterface):
             self._table_meta_cache[table_name] = table
             r =  table
 
-        # This is primarily used in ValueInserter.__init__ to 
-        # allow for using an inserter on databases that aren't 
-        # attached to bundles, like Warehouses
-        r._db_orm_table  = self.bundle.schema.table(r.name)
-        
         return r
 
     def X_inserter(self,table_name, **kwargs):

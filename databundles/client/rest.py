@@ -46,7 +46,7 @@ class RestApi(object):
         id_or_name = id_or_name.replace('/','|')
 
         response  = self.remote.ref(id_or_name).get()
-  
+
         if response.status == 404:
             raise NotFound("Didn't find a file for {}".format(id_or_name))
         elif response.status != 200:
