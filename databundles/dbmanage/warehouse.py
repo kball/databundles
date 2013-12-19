@@ -55,6 +55,9 @@ def warehouse_parser(cmd):
     whsp = whp.add_parser('create', help='Create required tables')
     whsp.set_defaults(subcommand='create')   
  
+    whsp = whp.add_parser('users', help='Create and configure warehouse users')
+    whsp.set_defaults(subcommand='users')   
+ 
     whsp = whp.add_parser('list', help='List the datasets inthe warehouse')
     whsp.set_defaults(subcommand='list')   
     whsp.add_argument('term', type=str, nargs='?', help='Name of bundle, to list partitions')
@@ -181,9 +184,13 @@ def warehouse_create(args, w,config):
     w.create()
     w.library.database.create()
     
+def warehouse_users(args, w,config):
+    
+    w.configure_default_users()
     
 def warehouse_list(args, w, config):    
 
+    
     l = w.library
 
     if not args.term:

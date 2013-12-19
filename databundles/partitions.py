@@ -83,6 +83,26 @@ class Partitions(object):
             raise
             return []
             
+    @property 
+    def all_nocsv(self): #@ReservedAssignment
+        '''Return an iterator of all partitions, excluding CSV format partitions'''
+        from databundles.orm import Partition as OrmPartition
+        import sqlalchemy.exc
+
+        try:
+            ds = self.bundle.dataset
+            
+            q = (self.bundle.database.session.query(OrmPartition)
+                                    .filter(OrmPartition.d_vid == ds.vid)
+                                    .filter(OrmPartition.format != 'csv')
+                                    .order_by(OrmPartition.vid.asc())
+                                    .order_by(OrmPartition.segment.asc()))
+
+            return [self.partition(op) for op in q.all()]
+        except sqlalchemy.exc.OperationalError:
+            raise
+            return []        
+        
         
     def __iter__(self):
         return iter(self.all)
@@ -163,6 +183,7 @@ class Partitions(object):
                           OrmPartition.vid==str(id_).encode('ascii')
                          )))       
 
+ 
         return q.first()
 
     def find(self, pid=None, use_library=False, **kwargs):
@@ -178,6 +199,7 @@ class Partitions(object):
             elif not 'format' in kwargs:
                     kwargs['format'] = Identity.ANY
                 
+   
             partitions = [ self.partition(op, memory=kwargs.get('memory',False)) 
                           for op in self._find_orm(pid, **kwargs).all()];
 
@@ -284,6 +306,8 @@ class Partitions(object):
         q = q.filter(OrmPartition.d_vid == ds.vid)
 
         q = q.order_by(OrmPartition.vid.asc()).order_by(OrmPartition.segment.asc())
+
+        print __file__,q
 
         return q
 

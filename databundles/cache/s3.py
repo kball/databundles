@@ -325,7 +325,7 @@ class S3Cache(Cache, RemoteMarker):
             key.delete()   
 
         
-    def list(self, path=None,with_metadata=False):
+    def list(self, path=None,with_metadata=False, include_partitions=False):
         '''Get a list of all of bundle files in the cache. Does not return partition files'''
         import json
         
@@ -337,7 +337,7 @@ class S3Cache(Cache, RemoteMarker):
             if path.startswith('_'):
                 continue
             
-            if path.count('/') > 1:
+            if not include_partitions and path.count('/') > 1:
                 continue # partition files
             
             if with_metadata:
@@ -352,6 +352,9 @@ class S3Cache(Cache, RemoteMarker):
 
 
         return l
+
+
+        
 
     def has(self, rel_path, md5=None, use_upstream=True):
 

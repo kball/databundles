@@ -787,9 +787,14 @@ class LibraryDb(object):
                                               like_or_eq(Table.name,v)))
                 elif k == 'space':
                     query = query.filter( or_( like_or_eq(Partition.space,v)))
-                    
+ 
                 else:
                     query = query.filter(  like_or_eq(getattr(Partition, k),v) )
+        
+
+            if not query_command.partition.format:
+                # Exclude CSV if not specified
+                query = query.filter( Partition.format  != 'csv')
         
         if len(query_command.table) > 0:
             query = query.join(Table)
@@ -1132,6 +1137,7 @@ class QueryCommand(object):
         time
         space
         table
+        format
         other
         
     When the Partition search is included, the other three components are used
@@ -1989,10 +1995,17 @@ class Library(object):
 
         self.logger.info("Rebuild library from: {}".format(self.remote))
 
-        self.database.drop()
-        self.database.create()
+        #self.database.drop()
+        #self.database.create()
+        
+        # This should almost always be an object store, like S3. Well, it better be, 
+        # inst that is the only cache that has the include_partitions parameter. 
+        rlu = self.remote.last_upstream()
+     
+        remote_partitions = rlu.list(include_partitions=True)
         
         for rel_path in self.remote.list():
+
 
             path = self.load(rel_path)
   
@@ -2012,9 +2025,14 @@ class Library(object):
                 continue
                 
             for p in bundle.partitions:  
-                if self.remote.last_upstream().has(p.identity.cache_key):
+                
+                # This is the slow way to do it:
+                # if self.remote.last_upstream().has(p.identity.cache_key):
+                if p.identity.cache_key in remote_partitions:
                     self.database.add_remote_file(p.identity)
                     self.logger.info('            {} '.format(p.identity.name))
+                else:
+                    self.logger.info('            {} Ignored; not in remote'.format(p.identity.name))
 
     def rebuild(self):
         '''Rebuild the database from the bundles that are already installed

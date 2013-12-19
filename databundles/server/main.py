@@ -312,14 +312,14 @@ def get_dataset(did, library, pid=None):
     did = did.replace('|','/')
 
     gr =  library.get(did)
-     
+ 
     if not gr:
         raise exc.NotFound("Failed to find dataset for {}".format(did))
     
     # Construct the response
     d = {'dataset' : gr.identity.to_dict(), 'partitions' : {}}
          
-    file = library.database.get_file_by_ref(gr.identity.vid)
+    file_ = library.database.get_file_by_ref(gr.identity.vid)
     
     # Get direct access to the cache that implements the remote, so
     # we can get a URL with path()
@@ -327,8 +327,8 @@ def get_dataset(did, library, pid=None):
 
     d['dataset']['url'] = "{}/datasets/{}/db".format(_host_port(library), gr.identity.vid_enc)
     
-    if file:
-        d['dataset']['file'] = file.to_dict()
+    if file_:
+        d['dataset']['file'] = file_.to_dict()
 
         d['dataset']['config']  = gr.db_config.dict
 
@@ -338,16 +338,16 @@ def get_dataset(did, library, pid=None):
     else:
         partitions = gr.partitions
 
-    for partition in  partitions:
+    for partition in  partitions.all_nocsv:
 
-        
+
         d['partitions'][partition.identity.id_] = partition.identity.to_dict()
-    
-        file = library.database.get_file_by_ref(partition.identity.vid)
+ 
+        file_ = library.database.get_file_by_ref(partition.identity.vid)
         
-        if file:
+        if file_:
 
-            fd = file.to_dict()
+            fd = file_.to_dict()
             d['partitions'][partition.identity.id_]['file']  = { k:v for k,v in fd.items() if k in ['state'] }
 
         csv_link = "{}/datasets/{}/partitions/{}/csv".format(_host_port(library), gr.identity.vid_enc, partition.identity.vid_enc)
@@ -369,7 +369,14 @@ def get_dataset(did, library, pid=None):
                                     
         }
         
+
     return d
+
+@get('/datasets/<did>/csv') 
+@CaptureException   
+def get_dataset_csv(did, library, pid=None):
+    '''List the CSV partitions for the dataset'''
+    pass
 
 @post('/datasets/<did>/partitions/<pid>') 
 @CaptureException   
@@ -687,9 +694,10 @@ def get_partition_csv_parts(did, pid, library):
 
     did, d_on, b = process_did(did, library)
     pid, p_on, p_orm  = process_pid(did, pid, library)
+
+    b = library.get(did)
     
-    b = library.get(pid)
-    p = b.partition # p_orm is a database entry, not a partition
+    p = b.partitions.partition(p_orm)
     
     parts = []
     
@@ -697,10 +705,11 @@ def get_partition_csv_parts(did, pid, library):
     
     if len(csv_parts):
         # This partition has defined CSV parts, so we should link to those. 
-        
-        for csv_p in csv_parts:
-            parts.append("{}/datasets/{}/partitions/{}/db"
-                         .format(_host_port(library), b.identity.vid_enc, csv_p.identity.vid_enc))
+
+        for csv_p in sorted(csv_parts, key=lambda x: x.identity.segment):
+            parts.append("{}/datasets/{}/partitions/{}/db#{}"
+                         .format(_host_port(library), b.identity.vid_enc, 
+                                 csv_p.identity.vid_enc, csv_p.identity.segment))
         
         pass
     else:

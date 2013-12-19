@@ -300,7 +300,7 @@ def library_info(args, l, config, list_all=False):
         if not d:
             err("Failed to find record for: {}", args.term)
             return 
-                
+ 
         _print_info(l,d,p, list_partitions=list_all)
 
     else:

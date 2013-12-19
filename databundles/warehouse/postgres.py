@@ -19,6 +19,31 @@ class PostgresWarehouse(RelationalWarehouse):
         self.database.connection.execute('CREATE SCHEMA IF NOT EXISTS library;')
         self.library.database.create()
         
+    def configure_default_users(self):
+        
+        e = self.database.connection.execute
+        
+        u='rouser'
+        
+        try:
+            e("DROP OWNED BY {}".format(u))
+            e("DROP ROLE {}".format(u))
+        except:
+            pass
+        
+        e("CREATE ROLE {0} LOGIN PASSWORD '{0}'".format(u))
+        
+        
+        # From http://stackoverflow.com/a/8247052
+        e("GRANT SELECT ON ALL TABLES IN SCHEMA public TO {}".format(u))
+        e("""ALTER DEFAULT PRIVILEGES IN SCHEMA public 
+        GRANT SELECT ON TABLES  TO {}; """.format(u))
+
+        e("GRANT SELECT, USAGE ON ALL SEQUENCES IN SCHEMA public TO {}".format(u))
+        e("""ALTER DEFAULT PRIVILEGES IN SCHEMA public 
+          GRANT SELECT, USAGE ON SEQUENCES  TO {}""".format(u))
+        
+        
     def _copy_command(self, table, url):
         
         template = """COPY "public"."{table}"  FROM  PROGRAM 'curl -s -L --compressed "{url}"'  WITH ( DELIMITER '|', NULL '' )"""

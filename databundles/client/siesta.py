@@ -34,7 +34,14 @@ import httplib
 import simplejson as json
 
 from urlparse import urlparse
+from databundles.util import get_logger
 
+
+import logging #@UnusedImport
+import logging.handlers #@UnusedImport
+logger = get_logger(__name__)
+logger.setLevel(logging.DEBUG) 
+        
 USER_AGENT = "Python-siesta/%s" % __version__
 
 class ServerError(Exception):
@@ -284,6 +291,7 @@ class Resource(object):
             
         meta = dict([(k, kwargs.pop(k)) for k in kwargs.keys() if k.startswith("__")])
           
+        logger.debug("Requesting {} {}".format(method, url))
         self._request(method, url, data, {}, meta)
           
         return self._getresponse()
