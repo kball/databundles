@@ -336,10 +336,9 @@ def get_dataset(did, library, pid=None):
         pid = pid.replace('|','/')
         partitions = [gr.partitions.partition(pid)]
     else:
-        partitions = gr.partitions
+        partitions = gr.partitions.all_nocsv
 
-    for partition in  partitions.all_nocsv:
-
+    for partition in  partitions:
 
         d['partitions'][partition.identity.id_] = partition.identity.to_dict()
  
