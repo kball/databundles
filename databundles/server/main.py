@@ -720,6 +720,10 @@ def get_partition_csv_parts(did, pid, library):
         
         TARGET_ROW_COUNT = 50000
      
+        # For large partitions, this could be really slow, and
+        # can cause the server to run out of disk space. 
+        p = library.get(pid).partition
+     
         table = p.table.name
         
         count = p.query("SELECT count(*) FROM {}".format(table)).fetchone()
