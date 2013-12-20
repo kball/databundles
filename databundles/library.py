@@ -539,7 +539,45 @@ class LibraryDb(object):
             bundle = DbBundle(bundle_file)
             self.install_bundle(bundle)
         
+    def install_dataset(self, bundle):
+        """Install only the most basic parts of the bundle, excluding the 
+        prtitions and tables.
         
+        This will delete all of the tables and partitions associated with the
+        bundle, if they already exist, so callers should check that the dataset does not
+        already exist if before installing again. 
+        """
+        
+        from databundles.orm import Dataset, Config, Column, Table, Partition
+        from databundles.bundle import Bundle
+
+        # There should be only one dataset record in the 
+        # bundle
+        bdbs = bundle.database._unmanaged_session
+    
+        s = self.session
+        dataset = bdbs.query(Dataset).one()
+        s.merge(dataset)
+
+        for config in bdbs.query(Config).all():
+            s.merge(config)
+            
+        s.query(Partition).filter(Partition.d_vid == dataset.vid).delete()
+            
+        for table in dataset.tables:
+            s.query(Column).filter(Column.t_vid == table.vid).delete()
+
+        s.query(Table).filter(Table.d_vid == dataset.vid).delete()
+       
+        try:
+            s.commit()
+        except IntegrityError as e:
+            self.logger.error("Failed to merge")
+            s.rollback()
+            raise e
+           
+        return dataset
+                
     def install_bundle(self, bundle):
         '''Copy the schema and partitions lists into the library database
         
@@ -552,37 +590,25 @@ class LibraryDb(object):
 
             # The Tables only get installed when the dataset is installed, 
             # not for the partition
-            
+
         self._mark_update()
                     
-        # There should be only one dataset record in the 
-        # bundle
-        bdbs = bundle.database._unmanaged_session
-    
-        s = self.session
-        dataset = bdbs.query(Dataset).one()
-        s.merge(dataset)
- 
-        for config in bdbs.query(Config).all():
-            s.merge(config)
-            
-        s.query(Partition).filter(Partition.d_vid == dataset.vid).delete()
-            
-        for table in dataset.tables:
-            s.query(Column).filter(Column.t_vid == table.vid).delete()
+        
+        dataset = self.install_dataset(bundle)
 
-        s.query(Table).filter(Table.d_vid == dataset.vid).delete()
-            
+        s = self.session
+ 
         for table in dataset.tables:
-            
+
             s.merge(table)
          
             for column in table.columns:
                 s.merge(column)
 
+
         for partition in dataset.partitions:
             s.merge(partition)
-            
+     
         try:
             s.commit()
         except IntegrityError as e:
@@ -590,10 +616,38 @@ class LibraryDb(object):
             s.rollback()
             raise e
 
-    def install_partition(self, partition):
-        """Mark a partition record as installed"""   
-        pass 
-    
+
+    def install_partition(self, bundle,  p_id):
+        """Install a single partition and its tables"""   
+        from databundles.orm import Table
+        from sqlalchemy.orm.exc import NoResultFound
+        print bundle, bundle.identity.name
+        
+        partition = bundle.partitions.find(p_id)
+
+        s = self.session
+        
+        for table_name in partition.tables:
+            table = bundle.schema.table(table_name)
+
+            try:
+                s.query(Table).filter(Table.vid == table.vid).one()
+                # the library already has the table
+            except NoResultFound as e:
+                s.merge(table)
+         
+                for column in table.columns:
+                    s.merge(column)
+            
+        s.merge(partition.record)
+
+        try:
+            s.commit()
+        except IntegrityError as e:
+            self.logger.error("Failed to merge")
+            s.rollback()
+            raise e
+
 
     def install_table(self, table_or_vid, name=None):
         """Mark a table record as installed"""   

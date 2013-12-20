@@ -21,10 +21,13 @@ def remote_command(args, rc, src):
 
 def remote_info(args, l, rc):
     from ..identity import new_identity
+    from databundles.client.exceptions import NotFound
     
     if args.term:
-
-        dsi = l.remote.get_ref(args.term)
+        try:
+            dsi = l.remote.get_ref(args.term)
+        except NotFound:
+            dsi = None
 
         if not dsi:
             err("Failed to find record for: {}", args.term)

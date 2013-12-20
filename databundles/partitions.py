@@ -37,7 +37,6 @@ class Partitions(object):
         
         session = self.bundle.database.session
 
-
         if isinstance(arg,OrmPartition):
             orm_partition = arg
             
@@ -306,8 +305,6 @@ class Partitions(object):
         q = q.filter(OrmPartition.d_vid == ds.vid)
 
         q = q.order_by(OrmPartition.vid.asc()).order_by(OrmPartition.segment.asc())
-
-        print __file__,q
 
         return q
 

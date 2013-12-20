@@ -54,7 +54,7 @@ class PostgresWarehouse(RelationalWarehouse):
 
         from databundles.client.exceptions import NotFound
         
-        self.logger.log('install_partition {}'.format(partition.identity.name))
+        self.logger.log('install_partition_csv {}'.format(partition.identity.name))
 
         pdb = partition.database
 
@@ -80,22 +80,13 @@ class PostgresWarehouse(RelationalWarehouse):
         self.logger.log('install_csv_url {}'.format(url))
 
         cmd =  self._copy_command(table.name, url)
-        self.logger.log('installing with command: {} '.format(cmd))
+        #self.logger.log('installing with command: {} '.format(cmd))
         r = self.database.connection.execute(cmd)
+                
+        #self.logger.log('installed_csv_url {}'.format(url)) 
+        
         r = self.database.connection.execute('commit')
-        
-        try: self.logger.log("Install result (a): {}".format(r))
-        except: pass
-        
-        try: self.logger.log("Install result (b): {}".format(r.fetchone()))
-        except: pass
 
-        try: self.logger.log("Install result (c): {}".format(r.fetchall()))
-        except: pass
-
-        self.logger.log('installed_csv_url {}'.format(url)) 
-        
-        
     def remove_by_name(self,name):
         '''Call the parent, then remove CSV partitions'''
         from ..bundle import LibraryDbBundle

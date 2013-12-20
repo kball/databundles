@@ -221,6 +221,9 @@ class Schema(object):
         '''Translate types for particular driver, and perform some validity checks'''
         # Creates a lot of unnecessary objects, but speed is not important here.  
         
+        if driver == 'postgis':
+            driver = 'postgres'
+
         if driver == 'mysql':
             
             if (column.datatype in (Column.DATATYPE_TEXT, column.datatype == Column.DATATYPE_VARCHAR) and
@@ -247,7 +250,7 @@ class Schema(object):
             if (column.datatype == Column.DATATYPE_TEXT  and bool(column.size)):
                 column.datatype = Column.DATATYPE_VARCHAR            
               
-        if driver == 'sqlite' or driver is None:
+        if driver == 'sqlite' or driver != 'postgres' :
             if column.is_primary_key and column.datatype == Column.DATATYPE_INTEGER64:
                 column.datatype = Column.DATATYPE_INTEGER # Required to trigger autoincrement
               
@@ -255,7 +258,6 @@ class Schema(object):
         #print driver, column.name, column.size, column.default
                 
         type_ =  Column.types[column.datatype][0]
-    
     
         if column.datatype == Column.DATATYPE_NUMERIC:
             return type_(column.precision, column._scale)
@@ -322,9 +324,10 @@ class Schema(object):
                     kwargs['server_default'] = column.default
           
           
-          
+            tt = self.translate_type(driver, table, column)
+
             ac = SAColumn(column.name, 
-                          self.translate_type(driver, table, column), 
+                          tt, 
                           primary_key = ( column.is_primary_key == 1),
                           **kwargs
                           )

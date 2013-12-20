@@ -232,14 +232,13 @@ def _print_info(l,d,p, list_partitions=False):
     from ..bundle import LibraryDbBundle # Get the bundle from the library
     from sqlalchemy.orm.exc import NoResultFound
     import time
-    
-    print(time.clock())
+   
     api = None
     try:
         api = l.remote.get_upstream(RemoteMarker)
     except AttributeError: # No api
         api = l.remote
-    print(time.clock())
+    
     remote_d = None
     remote_p = None
 
@@ -252,8 +251,7 @@ def _print_info(l,d,p, list_partitions=False):
                 remote_p = r['partitions'].items()[0][1] if p and 'partitions' in r and len(r['partitions']) != 0 else None
         except NotFound:
             pass 
-    
-    print(time.clock())
+
     prt("D --- Dataset ---")
     prt("D Dataset   : {}; {}",d.vid, d.vname)
     prt("D Is Local  : {}",l.cache.has(d.cache_key) is not False)

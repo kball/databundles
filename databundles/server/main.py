@@ -154,6 +154,10 @@ def error500(error):
 def close_library_db():
     pass
 
+@hook('after_request')
+def enable_cors():
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    
 def _host_port(library):
     return  'http://{}{}'.format(library.host, ':'+str(library.port) if library.port != 80 else '')
 

@@ -77,16 +77,18 @@ class RelationalWarehouse(WarehouseInterface):
             if not b:
                 raise DependencyError("Resolver failed to get dataset for {}".format(d.vname))
                   
-            self._install_bundle(b)
+            self.logger.log('install_bundle {}'.format(b.identity.vname))
+            self.library.database.install_dataset(b)
         else:
             self.logger.log('Dataset already installed {}'.format(d.vname))
             
        
         if p:
-            if False and self.has_partition(p.vid):
+            if self.has_partition(p.vid):
                 self.logger.log('Partition already installed {}'.format(d.vname))
             else:
                 b = self.resolver.get(d.vid)
+                self.library.database.install_partition(b,p)
                 self.install_partition_by_name(b, p)
             
     
@@ -106,11 +108,6 @@ class RelationalWarehouse(WarehouseInterface):
             self._install_partition(partition)
 
 
-    def _install_bundle(self, bundle):
-        
-        self.logger.log('install_bundle {}'.format(bundle.identity.vname))
-        self.library.database.install_bundle(bundle)
-    
     def has_table(self, table_name):
 
         return table_name in self.database.inspector.get_table_names()
@@ -131,6 +128,7 @@ class RelationalWarehouse(WarehouseInterface):
         meta, table = Schema.get_table_meta_from_db(self.library.database, 
                                                     table_name, 
                                                     d_vid = d_vid,  
+                                                    driver = self.database.driver,
                                                     alt_name = self.augmented_table_name(d_vid, table_name),
                                                     session=self.library.database.session)        
     
@@ -172,7 +170,7 @@ class RelationalWarehouse(WarehouseInterface):
     def _install_partition_insert(self, partition):
         from ..database.inserter import  ValueInserter
         
-        self.logger.log('install_partition {}'.format(partition.identity.name))
+        self.logger.log('install_partition_insert {}'.format(partition.identity.name))
 
         pdb = partition.database
      
