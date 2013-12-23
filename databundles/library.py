@@ -2103,7 +2103,9 @@ class Library(object):
   
         from databundles.bundle import DbBundle
    
+        self.logger.info("Drop database {}".format(self.database.dsn))
         self.database.drop()
+        self.logger.info("Create database {}".format(self.database.dsn))
         self.database.create()
    
         bundles = []
