@@ -184,6 +184,7 @@ class LibraryDb(object):
         self.dsn_template = self.DBCI[self.driver].dsn_template
         self.dsn = None
   
+        self.Session = None
         self._session = None
         self._engine = None
         self._connection  = None
@@ -239,6 +240,11 @@ class LibraryDb(object):
 
         return self._connection
 
+    def close_connection(self):
+        if self._connection:
+            self._connection.close()
+            self._connection = None
+
     @property
     def metadata(self):
         '''Return an SqlAlchemy MetaData object, bound to the engine'''
@@ -290,14 +296,15 @@ class LibraryDb(object):
         '''Return a SqlAlchemy session'''
         from sqlalchemy.orm import sessionmaker
         
-        if not self._session:  
+        if not self.Session:
             self.Session = sessionmaker(bind=self.engine)
+        
+        if not self._session:  
             self._session = self.Session()
             # set the search path
             if self.driver in ('postgres','postgis') and self._schema:
                 self._session.execute("SET search_path TO library")
          
-
         return self._session
    
     def set_config_value(self, group, key, value):
@@ -315,16 +322,16 @@ class LibraryDb(object):
         try:
             o = SAConfig(group=group,key=key,d_vid=ROOT_CONFIG_NAME_V,value = value)
             s.add(o)
-            s.commit()  
+            self.commit()  
         except IntegrityError:
-            s.rollback()
+            self.rollback()
             o = s.query(SAConfig).filter(SAConfig.group == group,
                                  SAConfig.key == key,
                                  SAConfig.d_vid == ROOT_CONFIG_NAME_V).one()
                       
             o.value = value           
             s.merge(o)
-            s.commit()  
+            self.commit()  
 
     def get_config_value(self, group, key):
         
@@ -353,6 +360,7 @@ class LibraryDb(object):
         for config in s.query(SAConfig).filter(SAConfig.d_vid == ROOT_CONFIG_NAME_V).all():
             d[(str(config.group),str(config.key))] = config.value
             
+        self.close_session()
         return d
         
    
@@ -366,17 +374,28 @@ class LibraryDb(object):
    
     def close(self):
 
-        if self._session:    
-            self._session.bind.dispose()
-            #self.Session.close_all() # Also tries to commit the unmanaged session
-            self.engine.dispose() 
-            self._session = None
-            self._engine = None
+        self.close_session()
+        self.close_connection()
             
-   
+        self.engine.dispose() 
+        self._engine = None
+            
+
     def commit(self):
-        self.session.commit()     
+        self.session.commit()  
+        self.close_session()
+           
+  
+    def rollback(self):
+        self.session.rollback()     
+        self.close_session()
         
+    def close_session(self):
+        if self._session:
+            self._session.close()
+            #self._session.bind.dispose()
+            self._session = None       
+                
     def exists(self):
         from databundles.orm import Dataset
         from sqlalchemy.exc import  ProgrammingError, OperationalError
@@ -387,7 +406,8 @@ class LibraryDb(object):
         self.engine
 
         try: 
-            try: rows = self.connection.execute("SELECT * FROM datasets WHERE d_vid = '{}' ".format(ROOT_CONFIG_NAME_V)).fetchone()
+            try: 
+                rows = self.connection.execute("SELECT * FROM datasets WHERE d_vid = '{}' ".format(ROOT_CONFIG_NAME_V)).fetchone()
             except Exception as e:
                 raise 
                 rows = False
@@ -398,6 +418,8 @@ class LibraryDb(object):
                 return True
         except Exception as e:
             return False
+        finally:
+            self.close_connection()
 
     
     def clean(self, add_config_root=True):
@@ -414,7 +436,7 @@ class LibraryDb(object):
         if add_config_root:
             self._add_config_root()
 
-        s.commit()
+        self.commit()
  
         
     def _creation_sql(self):
@@ -448,6 +470,7 @@ class LibraryDb(object):
         
         try: 
             self.session.query(Dataset).filter(Dataset.vid==ROOT_CONFIG_NAME).one()
+            self.close_session()
         except NoResultFound:
             o = Dataset(
                         id=ROOT_CONFIG_NAME,
@@ -459,7 +482,7 @@ class LibraryDb(object):
                         revision=1,
                         )
             self.session.add(o)
-            self.session.commit()  
+            self.commit()  
              
     def _clean_config_root(self):
         '''Hack need to clean up some installed databases'''
@@ -476,7 +499,7 @@ class LibraryDb(object):
         ds.revision=1
                    
         self.session.merge(ds)
-        self.session.commit()          
+        self.commit()          
              
     
     def _drop(self, s):
@@ -521,7 +544,7 @@ class LibraryDb(object):
                 
             it.create(bind=self.engine)
         
-        self.session.commit()
+        self.commit()
         
     def install_bundle_file(self, identity, bundle_file):
         """Install a bundle in the database, starting from a file that may
@@ -570,10 +593,10 @@ class LibraryDb(object):
         s.query(Table).filter(Table.d_vid == dataset.vid).delete()
        
         try:
-            s.commit()
+            self.commit()
         except IntegrityError as e:
             self.logger.error("Failed to merge")
-            s.rollback()
+            self.rollback()
             raise e
            
         return dataset
@@ -610,10 +633,10 @@ class LibraryDb(object):
             s.merge(partition)
      
         try:
-            s.commit()
+            self.commit()
         except IntegrityError as e:
             self.logger.error("Failed to merge")
-            s.rollback()
+            self.rollback()
             raise e
 
 
@@ -642,10 +665,10 @@ class LibraryDb(object):
         s.merge(partition.record)
 
         try:
-            s.commit()
+            self.commit()
         except IntegrityError as e:
             self.logger.error("Failed to merge")
-            s.rollback()
+            self.rollback()
             raise e
 
 
@@ -700,7 +723,7 @@ class LibraryDb(object):
         # trigger in-python cascades!
         s.delete(dataset)
   
-        s.commit()
+        self.commit()
         
       
     def remove_partition(self, partition):
@@ -717,7 +740,7 @@ class LibraryDb(object):
         for p in b.partitions:
             if p.identity.vid == partition.vid:
                 s.delete(p.record)
-        s.commit()
+        self.commit()
                 
       
     def get_id(self, id_):
@@ -737,6 +760,7 @@ class LibraryDb(object):
                        
             
 
+        self.close_session()
         return False, False
 
     def get_name(self, name):
@@ -754,6 +778,7 @@ class LibraryDb(object):
                 r  = r[0]
                 return new_identity(r['identity']),new_identity(r['partition']) if 'partition' in r else None
 
+        self.close_session()
         return False, False
 
 
@@ -889,6 +914,7 @@ class LibraryDb(object):
             self.logger.error("Exception while querrying in {}, schema {}".format(self.dsn, self._schema))
             raise
 
+        self.close_session()
         return out
         
     def queryByIdentity(self, identity):
@@ -980,9 +1006,9 @@ class LibraryDb(object):
         # can't re-try the commit until you roll back. 
         try:
             s.add(file_)
-            s.commit()
+            self.commit()
         except:
-            s.rollback()
+            self.rollback()
             raise
         
         self._mark_update()
@@ -1008,7 +1034,7 @@ class LibraryDb(object):
                      size=0)
     
         s.add(file_)
-        s.commit()       
+        self.commit()       
         
     def get_ticket(self, ticket):
         from databundles.orm import  File
