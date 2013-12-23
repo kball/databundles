@@ -217,7 +217,7 @@ class LibraryDb(object):
             self.dsn = self.dsn_template.format(user=self.username, password=self.password, 
                             server=self.server, name=self.dbname, colon_port=self.colon_port)
 
-            self._engine = create_engine(self.dsn,echo=False) 
+            self._engine = create_engine(self.dsn,echo=True) 
             
             from sqlalchemy import event
             
@@ -485,7 +485,7 @@ class LibraryDb(object):
             raise Exception("Deleting not enabled")
         
         for table in reversed(self.metadata.sorted_tables): # sorted by foreign key dependency
-            print "Drop", table.name
+            print __file__,"Drop", table.name
             table.drop(self.engine, checkfirst=True)
 
     def drop(self):
