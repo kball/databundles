@@ -2108,6 +2108,8 @@ class Library(object):
    
         bundles = []
         
+        self.logger.info("Rebuilding from dir {}".format(self.cache.cache_dir))
+        
         for r,d,f in os.walk(self.cache.cache_dir): #@UnusedVariable
             
             if '/meta/' in r:
@@ -2115,7 +2117,6 @@ class Library(object):
 
             for file_ in f:
             
-                
                 if file_.endswith(".db"):
                     path_ = os.path.join(r,file_)
                     try:
