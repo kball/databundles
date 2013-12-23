@@ -22,7 +22,7 @@ class PartitionDb(SqliteDatabase, RelationalPartitionDatabaseMixin, SqliteAttach
         self._session = None
 
     def query(self,*args, **kwargs):
-        """Convience function for self.connection.execute()"""
+        """Convenience function for self.connection.execute()"""
         from sqlalchemy.exc import OperationalError
         from ..dbexceptions import QueryError
         

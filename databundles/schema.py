@@ -140,7 +140,8 @@ class Schema(object):
                     sequence_id=self.table_sequence,
                     data=data)
         
-        self.bundle.database.session.add(row)
+        self.bundle.session.add(row)
+
 
         for key, value in kwargs.items():
             if not key:
@@ -361,20 +362,23 @@ class Schema(object):
                     if cons.strip() not in constraints:
                         constraints[cons.strip()] = []
                     
-                    constraints[cons.strip()].append(column.name)
+                    constraints[cons.strip()].append(ac)
             
+
+        def munge_name(n):
+            return table.vid_enc+'_'+n
 
         # Append constraints. 
         for constraint, columns in constraints.items():
-            at.append_constraint(UniqueConstraint(name=constraint,*columns))
+            at.append_constraint(UniqueConstraint(name=munge_name(constraint),*columns))
              
         # Add indexes   
         for index, columns in indexes.items():
-            Index(table.name+'_'+index, unique = False ,*columns)
+            Index(munge_name(index), unique = False ,*columns)
     
         # Add unique indexes   
         for index, columns in uindexes.items():
-            Index(table.name+'_'+index, unique = True ,*columns)
+            Index(munge_name(index), unique = True ,*columns)
         
         #for from_col, to_col in foreign_keys.items():
         #    at.append_constraint(ForeignKeyConstraint(from_col, to_col))
@@ -404,11 +408,14 @@ class Schema(object):
                     uindexes[cons.strip()].add(column)
 
         for index_name, cols in indexes.items():
-            yield "CREATE INDEX IF NOT EXISTS {} ON parcels ({});".format(index_name, ','.join([c.name for c in cols]) )
+            yield "CREATE INDEX IF NOT EXISTS {} ON {} ({});".format(index_name, table.name,  
+                                                                     ','.join([c.name for c in cols]) )
             
         for index_name, cols in uindexes.items():
-            yield "CREATE UNIQUE INDEX IF NOT EXISTS {} ON parcels ({});".format(index_name, ','.join([c.name for c in cols]) )
+            yield "CREATE UNIQUE INDEX IF NOT EXISTS {} ON {} ({});".format(index_name, table.name, 
+                                                                             ','.join([c.name for c in cols]) )
              
+    
                     
     def create_tables(self):
         '''Create the defined tables as database tables.'''
@@ -447,8 +454,7 @@ class Schema(object):
         new_table = True
         last_table = None
         line_no = 1; # Accounts for file header. Data starts on line 2
-        s = self.bundle.database.session
-    
+
         errors = []
         warnings = []
     
@@ -553,8 +559,8 @@ class Schema(object):
            
     def write_schema(self):
         '''Write the schema back to the schema file'''
-        with open(self.filesystem.path('meta',self.bundle.SCHEMA_FILE), 'w') as f:
-            self.schema.as_csv(f)
+        with open(self.bundle.filesystem.path('meta',self.bundle.SCHEMA_FILE), 'w') as f:
+            self.as_csv(f)
         
            
     def copy_table(self, in_table):
@@ -628,7 +634,7 @@ class Schema(object):
                 row['column'] = col.name
                 row['is_pk'] = 1 if col.is_primary_key else ''
                 row['is_fk'] = col.foreign_key if col.foreign_key else None
-                row['type'] = col.datatype.upper()   
+                row['type'] = col.datatype.upper()   if col.datatype else None
 
                 for idx,s in indexes.items():
                     if idx:

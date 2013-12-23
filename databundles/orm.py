@@ -627,8 +627,12 @@ Columns:
         
         for key, value in kwargs.items():
             
-            if key[0] != '_' and key not in ['d_id','t_id','name']:
-                setattr(row, key, value)
+            if key[0] != '_' and key not in ['d_id','t_id','name', 'schema_type']:
+                try:
+                    setattr(row, key, value)
+                except:
+                    print row, key, value
+                    raise
             
             if isinstance(value, basestring) and len(value) == 0:
                 if key == 'is_primary_key':
@@ -838,6 +842,11 @@ Columns:
             bdr.append(c.name, c.python_type)
         
         return bdr
+
+    @property
+    def vid_enc(self):
+        '''vid, urlencoded'''
+        return self.vid.replace('/','|')
 
 event.listen(Table, 'before_insert', Table.before_insert)
 event.listen(Table, 'before_update', Table.before_update)

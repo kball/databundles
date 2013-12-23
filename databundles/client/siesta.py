@@ -40,7 +40,7 @@ from databundles.util import get_logger
 import logging #@UnusedImport
 import logging.handlers #@UnusedImport
 logger = get_logger(__name__)
-logger.setLevel(logging.DEBUG) 
+#logger.setLevel(logging.DEBUG) 
         
 USER_AGENT = "Python-siesta/%s" % __version__
 

@@ -195,8 +195,10 @@ def warehouse_list(args, w, config):
 
     if not args.term:
 
-        for ident in sorted(l.list(), key=lambda x: x['vname']):
-            prt("{:2s} {:10s} {}", ''.join(ident['location']), ident['vid'], ident['vname'])
+        last_d = None
+        for d,p in l.partitions:
+            prt("{:2s} {:10s} {}", '   W', p.vid, p.vname)
+            
     else:
         d, p = l.get_ref(args.term)
                 

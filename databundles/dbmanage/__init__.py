@@ -261,7 +261,6 @@ def _print_info(l,d,p, list_partitions=False):
     if remote_d:
         prt("D Web Path  : {}",remote_d['url'])
 
-    
     if l.cache.has(d.cache_key):
         b = LibraryDbBundle(l.database, d.vid)
         

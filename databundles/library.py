@@ -824,7 +824,7 @@ class LibraryDb(object):
 
         if len(query_command.partition) > 0:     
             query = query.join(Partition)
-            has_partition = True
+            
             for k,v in query_command.partition.items():
                 if k == 'id':
                     k = 'id_'
@@ -1444,6 +1444,9 @@ class Library(object):
     
     
     def list(self, with_meta = True, add_remote=True):
+        '''Lists all of the datasets in the partition, optionally with
+        metadata. Does not include partitions. This returns a dictionary
+        in  a form that is similar to the remote and source lists. '''
         import socket
         
         datasets = {}
@@ -1741,9 +1744,10 @@ class Library(object):
             # Ensure the file is in the local library. 
 
         ds, pt= self.database.get_id(p.identity.vid)
+        
         if not pt:
             self.database.add_file(p.database.path, self.cache.repo_id, p.identity.vid, 'pulled')   
-            self.database.install_partition(p)
+            self.database.install_partition(p.bundle, p.identity)
         
         p.library = self  
         
@@ -1752,7 +1756,7 @@ class Library(object):
         # disk is changed.  
         p.unset_database()
         r.partition = p
-
+        
         return r
 
         
@@ -1853,7 +1857,7 @@ class Library(object):
             raise ConfigurationError("No dependency named '{}'".format(name))
         
         b = self.get(bundle_name)
-        
+
         if not b:
             raise NotFoundError("Failed to get dependency, key={}, id={}".format(name, bundle_name))
         
@@ -1941,9 +1945,14 @@ class Library(object):
        
         return [d for d in self.database.session.query(Dataset).all() if d.vid != ROOT_CONFIG_NAME_V]
 
-  
+    @property
+    def partitions(self):
+        '''Return an array of all of the dataset records in the library database'''
+        from databundles.orm import Partition, Dataset
+       
+        return [r for r in self.database.session.query(Dataset, Partition).join(Partition).all() 
+               if r.Dataset.vid != ROOT_CONFIG_NAME_V]
 
-  
     @property
     def new_files(self):
         '''Generator that returns files that should be pushed to the remote

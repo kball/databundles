@@ -90,12 +90,14 @@ class GitHubService(ServiceInterface,GitServiceMarker):
             r.raise_for_status()
 
             for i,e in enumerate(r.json()): 
-               
-                r = requests.get(e['url'].replace('api.github.com/repos', 'raw.github.com')+'/master/bundle.yaml')
+                url = e['url'].replace('api.github.com/repos', 'raw.github.com')+'/master/bundle.yaml'
+                r = requests.get(url)
+                r.raise_for_status()
                 try:
                     config = yaml.load(r.content, OrderedDictYAMLLoader)
                 except ScannerError:
                     print r.content
+                    print '!!!',url
                     raise 
                 ident = dict(config['identity'])
                 ident['clone_url'] = e['clone_url']

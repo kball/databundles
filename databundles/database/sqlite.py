@@ -416,9 +416,13 @@ class BundleLockContext(object):
         from lockfile import FileLock
 
         self._bundle = bundle
+        
         self._lock_path = self._bundle.path
 
         self._lock = FileLock(self._lock_path)
+
+        if not hasattr(self._bundle,'_lock_depth' ):
+            self._bundle._lock_depth  = 0
 
         tb = traceback.extract_stack()[-4:-3][0]
 
@@ -431,48 +435,58 @@ class BundleLockContext(object):
         import lockfile
         
         if self._bundle._session:
-            logger.debug("Failing to acquire lock on {}, bundle already has session".format(self._bundle.dsn))
-            raise Locked("Bundle already has a session, {}".format(repr(self._bundle._session)))
-        
-        Session = sessionmaker(bind=self._bundle.engine,autocommit=False)
-        self._session =  Session()
+            self._session = self._bundle._session
+            #logger.debug("Failing to acquire lock on {}, bundle already has session".format(self._bundle.dsn))
+            #raise Locked("Bundle already has a session, {}".format(repr(self._bundle._session)))
+        else:
+            Session = sessionmaker(bind=self._bundle.engine,autocommit=False)
+            self._session =  Session()
 
         logger.debug("Acquiring lock on {}".format(self._bundle.dsn))
         
         while True:
             try:
                 self._lock.acquire(5)
+                    
+                self._bundle._lock_depth += 1
+                logger.debug("Acquired lock on {}. Depth = {}".format(self._bundle.dsn, self._bundle._lock_depth))
                 break
             except lockfile.LockTimeout as e:
                 logger.warn(e.message)
 
         self._bundle._session = self._session
         return self._session
-
     
     def __exit__( self, exc_type, exc_val, exc_tb ):
 
         if  exc_type is not None:
             logger.debug("Release lock and rollback on exception: {}".format(exc_val))
             self._session.rollback()
+            self._bundle._lock_depth -= 1
             self._lock.release()
             self._bundle._session.close()
             self._bundle._session = None
             raise
             return False
         else:
-            logger.debug("Release lock and commit session {}".format(repr(self._session)))
+            logger.debug("Release lock and commit session {}. Depth = {}".format(repr(self._session), self._bundle._lock_depth))
             try:
                 self._session.commit()
             except:
                 self._session.rollback()
                 raise
             finally:
-                self._lock.release()
-                self._bundle._session.close()
-                self._bundle._session = None
+                self._bundle._lock_depth -= 1
+                if self._bundle._lock_depth == 0:
+                    logger.debug("Released lock and commit session {}".format(repr(self._session)))
+                    self._lock.release()
+                    self._bundle._session.close()
+                    self._bundle._session = None
             
             return True
+            
+    def add(self,o):
+        self._bundle._session.add(o) 
             
 class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
 
@@ -520,6 +534,16 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
     @property
     def has_session(self):
         return self._session is not None
+
+    def query(self,*args, **kwargs):
+        """Convenience function for self.connection.execute()"""
+        from sqlalchemy.exc import OperationalError
+        from ..dbexceptions import QueryError
+        
+        try:
+            return self.connection.execute(*args, **kwargs)
+        except OperationalError as e:
+            raise QueryError("Error while executing {} in database {} ({}): {}".format(args, self.dsn, type(self), e.message))
 
                 
     @property

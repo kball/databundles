@@ -65,7 +65,6 @@ class LibraryPlugin(object):
         # Replace the route callback with the wrapped one.
         return wrapper
  
-
 def capture_return_exception(e):
     
     import sys

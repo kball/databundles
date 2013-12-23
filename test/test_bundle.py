@@ -169,6 +169,8 @@ class Test(TestBase):
         # If we don't explicitly set the id_, it will change for every run. 
         self.bundle.config.identity.id_ = 'aTest'
 
+        self.bundle.schema.clean()
+
         with self.bundle.session:
             s = self.bundle.schema
             s.add_table('table 1', altname='alt name a')
@@ -176,9 +178,6 @@ class Test(TestBase):
             
             self.assertRaises(Exception,  s.add_table, ('table 1', ))
           
-            self.assertIn('c1DxuZ01', [t.id_ for t in self.bundle.schema.tables])
-            self.assertIn('c1DxuZ02', [t.id_ for t in self.bundle.schema.tables])
-            self.assertNotIn('cTest03', [t.id_ for t in self.bundle.schema.tables])
             
             t = s.add_table('table 3', altname='alt name')
         
@@ -187,9 +186,29 @@ class Test(TestBase):
             s.add_column(t,'col 3',altname='altname3')
 
         
-            self.assertIn('d1DxuZ0b001', [c.id_ for c in t.columns])
-            self.assertIn('d1DxuZ0b002', [c.id_ for c in t.columns])
-            self.assertIn('d1DxuZ0b003', [c.id_ for c in t.columns])
+        #print self.bundle.schema.as_csv()
+        
+        self.assertIn('c1DxuZ01', [t.id_ for t in self.bundle.schema.tables])
+        self.assertIn('c1DxuZ02', [t.id_ for t in self.bundle.schema.tables])
+        self.assertNotIn('cTest03', [t.id_ for t in self.bundle.schema.tables])
+    
+        t = self.bundle.schema.table('table_3')
+    
+        self.assertIn('d1DxuZ03001', [c.id_ for c in t.columns])
+        self.assertIn('d1DxuZ03002', [c.id_ for c in t.columns])
+        self.assertIn('d1DxuZ03003', [c.id_ for c in t.columns])
+        
+        # Try with a nested session, b/c we need to test it somewhere ... 
+        with self.bundle.session:
+            
+            with self.bundle.session:
+                
+                t = s.add_table('table 4', altname='alt name')
+            
+                s.add_column(t,'col 1',altname='altname1')
+                s.add_column(t,'col 2',altname='altname2')
+                s.add_column(t,'col 3',altname='altname3')
+
         
     def x_test_generate_schema(self):
         '''Uses the generateSchema method in the bundle'''
@@ -474,6 +493,7 @@ class Test(TestBase):
         bundle.exit_on_fatal = False
         bundle.prepare()
         bundle.build()
+
 
 
 def suite():

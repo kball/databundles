@@ -418,7 +418,7 @@ class GitRepository(RepositoryInterface):
 
         d = os.path.join(self.dir, path)
        
-        impl = GitShellService(self,None)
+        impl = GitShellService(None)
 
         impl.clone(url,d)
         

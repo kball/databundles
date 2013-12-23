@@ -186,6 +186,7 @@ def source_new(args,rc, src):
     from ..source.repository import new_repository
     from ..identity import new_identity, DatasetNumber
     
+    
     repo = new_repository(rc.sourcerepo(args.name))  
 
     ident = new_identity(vars(args))
@@ -197,28 +198,50 @@ def source_new(args,rc, src):
     elif not os.path.isdir(bundle_dir):
         raise IOError("Directory already exists: "+bundle_dir)
 
-    config ={'identity':{
-         'id': str(DatasetNumber()),
-         'source': args.source,
-         'creator': args.creator,
-         'dataset':args.dataset,
-         'subset': args.subset,
-         'variation': args.variation,
-         'revision': args.revision
-         }}
+    config ={
+        'identity':{
+             'id': str(DatasetNumber()),
+             'source': args.source,
+             'creator': args.creator,
+             'dataset':args.dataset,
+             'subset': args.subset,
+             'variation': args.variation,
+             'revision': args.revision
+         },
+        'about': {
+            'author': "Author's email address",
+            'description': "**include**", # Can't get YAML to write this properly
+            'groups': ['group1','group2'],
+            'homepage': "https://civicknowledge.org",
+            'license': "other-open",
+            'maintainer': "Maintainers email address",
+            'tags': ['tag1','tag2'],
+            'title': "Bundle title"
+        }
+    }
     
-    file_ = os.path.join(bundle_dir, 'bundle.yaml')
+    os.makedirs(os.path.join(bundle_dir, 'meta'))
+    
+    file_ = os.path.join(bundle_dir, 'bundle.yaml-in')
+    
     yaml.dump(config, file(file_, 'w'), indent=4, default_flow_style=False)
 
-    bundle_file =  os.path.join(os.path.dirname(__file__),'..','support','bundle.py')
-
-    shutil.copy(bundle_file, bundle_dir  )
-
-    os.makedirs(os.path.join(bundle_dir, 'meta'))
-
-    schema_file =  os.path.join(os.path.dirname(__file__),'..','support','schema.csv')
+    # Need to edit the YAML file because the !include line is special metadata
+    # that is hard ( or impossible ) to write through serialization
     
-    shutil.copy(schema_file, os.path.join(bundle_dir, 'meta')  )
+    with file(file_, 'r') as f_in:
+        with file(os.path.join(bundle_dir, 'bundle.yaml'), 'w') as f_out:
+            f_out.write(f_in.read().replace("'**include**'", "!include 'meta/about.description.md'"))
+        
+    os.remove(file_)
+        
+    p = lambda x : os.path.join(os.path.dirname(__file__),'..','support',x)
+
+    shutil.copy(p('bundle.py'),bundle_dir)
+    shutil.copy(p('README.md'),bundle_dir)
+    shutil.copy(p('schema.csv'), os.path.join(bundle_dir, 'meta')  )
+    shutil.copy(p('about.description.md'), os.path.join(bundle_dir, 'meta')  )
+    
 
     prt("CREATED: {}",bundle_dir)
 

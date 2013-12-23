@@ -36,6 +36,32 @@ class SqlitePartition(PartitionBase):
     def attach(self,id_, name=None):
         return self.database.attach(id_,name)
     
+    def create_indexes(self, table=None):
+    
+        if table is None:
+            table = self.get_table()
+    
+        if isinstance(table,basestring):
+            table = self.bundle.schema.table(table)
+        
+    
+        for sql in self.bundle.schema.generate_indexes(table):
+            self.database.connection.execute(sql)
+              
+              
+    def drop_indexes(self, table=None):
+        
+        if table is None:
+            table = self.get_table()
+        
+        if not isinstance(table,basestring):
+            table = table.name
+        
+        for index_name in self.database.query("""SELECT name 
+            FROM sqlite_master WHERE type='index' AND tbl_name = 'geofile';"""):
+                self.database.connection.execute("DROP INDEX {}".format(index_name))
+    
+    
     def query(self,*args, **kwargs):
         """Convience function for self.database.query()"""
      

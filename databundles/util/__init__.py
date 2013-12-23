@@ -771,6 +771,7 @@ def init_log_rate(output_f, N=None, message='', print_rate=None):
 
     f = partial(_log_rate, output_f, d)
     f.always = output_f
+    f.count = lambda: d[0]
    
     return f
 
