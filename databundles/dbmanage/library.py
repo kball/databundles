@@ -249,11 +249,13 @@ def library_purge(args, l, config):
       
 def library_rebuild(args, l, config):  
 
-    prt("Rebuild library")
+    
     l.database.enable_delete = True
     if args.remote:
+        prt("Rebuild library from remote")
         l.remote_rebuild()
     else:
+        prt("Rebuild library from local storage")
         l.rebuild()
         
 def library_list(args, l, config):    
