@@ -222,7 +222,7 @@ class LibraryDb(object):
 
             #print "Create Engine",os.getpid(), self.dsn
 
-            self._engine = create_engine(self.dsn,echo=False, poolclass=AssertionPool) 
+            self._engine = create_engine(self.dsn,echo=False, poolclass=NullPool) 
             
             from sqlalchemy import event
             
