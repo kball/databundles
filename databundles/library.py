@@ -213,12 +213,16 @@ class LibraryDb(object):
         from sqlalchemy import create_engine  
         from database.sqlite import _on_connect_update_sqlite_schema
         from sqlalchemy.pool import AssertionPool
+        from sqlalchemy.pool import NullPool
         
         if not self._engine:
+        
             self.dsn = self.dsn_template.format(user=self.username, password=self.password, 
                             server=self.server, name=self.dbname, colon_port=self.colon_port)
 
-            self._engine = create_engine(self.dsn,echo=False) 
+            #print "Create Engine",os.getpid(), self.dsn
+
+            self._engine = create_engine(self.dsn,echo=False, poolclass=AssertionPool) 
             
             from sqlalchemy import event
             
@@ -370,7 +374,7 @@ class LibraryDb(object):
         
    
     def close(self):
-
+        #print "Close Engine",os.getpid(), self.dsn
         self.close_session()
         self.close_connection()
             
