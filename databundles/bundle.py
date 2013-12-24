@@ -130,11 +130,8 @@ class Bundle(object):
     @property
     def dataset(self):
         '''Return the dataset'''
-        try:
-            return self.get_dataset(self.database.session)
-        except:
-            self.error("Failed to get dataset record from {}".format(self.database.dsn))
-            raise
+        return self.get_dataset(self.database.session)
+
        
     def _dep_cb(self, library, key, name, resolved_bundle):
         '''A callback that is called when the library resolves a dependency.
@@ -265,7 +262,7 @@ class LibraryDbBundle(Bundle):
         '''Initialize a db and all of its sub-components. 
 
         '''
-        raise NotImplemented()
+
         super(LibraryDbBundle, self).__init__(logger=logger)
    
         self._dataset_id = dataset_id

@@ -222,6 +222,11 @@ class LibraryDb(object):
 
             #print "Create Engine",os.getpid(), self.dsn
 
+            # There appears to be a problem related to connection pooling on Linux + Postgres, where
+            # multiprocess runs will throw exceptions when the Datasets table record can't be
+            # found. It looks like connections are losing the setting for the search path to the
+            # library schema. 
+            # Disabling connection pooling solves the problem. 
             self._engine = create_engine(self.dsn,echo=False, poolclass=NullPool) 
             
             from sqlalchemy import event
@@ -716,8 +721,6 @@ class LibraryDb(object):
         from identity import Identity
         from databundles.orm import Dataset
         from bundle import LibraryDbBundle
-        
-        s = self.session
 
         try:
             dataset, partition = self.get_id(bundle.identity.vid) #@UnusedVariable
@@ -734,17 +737,19 @@ class LibraryDb(object):
             for p in b.partitions:
                 self.remove_partition(p)
 
-        dataset = s.query(Dataset).filter(Dataset.vid==dataset.vid).one()
+        dataset = self.session.query(Dataset).filter(Dataset.vid==dataset.vid).one()
 
         # Can't use delete() on the query -- bulk delete queries do not 
         # trigger in-python cascades!
-        s.delete(dataset)
+        self.session.delete(dataset)
   
         self.commit()
         
       
     def remove_partition(self, partition):
         from bundle import LibraryDbBundle
+        from databundles.orm import Partition
+         
         try:
             dataset, partition = self.get_id(partition.identity.vid) #@UnusedVariable
         except AttributeError:
@@ -754,9 +759,9 @@ class LibraryDb(object):
         b = LibraryDbBundle(self, dataset.vid)
       
         s = self.session
-        for p in b.partitions:
-            if p.identity.vid == partition.vid:
-                s.delete(p.record)
+        
+        s.query(Partition).filter(Partition.t_vid  == partition.vid).delete()
+       
         self.commit()
                 
       

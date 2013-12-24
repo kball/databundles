@@ -137,6 +137,7 @@ class Resolver(ResolverInterface):
             parts_url =  dsi['partitions'].values()[0]['urls']['csv']['parts']
 
             r = requests.get(parts_url)
+            r.raise_for_status()
 
             return r.json()
             
