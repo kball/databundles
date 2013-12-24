@@ -232,11 +232,8 @@ class LibraryDb(object):
     @property
     def connection(self):
         '''Return an SqlAlchemy connection'''
-        if not self._connection:
+        if not self._connection:  
             self._connection = self.engine.connect()
-
-            if self.driver in ('postgres','postgis') and self._schema:
-                self._connection.execute("SET search_path TO library")
 
         return self._connection
 
@@ -303,7 +300,7 @@ class LibraryDb(object):
             self._session = self.Session()
             # set the search path
             if self.driver in ('postgres','postgis') and self._schema:
-                self._session.execute("SET search_path TO library")
+                self._session.execute("SET search_path TO {}".format(self._schema))
          
         return self._session
    
@@ -407,7 +404,14 @@ class LibraryDb(object):
 
         try: 
             try: 
-                rows = self.connection.execute("SELECT * FROM datasets WHERE d_vid = '{}' ".format(ROOT_CONFIG_NAME_V)).fetchone()
+                # Since we are using the connection, rather than the session, need to 
+                # explicitly set the search path. 
+                if self.driver in ('postgres','postgis') and self._schema:
+                    self.connection.execute("SET search_path TO {}".format(self._schema))
+                    
+                rows = self.connection.execute(
+                            "SELECT * FROM datasets WHERE d_vid = '{}' "
+                            .format(ROOT_CONFIG_NAME_V)).fetchone()
             except Exception as e:
                 raise 
                 rows = False
@@ -417,6 +421,8 @@ class LibraryDb(object):
             else:
                 return True
         except Exception as e:
+            # Hey! Set the right exception type here!
+            raise
             return False
         finally:
             self.close_connection()
@@ -538,13 +544,21 @@ class LibraryDb(object):
 
         for table in tables:
             it = table.__table__
+            
+            # These schema shenanigans are almost certainly wrong.
             if self._schema:
-                #raise Exception()
+                orig_schema = it.schema
                 it.schema = self._schema
                 
             it.create(bind=self.engine)
+            self.commit()
+            
+            if self._schema:
+                it.schema = orig_schema      
+                     
+            
         
-        self.commit()
+        
         
     def install_bundle_file(self, identity, bundle_file):
         """Install a bundle in the database, starting from a file that may
@@ -644,8 +658,7 @@ class LibraryDb(object):
         """Install a single partition and its tables"""   
         from databundles.orm import Table
         from sqlalchemy.orm.exc import NoResultFound
-        print bundle, bundle.identity.name
-        
+
         partition = bundle.partitions.find(p_id)
 
         s = self.session

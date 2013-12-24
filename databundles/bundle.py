@@ -106,28 +106,35 @@ class Bundle(object):
         return self._identity            
 
     def get_dataset(self, session):
-        '''Return the dataset'''
+        '''Return the dataset
+        '''
         from sqlalchemy.orm.exc import NoResultFound
         
         from databundles.orm import Dataset
 
-       
-        if self._dataset_id:
-            try:
-                return (session.query(Dataset).filter(Dataset.vid == self._dataset_id).one())
-            except NoResultFound:
-                from dbexceptions import NotFoundError
-                raise NotFoundError("Failed to find dataset for id {} in {} "
-                                    .format(self._dataset_id, self.database.dsn))
-    
-        else:
-            return (session.query(Dataset).one())
+        try:
+            if self._dataset_id:
+                try:
+                    return (session.query(Dataset).filter(Dataset.vid == self._dataset_id).one())
+                except NoResultFound:
+                    from dbexceptions import NotFoundError
+                    raise NotFoundError("Failed to find dataset for id {} in {} "
+                                        .format(self._dataset_id, self.database.dsn))
+        
+            else:
+                
+                return (session.query(Dataset).one())
+        except:
+            raise
 
     @property
     def dataset(self):
         '''Return the dataset'''
-        return self.get_dataset(self.database.session)
-        
+        try:
+            return self.get_dataset(self.database.session)
+        except:
+            self.error("Failed to get dataset record from {}".format(self.database.dsn))
+            raise
        
     def _dep_cb(self, library, key, name, resolved_bundle):
         '''A callback that is called when the library resolves a dependency.
@@ -142,7 +149,6 @@ class Bundle(object):
             with self.session:
                 self.db_config.set_value('rdep', key, ident.to_dict())
 
-        
     @property
     def library(self):
         '''Return the library set for the bundle, or 
@@ -259,7 +265,7 @@ class LibraryDbBundle(Bundle):
         '''Initialize a db and all of its sub-components. 
 
         '''
-
+        raise NotImplemented()
         super(LibraryDbBundle, self).__init__(logger=logger)
    
         self._dataset_id = dataset_id
