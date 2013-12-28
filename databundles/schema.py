@@ -1028,16 +1028,14 @@ class {name}(Base):
         if not isinstance(v, basestring):
             return False
         
-        if len(v) > 8:
-            # Not exactly correct; ISO8601 allows fractional sections
-            # which could result in a longer string. 
+        if len(v) > 15:
             return False
         
         if ':' not in v:
             return False
         
         for c in set(v): # Set of Unique characters
-            if not c.isdigit() and c not in 'T:Z':
+            if not c.isdigit() and c not in 'T:Z.':
                 return False
             
         return True

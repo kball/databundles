@@ -485,40 +485,60 @@ class Test(TestBase):
         for i in range(10):
             w.writerow([i,i,i])
 
-      
-    def test_make_bundles(self):  
+  
+    def test_bundle_insert_codes(self):  
         import shutil
               
         bundle = Bundle()
         
         shutil.copyfile(
-                bundle.filesystem.path('meta','schema-orig.csv'),
+                bundle.filesystem.path('meta','schema-edit-me.csv'),
                 bundle.filesystem.path('meta','schema.csv'))
         
-        bundle.clean()
-        bundle = Bundle()   
-        bundle.exit_on_fatal = False
-        bundle.pre_prepare()
-        bundle.prepare()
-        bundle.post_prepare()
-        bundle.pre_build()
-        bundle.build()
-        bundle.post_build()
+        try:
+            bundle.clean()
+            bundle = Bundle()   
+            bundle.exit_on_fatal = False
+            bundle.pre_prepare()
+            bundle.prepare()
+            bundle.post_prepare()
+            bundle.pre_build()
+            bundle.build_db_inserter_codes()
+            bundle.post_build()
+    
+            # The second run will use the changes to the schem made in the
+            # first run, due to the types errors in the  'coding' table. 
+    
+            bundle.clean()
+            bundle = Bundle()   
+            bundle.exit_on_fatal = False
+            bundle.pre_prepare()
+            bundle.prepare()
+            bundle.post_prepare()
+            bundle.pre_build()
+            bundle.build_db_inserter_codes()
+            bundle.post_build()
+        finally:
+            
+            # Need to clean up to ensure that we're back to a good state.
+            # This runs the normal build, which will be used by the other
+            # tests. 
 
-        # The second run will use the changes to the schem made in the
-        # first run, due to the types errors in the  'coding' table. 
-
-        bundle.clean()
-        bundle = Bundle()   
-        bundle.exit_on_fatal = False
-        bundle.pre_prepare()
-        bundle.prepare()
-        bundle.post_prepare()
-        bundle.pre_build()
-        bundle.build()
-        bundle.post_build()
-        
-        
+            shutil.copyfile(
+                    bundle.filesystem.path('meta','schema-edit-me.csv'),
+                    bundle.filesystem.path('meta','schema.csv'))      
+            
+            bundle.clean()
+            bundle = Bundle()   
+            bundle.exit_on_fatal = False
+            bundle.pre_prepare()
+            bundle.prepare()
+            bundle.post_prepare()
+            bundle.pre_build()
+            bundle.build()
+            bundle.post_build()
+                  
+    
 def suite():
     suite = unittest.TestSuite()
     suite.addTest(unittest.makeSuite(Test))

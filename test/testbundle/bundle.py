@@ -61,15 +61,8 @@ class Bundle(BuildBundle):
   
     def build(self):
 
-        self.log("=== Build db, using an inserter, with code errors")
-        self.build_db_inserter_codes()
-
-        return True
-
         self.log("=== Build db, using an inserter")
         self.build_db_inserter()
-
-        return True
 
         self.log("=== Build geo")
         self.build_geo()
@@ -139,11 +132,17 @@ class Bundle(BuildBundle):
                 yield row
 
 
-        memo = self.schema.update('coding', yield_rows(),
-                logger=self.init_log_rate(10000,'Update table schema'))
+        # Reset all of the columns to float data type so the intuition process can
+        # run completely 
+        self.schema.reset_to_float('coding')
 
-        lr = self.init_log_rate(5000)
-        lr_ce = self.init_log_rate(200, message="cast errors")
+        # Iterate through the records and intuit the types of the columns, 
+        # then update the schema. 
+        memo = self.schema.update('coding', yield_rows(),
+                logger=self.init_log_rate(3000,'Update table schema'))
+
+        lr = self.init_log_rate(3000)
+
         with p.inserter(cast_error_handler=CodeCastErrorHandler) as ins:
             
             for row in yield_rows():
@@ -176,7 +175,8 @@ class Bundle(BuildBundle):
             caster = table.caster
             for i in range(10000):
                 row = { f[0]:f[1]() for f in field_gen }
-                ins.insert(caster(row))
+                cast_row, cast_errors = caster(row)
+                ins.insert(cast_row)
                 lr()
         
         
