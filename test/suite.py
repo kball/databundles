@@ -8,6 +8,8 @@ import unittest
 import test_bundle
 import test_library
 import test_server
+import test_filesystem
+import test_partition
 
 if __name__ == '__main__':
     suite = unittest.TestSuite()
@@ -15,5 +17,6 @@ if __name__ == '__main__':
     suite.addTests(test_bundle.suite())
     suite.addTests(test_library.suite())
     suite.addTests(test_server.suite())
-
+    suite.addTests(test_filesystem.suite())
+    suite.addTests(test_partition.suite())
     unittest.TextTestRunner().run(suite)
