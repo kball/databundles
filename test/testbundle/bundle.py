@@ -237,10 +237,12 @@ class Bundle(BuildBundle):
             lr = self.init_log_rate(2500, "Segment "+str(j))
             with csvt.database.inserter(skip_header=True) as ins:
                 for i in range(5000):
-                    r = [i,'foo',i, float(i)* 37.452]
+                    r = [i,'foo',i, float(i)* 37.452, '|','\\','"']
                     ins.insert(r)
                     lr()
 
+
+            self.log("Wrote to {}".format(csvt.database.path))
 
     def deps(self):
         
