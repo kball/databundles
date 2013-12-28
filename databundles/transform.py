@@ -4,6 +4,16 @@ writing to databases.
 Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
+import textwrap
+
+class CastingError(TypeError):
+    def __init__(self, field_name, value, message, *args, **kwargs):
+
+        # Call the base class constructor with the parameters it needs
+        Exception.__init__(self,textwrap.fill(message, 120), *args, **kwargs)
+
+        self.field_name = field_name
+        self.value = value
 
 def coerce_int(v):   
     '''Convert to an int, or return if isn't an int'''
@@ -235,20 +245,28 @@ def is_nothing(v):
     else:
         return False
 
-def parse_int(v):
-    if is_nothing(v):
-        return None
-    else:
-        return int(round(float(v),0))
+def parse_int(name, v):
+    try:
+        if is_nothing(v):
+            return None
+        else:
+            return int(round(float(v),0))
+    except ValueError:
+        raise CastingError(name, v, 
+            "Can't cast '{}' to Integer in field '{}' ".format(v, name))
 
-def parse_type(type_,v):
+def parse_type(type_,name, v):
 
-    if is_nothing(v):
-        return None
-    else:
-        return type_(v)   
+    try:
+        if is_nothing(v):
+            return None
+        else:
+            return type_(v)   
+    except TypeError:
+        raise CastingError(name, v, 
+            "Can't cast '{}' to {} in field '{}' ".format(v, type_, name))
 
-def parse_date(v):
+def parse_date(name, v):
     import dateutil.parser as dp
     import datetime
     if is_nothing(v):
@@ -257,13 +275,15 @@ def parse_date(v):
         try:
             return dp.parse(v).date()
         except ValueError as e:
-            raise ValueError("Failed to parse time for value '{}': {}".format(v, e.message))
+            raise CastingError(name, v, "Failed to parse time for value '{}': {}".format(v, e.message))
+        except TypeError as e:
+            raise CastingError(name, v, "Failed to parse time for value '{}': {}".format(v, e.message))
     elif isinstance(v, datetime.date):
         return v
     else:
-        raise TypeError("Expected datetime.date or basestring, got {{}}".format(type(v)))
+        raise CastingError(name, v, "Expected datetime.date or basestring, got {{}}".format(type(v)))
 
-def parse_time(v):
+def parse_time(name, v):
     import dateutil.parser as dp
     import datetime
     if is_nothing(v):
@@ -272,13 +292,13 @@ def parse_time(v):
         try:
             return dp.parse(v).time()
         except ValueError as e:
-            raise ValueError("Failed to parse time for value '{}': {}".format(v, e.message))
+            raise CastingError(name, v, "Failed to parse time for value '{}': {}".format(v, e.message))
     elif isinstance(v, datetime.time):
         return v
     else:
-        raise TypeError("Expected datetime.time or basestring, got {{}}".format(type(v)))
+        raise CastingError(name, v, "Expected datetime.time or basestring, got {{}}".format(type(v)))
 
-def parse_datetime(v):
+def parse_datetime(name, v):
     import dateutil.parser as dp
     import datetime
     if is_nothing(v):
@@ -287,11 +307,13 @@ def parse_datetime(v):
         try:
             return dp.parse(v)
         except ValueError as e:
-            raise ValueError("Failed to parse time for value '{}': {}".format(v, e.message))
+            raise CastingError(name, v, "Failed to parse time for value '{}': {}".format(v, e.message))
+        except TypeError as e:
+            raise CastingError(name, v, "Failed to parse time for value '{}': {}".format(v, e.message))
     elif isinstance(v, datetime.datetime):
         return v
     else:
-        raise TypeError("Expected datetime.datetime or basestring, got {{}}".format(type(v)))        
+        raise CastingError(name, v, "Expected datetime.datetime or basestring, got {{}}".format(type(v)))        
         
 
 class CasterTransformBuilder(object):
@@ -354,13 +376,16 @@ def {}(row):
         f_name = "dict_transform_"+str(uuid.uuid4()).replace('-','')
         f_name_inner = "dict_transform_"+str(uuid.uuid4()).replace('-','')
         
+        
+        c = []
+        
         o = """def {}(row):
     
     import dateutil.parser as dp
     import datetime
     from databundles.transform import parse_date, parse_time, parse_datetime
 
-    r = lambda : {{""".format(f_name)
+    return {{""".format(f_name)
     
         for i,(name,type_) in enumerate(self.types):
             if i != 0:
@@ -370,27 +395,26 @@ def {}(row):
                 type_ = unicode
                 
             if type_ == datetime.date:
-                o += "'{name}':parse_date(row.get('{name}',None))".format(name=name)
+                o += "'{name}':parse_date('{name}', row.get('{name}'))".format(name=name)
+                c.append("'{name}':lambda v: parse_date('{name}', v)".format(name=name))
             elif type_ == datetime.time:
-                o += "'{name}':parse_time(row.get('{name}',None))".format(name=name)
+                o += "'{name}':parse_time('{name}', row.get('{name}'))".format(name=name)
+                c.append("'{name}':lambda v: parse_time('{name}', v)".format(name=name))
             elif type_ == datetime.datetime:
-                o += "'{name}':parse_datetime(row.get('{name}',None))".format(name=name)
+                o += "'{name}':parse_datetime('{name}', row.get('{name}'))".format(name=name)
+                c.append("'{name}':lambda v:parse_datetime('{name}', v)".format(name=name))
             elif type_ == int:
-                o += "'{name}':parse_int(row.get('{name}',None))".format(name=name)
+                o += "'{name}':parse_int('{name}', row.get('{name}'))".format(name=name)
+                c.append("'{name}':lambda v:parse_int('{name}', v)".format(name=name))
             else:
-                o += "'{name}':parse_type({type},row.get('{name}',None))".format(type=type_.__name__,name=name)
-            
-        o+= """}
-
-    try:
-        return r()
-    except Exception as e:
-        import pprint
-        pprint.pprint(row)
-        raise TypeError("Row transform failed for row {}\\n{}: {}".format(row, type(e),  e.message))
+                o += "'{name}':parse_type({type},'{name}', row.get('{name}'))".format(type=type_.__name__,name=name)
+                c.append("'{name}':lambda v:parse_type({type},'{name}', v)".format(type=type_.__name__,name=name))
+          
+        o+= """}"""
         
-"""
-        return f_name, o
+        c = "caster_funcs={"+','.join(c) + "}"
+        
+        return f_name, o, c
           
     def compile(self):
         import uuid
@@ -398,34 +422,64 @@ def {}(row):
         if not self._compiled:
                     
             #lfn, lf = self.makeListTransform()
-            dfn, df = self.makeDictTransform()
-
             #exec(lf)
             #lf = locals()[lfn]
             lf = None
             
+            dfn, df, cf = self.makeDictTransform()
+            
             exec(df)
             df = locals()[dfn]
             
-            self._compiled  = (lf,df)
+            exec(cf)
+            cf = locals()['caster_funcs']
+
+            self._compiled  = (lf,df, cf)
         
         return self._compiled
             
+    def _call_dict(self, f, row, codify_cast_errors):
+        '''Call the caster to cast all of the values in a row. 
+        If there are casting errors, through an exception, unless
+        codify_cast_errors, in which case move the value with the casting
+        error to a field that is suffixed with '_code' '''
+        if codify_cast_errors:
+        
+            d = {k.lower():v for k,v in row.items()}
+        
+            try:
+                return  f[1](d),{}
+            except CastingError:
+                do = {}
+                cast_errors = {}
+                
+                for k,v in d.items():
+                    try:
+                        do[k] = f[2][k](v)
+                    except CastingError: 
+                        do[k+'_code'] = v
+                        cast_errors[k] = v
+                        do[k] = None
+                return do,cast_errors
+            except TypeError:
+                raise
+        else:
+            return  f[1]({k.lower():v for k,v in row.items()}),{}
             
-    def __call__(self, row):
+    def __call__(self, row, codify_cast_errors=True):
         from sqlalchemy.engine.result import RowProxy  # @UnresolvedImport
         
         f = self.compile()
 
         if isinstance(row, dict):
-            return f[1]({k.lower():v for k,v in row.items()})
-        
+            return self._call_dict(f,row, codify_cast_errors)
+
         elif isinstance(row, (list,tuple)):
             raise Exception("Casters are not implemented for lists and tuples, use zip() to create a dict: dict(zip(headers,row))")
             return f[0](row) 
           
         elif isinstance(row, RowProxy):
-            return f[1]({k.lower():v for k,v in row.items()})     
+            return self._call_dict(f,row. codify_cast_errors)
         else:
             raise Exception("Unknown row type: {} ".format(type(row)))
         

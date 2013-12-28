@@ -486,16 +486,39 @@ class Test(TestBase):
             w.writerow([i,i,i])
 
       
-    def test_make_bundles(self):        
+    def test_make_bundles(self):  
+        import shutil
+              
         bundle = Bundle()
+        
+        shutil.copyfile(
+                bundle.filesystem.path('meta','schema-orig.csv'),
+                bundle.filesystem.path('meta','schema.csv'))
+        
         bundle.clean()
         bundle = Bundle()   
         bundle.exit_on_fatal = False
+        bundle.pre_prepare()
         bundle.prepare()
+        bundle.post_prepare()
+        bundle.pre_build()
         bundle.build()
+        bundle.post_build()
 
+        # The second run will use the changes to the schem made in the
+        # first run, due to the types errors in the  'coding' table. 
 
-
+        bundle.clean()
+        bundle = Bundle()   
+        bundle.exit_on_fatal = False
+        bundle.pre_prepare()
+        bundle.prepare()
+        bundle.post_prepare()
+        bundle.pre_build()
+        bundle.build()
+        bundle.post_build()
+        
+        
 def suite():
     suite = unittest.TestSuite()
     suite.addTest(unittest.makeSuite(Test))

@@ -147,10 +147,39 @@ class ValueWriter(InserterInterface):
         return self
         
  
+class CodeCastErrorHandler(object):
+    '''Used by the Value Inserter to handle errors in casting
+    data types. This versino will create code table entries
+    for any values that can't be cast.  '''
+    
+    def __init__(self, inserter):
+        from collections import defaultdict
+        self.codes = defaultdict(set)
+        self.inserter = inserter
+    
+    def cast_error (self, row,  cast_errors):
+        '''For each cast error, save the key and value in a set, 
+        for later conversion to a code partition '''
+        for k,v in cast_errors.items():
+            self.inserter.bundle.schema.add_code_table(self.inserter.table.name, k) # idempotent
+            self.codes[k].add(v)
+            
+    def finish(self):
+        '''For each of the code sets generated during casting errors, create
+        a new partition that holds all of the codes. '''
+        for col_name, codes in self.codes.items():
+            p = self.inserter.bundle.partitions.find_or_new(
+                table=self.inserter.table.name+'_'+col_name+'_codes')
+            
+            with p.inserter() as ins:
+                for code in codes:
+                    ins.insert({'code':code})
+            
 class ValueInserter(ValueWriter):
     '''Inserts arrays of values into  database table'''
     def __init__(self, db,  bundle, table, 
                  orm_table = None,
+                 cast_error_handler = None,
                  cache_size=50000, text_factory = None, 
                  replace=False,  skip_none=True, update_size = True): 
 
@@ -167,12 +196,12 @@ class ValueInserter(ValueWriter):
             self.orm_table = self.table._db_orm_table
         else:
             self.orm_table = self.bundle.schema.table(table.name)
-        
 
         self.null_row = self.orm_table.null_dict
-    
-        self.caster = self.orm_table.caster
 
+        self.cast_error_handler = cast_error_handler(self) if cast_error_handler else None
+
+        self.caster = self.orm_table.caster
 
         self.header = [c.name for c in self.orm_table.columns]
 
@@ -184,8 +213,6 @@ class ValueInserter(ValueWriter):
         self.statement = self.table.insert()
  
         self.skip_none = skip_none
-        
-
 
         self.update_size = update_size
 
@@ -199,12 +226,14 @@ class ValueInserter(ValueWriter):
         if isinstance(values, RowProxy):
             values = dict(values)
 
+        code_dict = None
+
         try:
 
             if isinstance(values, dict):
 
                 if self.caster:
-                    d = self.caster(values)
+                    d, cast_errors = self.caster(values)
 
                 else:
                     d = dict((k.lower(), v) for k,v in values.items())
@@ -217,7 +246,7 @@ class ValueInserter(ValueWriter):
                 
                 if self.caster:
                     try:
-                        d = self.caster(values)
+                        d, cast_errors = self.caster(values)
                     except Exception as e:
                         raise ValueError("Failed to cast row: {}: {}".format(values, str(e)))
                 else:
@@ -235,7 +264,7 @@ class ValueInserter(ValueWriter):
                     except UnicodeEncodeError:
                         # Unicode is a PITA
                         pass
-                
+
             self.cache.append(d)
          
             if len(self.cache) >= self.cache_size: 
@@ -243,6 +272,11 @@ class ValueInserter(ValueWriter):
                 self.cache = []
 
                 self.commit_continue()
+
+            if cast_errors and self.cast_error_handler:
+                self.cast_error_handler.cast_error(values,cast_errors )
+
+            return cast_errors
 
         except (KeyboardInterrupt, SystemExit):
             if self.bundle:
@@ -273,6 +307,10 @@ class ValueInserter(ValueWriter):
 
         if self.update_size and self.bundle:
             self.bundle.schema.update_lengths(self.table.name, self.max_lengths)
+   
+        if self.cast_error_handler:
+            self.cast_error_handler.finish()
+   
    
 class ValueUpdater(ValueWriter, UpdaterInterface):
     '''Updates arrays of values into  database table'''
