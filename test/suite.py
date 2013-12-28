@@ -18,5 +18,4 @@ if __name__ == '__main__':
     suite.addTests(test_library.suite())
     suite.addTests(test_server.suite())
     suite.addTests(test_filesystem.suite())
-    suite.addTests(test_partition.suite())
     unittest.TextTestRunner().run(suite)

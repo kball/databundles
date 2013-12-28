@@ -524,6 +524,8 @@ class Test(TestBase):
             # This runs the normal build, which will be used by the other
             # tests. 
 
+            return 
+
             shutil.copyfile(
                     bundle.filesystem.path('meta','schema-edit-me.csv'),
                     bundle.filesystem.path('meta','schema.csv'))      
