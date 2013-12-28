@@ -61,26 +61,25 @@ class Bundle(BuildBundle):
   
     def build(self):
 
-        self.log("Build db, using an inserter")
+        self.log("=== Build db, using an inserter")
         self.build_db_inserter()
 
-        self.log("Build geo")
+        self.log("=== Build geo")
         self.build_geo()
         
-        self.log("Build missing")
+        self.log("=== Build missing")
         self.build_with_missing()
         
-
-        self.log("Build csvsegments")
+        self.log("=== Build csvsegments")
         self.build_csvsegments()
 
-        self.log("Build csv")
+        self.log("=== Build csv")
         self.build_csv()
 
-        self.log("Build db, using petl")
+        self.log("=== Build db, using petl")
         self.build_db_petl()
 
-        self.log("Build hdf")
+        self.log("=== Build hdf")
         self.build_hdf()
 
         return True
@@ -105,7 +104,52 @@ class Bundle(BuildBundle):
                              'integer':i,
                              'float':i})
       
-      
+    
+
+
+    def build_db_inserter_codes(self):  
+        from collections import defaultdict
+        from databundles.database.inserter import CodeCastErrorHandler
+        p = self.partitions.find_or_new_db(table='coding')
+        table = p.table
+        
+        
+        def yield_rows():
+
+            field_gen =  self.fields3
+
+            for i in range(10000):
+                row = { f[0]:f[1]() for f in field_gen }
+                
+                
+                if i % 51 == 0:
+                    row['integer'] = chr(65+(i/51 % 26))
+                
+                
+                if i % 13 == 0:
+                    row['date'] = chr(65+(i/13 % 26))
+   
+                yield row
+
+
+        # Reset all of the columns to float data type so the intuition process can
+        # run completely 
+        self.schema.reset_to_float('coding')
+
+        # Iterate through the records and intuit the types of the columns, 
+        # then update the schema. 
+        memo = self.schema.update('coding', yield_rows(),
+                logger=self.init_log_rate(3000,'Update table schema'))
+
+        lr = self.init_log_rate(3000)
+
+        with p.inserter(cast_error_handler=CodeCastErrorHandler) as ins:
+            
+            for row in yield_rows():
+
+                ins.insert(row)
+                lr()
+
     def build_db_inserter(self):  
         
         p = self.partitions.find_or_new_db(table='tthree')
@@ -114,7 +158,7 @@ class Bundle(BuildBundle):
         field_gen =  self.fields3
       
         lr = self.init_log_rate(5000)
-        with p.inserter(cache_size = 1) as ins:
+        with p.inserter() as ins:
             
             for i in range(10000):
                 row = { f[0]:f[1]() for f in field_gen }
@@ -131,7 +175,8 @@ class Bundle(BuildBundle):
             caster = table.caster
             for i in range(10000):
                 row = { f[0]:f[1]() for f in field_gen }
-                ins.insert(caster(row))
+                cast_row, cast_errors = caster(row)
+                ins.insert(cast_row)
                 lr()
         
         

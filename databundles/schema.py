@@ -45,6 +45,13 @@ class Schema(object):
         self.table_sequence = None
         self.auto_col_numbering = False
 
+        # Cache for references to code tables. 
+        self._code_table_cache = None
+        
+        # Flag to indicate that new code tables were added, so the
+        # build should be re-run
+        self.new_code_tables = False
+
     @property
     def dataset(self,):
         '''Initialize the identity, creating a dataset record, 
@@ -133,12 +140,14 @@ class Schema(object):
         if name in self._seen_tables:
             raise Exception("schema.add_table has already loaded a table named: "+name)
 
-        data = { k.replace('d_','',1): v for k,v in kwargs.items() if k.startswith('d_') }
+        in_data = kwargs.get('data',{})
+
+        col_data = { k.replace('d_','',1): v for k,v in kwargs.items() if k.startswith('d_') }
       
         row = Table(self.dataset,
                     name=name, 
                     sequence_id=self.table_sequence,
-                    data=data)
+                    data=dict(col_data.items() + in_data.items()))
         
         self.bundle.session.add(row)
 
@@ -164,7 +173,6 @@ class Schema(object):
         if not kwargs.get('sequence_id', False):
             self.auto_col_numbering = True
 
-        
         if self.auto_col_numbering:  
             if kwargs.get('sequence_id', False):
                 raise ConfigurationError("Can't specify a seg number for a column after a columns that was autonumbered. At table {} col: '{}'"
@@ -175,6 +183,7 @@ class Schema(object):
         kwargs['sequence_id'] = int(kwargs['sequence_id'])
         self.col_sequence = max(self.col_sequence,  kwargs['sequence_id']+1)
         
+                
         c =  table.add_column(name, **kwargs)
 
         return c
@@ -575,11 +584,10 @@ class Schema(object):
             
 
     def _dump_gen(self, table_name=None):
-        """Return the current schema as a CSV file
+        """Yield schema row for use in exporting the schem to other
+        formats
         
-        :param f: A file-like object where the CSV data will be written. If ``None``, 
-        will default to stdout. 
-        
+
         """
         
         from collections import OrderedDict
@@ -587,7 +595,9 @@ class Schema(object):
         # Collect indexes
         indexes = {}
 
-        all_opt_col_fields = ["size", "precision","scale", "default","width", "description","sql","flags","keywords","measure","units","universe"]
+        all_opt_col_fields = ["size", "precision","scale", "default","width", 
+                              "description","sql","flags","keywords",
+                              "measure","units","universe"]
         
         opt_col_fields = []
         
@@ -597,9 +607,12 @@ class Schema(object):
             tables = self.tables
             
         
+        data_fields = set()
+        # Need to get all of the indexes figured out forst, since there are a variable number of indexes. 
         for table in tables:
 
             for col in table.columns: 
+                
                 for index_set in [col.indexes, col.uindexes, col.unique_constraints]:
                     if not index_set:
                         continue # HACK. This probably shouldnot happen
@@ -616,7 +629,17 @@ class Schema(object):
                     v = getattr(col, field)
                     if v and field not in opt_col_fields:
                         opt_col_fields.append(field)
-                                
+
+                for k,v in col.data.items():
+                    data_fields.add(k) 
+
+        # also add data columns for the table
+        
+        for k,v in table.data.items():
+            data_fields.add(k)                      
+        
+            
+        data_fields = sorted(data_fields)
                      
         # Put back into same order as in app_opt_col_fields            
         opt_col_fields = [ field for field in all_opt_col_fields if field in opt_col_fields]
@@ -643,8 +666,13 @@ class Schema(object):
                 for field in opt_col_fields:
                     row[field] = getattr(col, field)
 
-                for k,v in col.data.items():
-                    row['d_'+k]=v
+                if col.is_primary_key:
+                    # For the primary key, the data comes from the table. 
+                    for k in data_fields:
+                        row['d_'+k]=table.data.get(k,None)
+                else:
+                    for k in data_fields:
+                        row['d_'+k]=col.data.get(k,None)
 
                 row['description'] = col.description
 
@@ -967,7 +995,70 @@ class {name}(Base):
             
         return  "SELECT {} FROM {}".format(self.extract_columns(self, extract_table, extra_columns),st.name)
      
+    #
+    # Updating Schemas
+    #
+    #
+     
+    def reset_to_float(self, table_name):
+        '''Reset all of the values in the table, except for the primary key
+        to floats, in preparation for intuiting the schema ''' 
 
+    @staticmethod
+    def _maybe_datetime(v):
+        if not isinstance(v, basestring):
+            return False
+        
+        if len(v) > 22:
+            # Not exactly correct; ISO8601 allows fractional sections
+            # which could result in a longer string. 
+            return False
+        
+        if '-' not in v and ':' not in v:
+            return False
+        
+        for c in set(v): # Set of Unique characters
+            if not c.isdigit() and c not in 'T:-Z':
+                return False
+            
+        return True
+
+    @staticmethod
+    def _maybe_time(v):
+        if not isinstance(v, basestring):
+            return False
+        
+        if len(v) > 15:
+            return False
+        
+        if ':' not in v:
+            return False
+        
+        for c in set(v): # Set of Unique characters
+            if not c.isdigit() and c not in 'T:Z.':
+                return False
+            
+        return True
+            
+    @staticmethod
+    def _maybe_date(v):
+        if not isinstance(v, basestring):
+            return False
+        
+        if len(v) > 10:
+            # Not exactly correct; ISO8601 allows fractional sections
+            # which could result in a longer string. 
+            return False
+        
+        if '-' not in v:
+            return False
+        
+        for c in set(v): # Set of Unique characters
+            if not c.isdigit() and c not in '-':
+                return False
+            
+        return True
+    
     def intuit(self, row, memo):
         '''Accumulate information about a database row to determine the most likely datatype and length for each
         field. 
@@ -978,20 +1069,65 @@ class {name}(Base):
             
         For row being either a dict or list of row values. 
         
+        To finalize, call with row == None
+        
         '''
+        from collections import defaultdict
         
         if memo is None :
             memo = {'fields' : None, 'name_index': {}}
             
-            memo['fields'] = [{'name': None, 'type': int, 'length': 0} for i in range(len(row))]
+            memo['fields'] = [{'name': None, 
+                               'min-type': int, 
+                               'prob-type': None, 
+                               'major-type': None, 
+                               'minor-type': None,
+                               'length': 0, 
+                               'maybe': {'date':0, 'datetime':0, 'time':0},
+                               'n' : 0,
+                               'counts': defaultdict(int)} for i in range(len(row))]
             
             if isinstance(row, dict):
                 for i,name in enumerate(row.keys()):
                     memo['fields'][i]['name'] = name
                     memo['name_index'][name] = i
 
+        if row is None:
+            
+            # Finalize the run by computing the major/minor ratio of types for each column 
+            for i in range(len(memo['fields'])):
+                col = memo['fields'][i]
+                if len(col['counts']):
+                    scounts = sorted(col['counts'].items(), key = lambda x: x[1], reverse = True)
+                    col['major-type'] = scounts.pop(0) if len(scounts) else None
+                    col['minor-type'] = scounts.pop(0) if len(scounts) else None
+                    
+                    if (bool(col['major-type']) and bool(col['major-type'][1]) and 
+                        bool(col['minor-type']) and bool(col['minor-type'][1])):
+                        col['mmr'] = float(col['minor-type'][1]) / float(col['major-type'][1])
+                    else:
+                        col['mmr'] = None
+
+
+                if float(col['maybe']['date'])/float(col['n']) > .90:
+                    import datetime
+                    col['prob-type'] = datetime.date
+                elif float(col['maybe']['time'])/float(col['n']) > .90:
+                    import datetime
+                    col['prob-type'] = datetime.time
+                elif float(col['maybe']['datetime'])/float(col['n']) > .90:
+                    import datetime
+                    col['prob-type'] = datetime.datetime
+                elif col['mmr'] is not None and col['mmr'] < .05:
+                    col['prob-type'] = col['major-type'][0]
+                else:
+                    col['prob-type'] = col['min-type']
+
+            return memo
+
         for i, v in enumerate(row):
             
+            # Convert lists to dicts
             if isinstance(row, dict):
                 key = v
                 i =  memo['name_index'][key]
@@ -999,62 +1135,100 @@ class {name}(Base):
 
             if isinstance(v, basestring):
                 v = v.strip()
+           
+           
+            mfi = memo['fields'][i]
+           
+            mfi['n'] += 1
+           
+            # Keep track of the number of possibilities for each
+            # field. This is needed to identify fields that are mostly
+            # one type ( ie, Integer ) but which have occasional text codes. 
+      
             
+            try:
+                mfi['counts'][str] += 1
+                float(v)
+                mfi['counts'][float] += 1
+                mfi['counts'][str] -= 1
+                int(v)
+                mfi['counts'][float] -= 1
+                mfi['counts'][int] += 1            
+            except TypeError:
+                pass
+            except ValueError:
+                pass
+            
+            # What follow is the normal intuiting process. 
+
+
+
             if v is None or v == '-' or v == '':
                 continue
-            elif memo['fields'][i]['type'] == str:
+            
+            elif mfi['min-type'] == str:
+                mfi['length'] = max(mfi['length'], len(str(v))) 
+                mfi['maybe']['date'] += 1 if self._maybe_date(v) else 0
+                mfi['maybe']['time'] += 1 if self._maybe_time(v) else 0
+                mfi['maybe']['datetime'] += 1 if self._maybe_datetime(v) else 0
                 continue # No more conversions are possible. 
-            elif isinstance(v, (int,float, long)):
-                memo['fields'][i]['length'] = max(memo['fields'][i]['length'], len(str(v))) # In case the field turns out to be a string
-            else:
-                memo['fields'][i]['length'] = max(memo['fields'][i]['length'], len(v))
 
-            if memo['fields'][i]['type'] is int:
+
+            mfi['length'] = max(mfi['length'], len(str(v))) 
+            
+            # Find the base type, the most specific type that will hold
+            # this data
+            if mfi['min-type'] is int:
                 try:
                     int(v)      
-                    memo['fields'][i]['type'] = int
+                    mfi['min-type'] = int
 
                 except ValueError:
-                    memo['fields'][i]['type'] = float
+                    mfi['min-type'] = float
                     
-            if memo['fields'][i]['type'] is float or isinstance(v, float):
+            if mfi['min-type'] is float or isinstance(v, float):
                 try:
                     float(v)
-                    memo['fields'][i]['type'] = float
+                    mfi['min-type'] = float
 
                 except ValueError:
-                    memo['fields'][i]['type'] = str
+                    mfi['min-type'] = str
 
         return memo
 
     def _update_from_memo(self, table_name,  memo, logger=None):
         '''Update a table schema using a memo from intuit()'''
-
+        from datetime import datetime, time, date 
         with self.bundle.session as s:
             table = self.table(table_name)
 
             index = memo['name_index'] if len(memo['name_index']) > 0 else None
             fields = memo['fields']
             
-            type_map = {int: 'integer', str: 'varchar',  float: 'real'}
+            type_map = {int: 'integer', str: 'varchar',  float: 'real', 
+                        datetime: 'datetime', date: 'date', time: 'time'}
             
             for i,c in enumerate(table.columns):
 
                 if index:
-                    i = index[c.name]
+                    try:
+                        i = index[c.name]
+                    except KeyError:
+                        # Can happen when new columsn are added during
+                        # run, like code columns
+                        continue
+                        
 
-                c.size = fields[i]['length'] if fields[i]['type'] == str else None
-                c.datatype = type_map[fields[i]['type']]
-                c.default = '-' if fields[i]['type'] == str  else -1
+                c.size = fields[i]['length'] if fields[i]['prob-type'] == str else None
+                c.datatype = type_map[fields[i]['prob-type']]
+                c.default = '-' if fields[i]['prob-type'] == str  else -1
                 s.merge(c)
            
         # Need to expire the unmanaged cache, or the regeneration of the schema in _revise_schema will 
         # use the cached schema object rather than the ones we just updated, if the schem objects
         # have alread been loaded. 
         self.bundle.database.unmanaged_session.expire_all()
-        
-                
-                
+ 
     def update(self, table_name, itr, logger=None):
         '''Update the schema from an interator that returns rows. '''
         
@@ -1064,22 +1238,66 @@ class {name}(Base):
             memo = self.intuit(dict(row), memo)
             logger()
 
+            memo = self.intuit(None, memo)
+
         self._update_from_memo(table_name, memo)
 
         with open(self.bundle.filesystem.path('meta',self.bundle.SCHEMA_FILE), 'w') as f:
             self.as_csv(f)        
         
+        
+        return memo
 
-    def add_code_table(self, name='codes'):
+    def add_code_table(self, source_table_name, source_column_name):
         '''Add a table to the schema for codes. The codes are integers that are associated 
         with strings, usually to indicate exceptional conditions in an integer field. '''
+        import json
+    
+        if self._code_table_cache == None:
+            self._code_table_cache = set()
+            
+            # Load the tables cache from data attached to 
+            # the tables in the schema. 
+            
+            for table in self.tables:
+                
+                try:
+                    self._code_table_cache.add(tuple(json.loads(table.data['code_key'])))
+                except KeyError:
+                    continue
+                except ValueError: # Json decode error
+                    continue
+            
         
+        key = (source_table_name, source_column_name)
         
-        t = self.add_table(name)
-        self.add_column(t, 'id', datatype='integer')
-        self.add_column(t, 'code', datatype='integer', description='Integer value of code')
-        self.add_column(t, 'column', datatype='text', description='The name of the column this code is associated with')
-        self.add_column(t, 'description', datatype='text', description='Code description')
+        if key in self._code_table_cache:
+            return
         
+        self._code_table_cache.add(key)
 
+        
+        name = "{}_{}_codes".format(source_table_name, source_column_name)
+        
+        self.bundle.log("Adding code table: {}".format(name))
+        
+        with self.bundle.session as s:
+            
+            # This has to come before the add_table, or the self.col_sequence values get screwed up
+            table = self.table(source_table_name)
+            self.add_column(table, source_column_name+'_code', 
+                             datatype = 'varchar',
+                             sequence_id = len(table.columns)+1,
+                             description='Non-integer code value for column {}'.format(source_column_name))
+            
+            
+            t = self.add_table(name, data={'code_key':json.dumps([source_table_name, source_column_name])})
+            self.add_column(t, 'id', datatype='integer', is_primary_key = True, sequence_id=1)
+            self.add_column(t, 'code', datatype='text', description='Value of code',sequence_id=2)
+            self.add_column(t, 'description', datatype='text', description='Code description', sequence_id = 3)
+            
+
+            
+        
+        
         

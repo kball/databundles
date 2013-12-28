@@ -628,12 +628,8 @@ Columns:
         for key, value in kwargs.items():
             
             if key[0] != '_' and key not in ['d_id','t_id','name', 'schema_type']:
-                try:
-                    setattr(row, key, value)
-                except:
-                    print row, key, value
-                    raise
-            
+                setattr(row, key, value)
+
             if isinstance(value, basestring) and len(value) == 0:
                 if key == 'is_primary_key':
                     value = False
