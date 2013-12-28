@@ -1207,15 +1207,19 @@ class {name}(Base):
             index = memo['name_index'] if len(memo['name_index']) > 0 else None
             fields = memo['fields']
             
-            import pprint
-
             type_map = {int: 'integer', str: 'varchar',  float: 'real', 
                         datetime: 'datetime', date: 'date', time: 'time'}
             
             for i,c in enumerate(table.columns):
 
                 if index:
-                    i = index[c.name]
+                    try:
+                        i = index[c.name]
+                    except KeyError:
+                        # Can happen when new columsn are added during
+                        # run, like code columns
+                        continue
+                        
 
                 c.size = fields[i]['length'] if fields[i]['prob-type'] == str else None
                 c.datatype = type_map[fields[i]['prob-type']]

@@ -45,4 +45,7 @@ identity:
     variation: variation
     vid: a1DxuZ/001
     vname: source-dataset-subset-variation-ca0d-r1
-partitions: []
+partitions:
+- source-dataset-subset-variation-ca0d.coding
+- source-dataset-subset-variation-ca0d.coding_date_codes
+- source-dataset-subset-variation-ca0d.coding_integer_codes
