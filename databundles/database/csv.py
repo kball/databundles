@@ -16,7 +16,8 @@ from .inserter import InserterInterface
 
 class ValueInserter(InserterInterface):
     '''Inserts arrays of values into  database table'''
-    def __init__(self, path, bundle,  table=None, header=None, delimiter = '|', encoding='utf-8', 
+    def __init__(self, path, bundle,  table=None, header=None, delimiter = '|',
+                 escapechar='\\', encoding='utf-8', 
                  write_header = False,  buffer_size=2*1024*1024): 
      
         self.table = table
@@ -24,6 +25,7 @@ class ValueInserter(InserterInterface):
         self.path = path
         self.buffer_size = buffer_size
         self.delimiter = delimiter
+        self.escapechar = escapechar,
         self.encoding = encoding
         self.write_header = write_header
 
@@ -83,26 +85,30 @@ class ValueInserter(InserterInterface):
         delimiter = self.delimiter
         
         if row_is_dict and has_header:
-            self._writer = unicodecsv.DictWriter(f, self.header, delimiter=delimiter, encoding=self.encoding)
+            self._writer = unicodecsv.DictWriter(f, self.header, delimiter=delimiter, 
+                                                 escapechar=self.escapechar, encoding=self.encoding)
             if self.write_header:
                 self._writer.writeheader()
             self._inserter = self._write_dict
             
         elif row_is_dict and not has_header:
             self.header = row.keys()
-            self._writer = unicodecsv.DictWriter(f, self.header, delimiter=delimiter, encoding=self.encoding)
+            self._writer = unicodecsv.DictWriter(f, self.header, delimiter=delimiter, 
+                                                 escapechar=self.escapechar, encoding=self.encoding)
             if self.write_header:
                 self._writer.writeheader()            
             self._inserter = self._write_dict
             
         elif row_is_list and has_header:
-            self._writer = unicodecsv.writer(f, delimiter=delimiter, encoding=self.encoding)
+            self._writer = unicodecsv.writer(f, delimiter=delimiter, 
+                                             escapechar=self.escapechar, encoding=self.encoding)
             if self.write_header:
                 self._writer.writerow(self.header)
             self._inserter = self._write_list
             
         elif row_is_list and not has_header:
-            self._writer = unicodecsv.writer(f, delimiter=delimiter, encoding=self.encoding)
+            self._writer = unicodecsv.writer(f, delimiter=delimiter, 
+                                             escapechar=self.escapechar, encoding=self.encoding)
             self._inserter = self._write_list
 
         else:
