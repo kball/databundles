@@ -25,7 +25,7 @@ class ValueInserter(InserterInterface):
         self.path = path
         self.buffer_size = buffer_size
         self.delimiter = delimiter
-        self.escapechar = escapechar,
+        self.escapechar = escapechar
         self.encoding = encoding
         self.write_header = write_header
 
