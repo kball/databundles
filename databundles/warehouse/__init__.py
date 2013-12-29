@@ -53,7 +53,10 @@ def new_warehouse(config):
         return RelationalWarehouse(database,storage=storage, library=library)
         
 
+class ResolutionError(Exception):
+    pass
     
+
 class ResolverInterface(object):   
     
     def get(self, name):

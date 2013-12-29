@@ -18,35 +18,50 @@ class PostgresWarehouse(RelationalWarehouse):
         self.database.create()
         self.database.connection.execute('CREATE SCHEMA IF NOT EXISTS library;')
         self.library.database.create()
+       
+       
+    def drop_user(self, u):
+        e = self.database.connection.execute
         
-    def configure_default_users(self):
+        e("DROP SCHEMA {} CASCADE;".format(u))
+        e("DROP OWNED BY {}".format(u))
+        e("DROP ROLE {}".format(u))  
+              
+    def create_user(self, u):
         
         e = self.database.connection.execute
         
-        u='rouser'
-        
-        try:
-            e("DROP OWNED BY {}".format(u))
-            e("DROP ROLE {}".format(u))
-        except:
-            pass
-        
         e("CREATE ROLE {0} LOGIN PASSWORD '{0}'".format(u))
         
+        e("CREATE SCHEMA {0} AUTHORIZATION {0};".format(u))
+        
+        e("ALTER ROLE {0} SET search_path TO library,public,{};".format(u))
         
         # From http://stackoverflow.com/a/8247052
         e("GRANT SELECT ON ALL TABLES IN SCHEMA public TO {}".format(u))
         e("""ALTER DEFAULT PRIVILEGES IN SCHEMA public 
-        GRANT SELECT ON TABLES  TO {}; """.format(u))
+             GRANT SELECT ON TABLES  TO {}; """.format(u))
 
         e("GRANT SELECT, USAGE ON ALL SEQUENCES IN SCHEMA public TO {}".format(u))
         e("""ALTER DEFAULT PRIVILEGES IN SCHEMA public 
           GRANT SELECT, USAGE ON SEQUENCES  TO {}""".format(u))
         
+    def users(self):
         
+        q = """SELECT 
+            u.usename AS "name", 
+            u.usesysid AS "id",
+            u.usecreatedb AS "createdb",
+            u.usesuper AS "superuser"
+            FROM pg_catalog.pg_user u
+            ORDER BY 1;"""
+        
+        return { row['name']:dict(row) for row 
+                in self.database.connection.execute(q) }
+
     def _copy_command(self, table, url):
         
-        template = """COPY "public"."{table}"  FROM  PROGRAM 'curl -s -L --compressed "{url}"'  WITH ( DELIMITER '|', NULL '' )"""
+        template = """COPY "public"."{table}"  FROM  PROGRAM 'curl -s -L --compressed "{url}"'  WITH ( FORMAT csv )"""
 
         return template.format(table = table, url = url)
      
@@ -60,19 +75,18 @@ class PostgresWarehouse(RelationalWarehouse):
 
         for table_name in partition.data.get('tables',[]):
             sqla_table, meta = self.create_table(partition.identity, table_name)
-
+            orm_table = partition.get_table(table_name)
+            
             try:
-                urls = self.resolver.csv_parts(partition.identity.vid)
+                urls = self.resolver.csv_parts(partition.identity.vid, orm_table.id_)
             except NotFound:
                 self.logger.error("install_partition {} CSV install failed because partition was not found on remote server"
                                   .format(partition.identity.name))
                 raise 
-         
+
             for url in urls:
                 self._install_csv_url(sqla_table, url)
-                
-            orm_table = partition.get_table()
-            
+
             self.library.database.install_table(orm_table.vid, sqla_table.name)
         
     def _install_csv_url(self, table, url):
@@ -80,7 +94,7 @@ class PostgresWarehouse(RelationalWarehouse):
         self.logger.log('install_csv_url {}'.format(url))
 
         cmd =  self._copy_command(table.name, url)
-        #self.logger.log('installing with command: {} '.format(cmd))
+        self.logger.log('installing with command: {} '.format(cmd))
         r = self.database.connection.execute(cmd)
                 
         #self.logger.log('installed_csv_url {}'.format(url)) 
