@@ -1296,7 +1296,15 @@ class BuildBundle(Bundle):
                 test.context.bundle = b
                 unittest.TextTestRunner().run(test)
 
+    def run_mp(self, method, arg_sets):
+        from run import mp_run
+        from multiprocessing import Pool
         
+        pool = Pool(self.run_args.multi)
+
+        pool.map(mp_run,[ (self.bundle_dir, method.__name__, args) 
+                         for args in arg_sets])
+
 class BundleConfig(object):
    
     def __init__(self):
