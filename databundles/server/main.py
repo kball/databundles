@@ -309,8 +309,6 @@ def post_dataset(did,library):
 def get_dataset(did, library, pid=None):
     '''Return the complete record for a dataset, including
     the schema and all partitions. '''
-    
-    from databundles.cache import RemoteMarker
 
     did = did.replace('|','/')
 
@@ -352,21 +350,41 @@ def get_dataset(did, library, pid=None):
             fd = file_.to_dict()
             d['partitions'][partition.identity.id_]['file']  = { k:v for k,v in fd.items() if k in ['state'] }
 
-        csv_link = "{}/datasets/{}/partitions/{}/csv".format(_host_port(library), gr.identity.vid_enc, partition.identity.vid_enc)
+        tables = {}
+        for table_name in partition.tables:
+            table = partition.bundle.schema.table(table_name)
+  
+            args = (_host_port(library), gr.identity.vid_enc, 
+                    partition.identity.vid_enc, table.id_, table.name)
+            whole_link = "{}/datasets/{}/partitions/{}/tables/{}/csv#{}".format(*args)
+            parts_link = "{}/datasets/{}/partitions/{}/tables/{}/csv/parts#{}".format(*args)
+            
+            tables[table.id_] = {'whole': whole_link,'parts': parts_link}
+
+        whole_link = "{}/datasets/{}/partitions/{}/csv#{}".format(_host_port(library), 
+                        gr.identity.vid_enc, partition.identity.vid_enc, partition.table.name)
 
         if partition.identity.format == 'csv':
-            db_link = csv_link
+            db_link = whole_link
             parts_link = None
         else:
-            db_link = "{}/datasets/{}/partitions/{}/db".format(_host_port(library), gr.identity.vid_enc, partition.identity.vid_enc)
-            parts_link = "{}/datasets/{}/partitions/{}/csv/parts".format(_host_port(library), gr.identity.vid_enc, partition.identity.vid_enc)
+            db_link = "{}/datasets/{}/partitions/{}/db".format(_host_port(library), 
+                            gr.identity.vid_enc, partition.identity.vid_enc)
+            parts_link = "{}/datasets/{}/partitions/{}/csv/parts#{}".format(
+                        _host_port(library), gr.identity.vid_enc,
+                        partition.identity.vid_enc, partition.table.name)
+
+        tables_link = "{}/datasets/{}/partitions/{}/tables".format(
+                        _host_port(library), gr.identity.vid_enc, partition.identity.vid_enc)
 
 
         d['partitions'][partition.identity.id_]['urls'] ={
          'db': db_link,
+         'tables': tables_link,
          'csv': {
-            'csv':csv_link,
-            'parts': parts_link
+            'whole':whole_link,
+            'parts': parts_link,
+            'tables': tables
           }
                                     
         }
@@ -484,6 +502,7 @@ def get_ref(ref, library):
   
     d,p = library.get_ref(ref)
   
+
     if not d:
         raise exc.NotFound("No object for ref: {}".format(ref))
   
@@ -609,12 +628,77 @@ def process_pid(did, pid, library):
     if not p_orm:
         raise exc.BadRequest("Partition reference {} not found in bundle {}".format(pid, did))
     
-
     return pid, p_on, p_orm
     
- 
-    
+@get('/datasets/<did>/partitions/<pid>/tables') 
+@CaptureException   
+def get_partition_tables(did, pid, library):
+    '''
+    '''
 
+     
+    did, _, _ = process_did(did, library)
+    pid, _, _  = process_pid(did, pid, library)
+    
+    p = library.get(pid).partition # p_orm is a database entry, not a partition
+  
+    o = {}
+  
+    for table_name in p.tables:
+        table = p.bundle.schema.table(table_name)
+        d = table.to_dict()
+        
+        args = (_host_port(library), did.replace('/','|'), pid.replace('/','|'), table.id_)
+        csv_link = "{}/datasets/{}/partitions/{}/tables/{}/csv".format(*args)
+        parts_link = "{}/datasets/{}/partitions/{}/tables/{}/csv/parts".format(*args)
+        
+        d['urls'] = {
+            'csv':{
+                'csv': csv_link,
+                'parts': parts_link
+            }
+        }
+        
+        o[table.name] = d
+    return o
+        
+@get('/datasets/<did>/partitions/<pid>/tables/<tid>/csv') 
+@CaptureException   
+def get_partition_table_csv(did, pid, tid, library):
+    '''
+    '''
+
+    did, _, _ = process_did(did, library)
+    pid, _, _  = process_pid(did, pid, library)
+    
+    p = library.get(pid).partition # p_orm is a database entry, not a partition
+  
+    table = p.bundle.schema.table(tid)
+  
+    if table == p.table:
+        pass
+  
+    return _send_csv_if(did, pid, table, library)
+    
+@get('/datasets/<did>/partitions/<pid>/tables/<tid>/csv/parts') 
+@CaptureException   
+def get_partition_table_csv_parts(did, pid, tid, library):
+    '''
+    '''
+
+    did, _, _ = process_did(did, library)
+    pid, _, _  = process_pid(did, pid, library)
+    
+    p = library.get(pid).partition # p_orm is a database entry, not a partition
+  
+    table = p.bundle.schema.table(tid)
+  
+    if table == p.table:
+        pass
+  
+    return _table_csv_parts(library,p.bundle,pid, table)
+
+       
 @get('/datasets/<did>/partitions/<pid>/csv') 
 @CaptureException   
 def get_partition_csv(did, pid, library):
@@ -626,30 +710,48 @@ def get_partition_csv(did, pid, library):
         header:If existent and not 'F', include the header on the first line. 
     
     '''
-    import unicodecsv as csv
-    from StringIO import StringIO
-    from sqlalchemy import text
-     
-    did, d_on, b = process_did(did, library)
-    pid, p_on, p_orm  = process_pid(did, pid, library)
+ 
+    return _send_csv_if(did, pid, None, library)
+
+    
+def _send_csv_if(did, pid, table, library):
+    '''Send csv function, with a web-processing interface '''
+    did, _, _ = process_did(did, library)
+    pid, _, _  = process_pid(did, pid, library)
     
     p = library.get(pid).partition # p_orm is a database entry, not a partition
   
     i = int(request.query.get('i',1))
     n = int(request.query.get('n',1))
-    sep = request.query.get('sep','|')
+    sep = request.query.get('sep',',')
     
     where = request.query.get('where',None)
   
+    return _send_csv(library, did, pid, table, i, n, where, sep)    
+    
+    
+  
+def _send_csv(library, did, pid, table, i, n, where, sep=',' ):
+    '''Send a CSV file to the client. '''
+    import unicodecsv
+    import csv
+    from StringIO import StringIO
+    from sqlalchemy import text
+        
+    p = library.get(pid).partition # p_orm is a database entry, not a partition
+    
+    
+    if not table:
+        table = p.table
+
     if i > n:
         raise exc.BadRequest("Segment number must be less than or equal to the number of segments")
     
     if i < 1:
         raise exc.BadRequest("Segment number starts at 1")
     
-    table = p.table.name
-    
-    count = p.query("SELECT count(*) FROM {}".format(table)).fetchone()
+ 
+    count = p.query("SELECT count(*) FROM {}".format(table.name)).fetchone()
     
     if count:
         count = count[0]
@@ -664,17 +766,18 @@ def get_partition_csv(did, pid, library):
         seg_size = base_seg_size
 
     out = StringIO()
-    writer = csv.writer(out, delimiter=sep)
+    #writer = unicodecsv.writer(out, delimiter=sep, escapechar='\\',quoting=csv.QUOTE_NONNUMERIC)
+    writer = unicodecsv.writer(out, delimiter=sep)
     
     if request.query.header:
         writer.writerow(tuple([c.name for c in p.table.columns]))
 
     if where:
-        q = "SELECT * FROM {} WHERE {} LIMIT {} OFFSET {} ".format(table, where, seg_size, base_seg_size*(i-1))
+        q = "SELECT * FROM {} WHERE {} LIMIT {} OFFSET {} ".format(table.name, where, seg_size, base_seg_size*(i-1))
      
         params = dict(request.query.items())
     else:
-        q = "SELECT * FROM {} LIMIT {} OFFSET {} ".format(table, seg_size, base_seg_size*(i-1))
+        q = "SELECT * FROM {} LIMIT {} OFFSET {} ".format(table.name, seg_size, base_seg_size*(i-1))
         params = {}
 
     for row in p.query(text(q), params):
@@ -682,7 +785,7 @@ def get_partition_csv(did, pid, library):
 
     response.content_type = 'text/csv'
     
-    response.headers["content-disposition"] = "attachment; filename='{}-{}-{}-{}.csv'".format(p.identity.vname,table,i,n)
+    response.headers["content-disposition"] = "attachment; filename='{}-{}-{}-{}.csv'".format(p.identity.vname,table.name,i,n)
     
     return out.getvalue()
     
@@ -693,7 +796,6 @@ def get_partition_csv(did, pid, library):
 def get_partition_csv_parts(did, pid, library):
     '''Return a set of URLS for optimal CSV parts of a partition'''
     
-
     did, d_on, b = process_did(did, library)
     pid, p_on, p_orm  = process_pid(did, pid, library)
 
@@ -701,13 +803,13 @@ def get_partition_csv_parts(did, pid, library):
     
     p = b.partitions.partition(p_orm)
     
-    parts = []
-    
     csv_parts = p.get_csv_parts()
     
     if len(csv_parts):
         # This partition has defined CSV parts, so we should link to those. 
-
+        
+        parts = []
+        
         for csv_p in sorted(csv_parts, key=lambda x: x.identity.segment):
             parts.append("{}/datasets/{}/partitions/{}/db#{}"
                          .format(_host_port(library), b.identity.vid_enc, 
@@ -715,33 +817,43 @@ def get_partition_csv_parts(did, pid, library):
         
         pass
     else:
-        # This partition does not have CSV parts, so we'll have to make them. 
+        return _table_csv_parts(library,b,pid)
         
-        TARGET_ROW_COUNT = 50000
-     
-        # For large partitions, this could be really slow, and
-        # can cause the server to run out of disk space. 
-        p = library.get(pid).partition
-     
-        table = p.table.name
-        
-        count = p.query("SELECT count(*) FROM {}".format(table)).fetchone()
-        
-        if count:
-            count = count[0]
-        else:
-            raise exc.BadRequest("Failed to get count of number of rows")
+    return parts
     
-        part_count, rem = divmod(count, TARGET_ROW_COUNT)
+def _table_csv_parts(library,b,pid,table=None):
+    # This partition does not have CSV parts, so we'll have to make them. 
+    parts = []
+    
+    TARGET_ROW_COUNT = 50000
+ 
+    # For large partitions, this could be really slow, and
+    # can cause the server to run out of disk space. 
+    p = library.get(pid).partition
+ 
+    if not table:
+        table = p.table # Use the default table
         
-        template = "{}/datasets/{}/partitions/{}/csv".format(_host_port(library), b.identity.vid_enc, p.identity.vid_enc)
-        
-        if part_count == 0:
-            parts.append(template)
-        else:
-            for i in range(1, part_count+1):
-                parts.append(template +"?i={}&n={}".format(i,part_count))
-        
+
+    count = p.query("SELECT count(*) FROM {}".format(table.name)).fetchone()
+    
+    if count:
+        count = count[0]
+    else:
+        raise exc.BadRequest("Failed to get count of number of rows")
+
+    part_count, rem = divmod(count, TARGET_ROW_COUNT)
+    
+    template = ("{}/datasets/{}/partitions/{}/tables/{}/csv"
+                .format(_host_port(library),b.identity.vid_enc, 
+                        p.identity.vid_enc, table.id_))
+    
+    if part_count == 0:
+        parts.append(template)
+    else:
+        for i in range(1, part_count+1):
+            parts.append(template +"?i={}&n={}".format(i,part_count))   
+    
     return parts
     
         

@@ -4,7 +4,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 from . import prt, err, _print_info #@UnresolvedImport
-from databundles.warehouse import ResolverInterface
+from databundles.warehouse import ResolverInterface, ResolutionError
 
 def warehouse_command(args, rc, src):
     from databundles.warehouse import new_warehouse
@@ -56,8 +56,13 @@ def warehouse_parser(cmd):
     whsp.set_defaults(subcommand='create')   
  
     whsp = whp.add_parser('users', help='Create and configure warehouse users')
-    whsp.set_defaults(subcommand='users')   
- 
+    whsp.set_defaults(subcommand='users')  
+    group = whsp.add_mutually_exclusive_group()
+    group.add_argument('-L', '--list', dest='action',  action='store_const', const='list')
+    group.add_argument('-a', '--add' )
+    group.add_argument('-d', '--delete')
+       
+
     whsp = whp.add_parser('list', help='List the datasets inthe warehouse')
     whsp.set_defaults(subcommand='list')   
     whsp.add_argument('term', type=str, nargs='?', help='Name of bundle, to list partitions')
@@ -110,10 +115,6 @@ class Resolver(ResolverInterface):
         if not dsi:
             return None
 
-        import pprint
-        
-        pprint.pprint(dsi)
-
         if dsi['ref_type'] == 'partition':
             # For a partition reference, we get back a dataset structure, which could
             # have many partitions, but if we asked for a parttion, will get only one. 
@@ -122,7 +123,7 @@ class Resolver(ResolverInterface):
         else:
             return dsi['dataset']['url']
 
-    def csv_parts(self, name):
+    def csv_parts(self, name, tid):
         import requests
         
         dsi = self.library.remote.get_ref(name)
@@ -134,16 +135,23 @@ class Resolver(ResolverInterface):
             # For a partition reference, we get back a dataset structure, which could
             # have many partitions, but if we asked for a parttion, will get only one. 
 
-            parts_url =  dsi['partitions'].values()[0]['urls']['csv']['parts']
+
+            parts_url =  dsi['partitions'].values()[0]['urls']['csv']['tables'][tid]['parts']
 
             r = requests.get(parts_url)
             r.raise_for_status()
 
-            return r.json()
+            v = r.json()
+            
+            if 'exception' in v:
+                raise ResolutionError(v['exception']['args'][0]+
+                                      "\n==== Server Trace: \n"+v['exception']['trace'])
+                
+            return v
             
         else:
             from ..dbexceptions import BadRequest
-            raise BadRequest("Didn't get any csvparts")
+            raise BadRequest("Didn't get any csvparts; references was not to a partition")
     
 def warehouse_install(args, w,config):
     from ..library import new_library
@@ -187,7 +195,17 @@ def warehouse_create(args, w,config):
     
 def warehouse_users(args, w,config):
     
-    w.configure_default_users()
+    print args
+    
+    if args.action == 'list':
+        for name, values in w.users().items():
+            prt("{} id={} super={}".format(name, values['id'], values['superuser']))
+    elif bool(args.delete):
+        print 'delete'
+    elif bool(args.add):
+        print 'add'
+
+    #w.configure_default_users()
     
 def warehouse_list(args, w, config):    
 

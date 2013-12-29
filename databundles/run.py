@@ -296,6 +296,40 @@ class RunConfig(object):
         return python_dir 
 
 
+def mp_run(mp_run_args):
+    ''' Run a bundle in a multi-processor child process. '''
+    import traceback, sys
+    
+    bundle_dir, method_name, args = mp_run_args
+
+    try:
+        
+        bundle_file = sys.argv[1]
+        
+        if not os.path.exists(os.path.join(os.getcwd(), 'bundle.yaml')):
+            print >> sys.stderr, "ERROR: Current directory '{}' does not have a bundle.yaml file, so it isn't a bundle file. Did you mean to run 'dbmanage'?".format(os.getcwd())
+            sys.exit(1)
+    
+        # Import the bundle file from the 
+        rp = os.path.realpath(os.path.join(bundle_dir, 'bundle.py'))
+        mod = import_file(rp)
+     
+        dir_ = os.path.dirname(rp)
+        b = mod.Bundle(dir_)
+
+        method = getattr(b, method_name)
+
+        b.log("MP Run: pid={} {}{} ".format(os.getpid(),method.__name__, args))
+        method(*args)
+        
+    except:
+        tb = traceback.format_exc()
+        print '==========vvv MR Run Exception: {}==========='.format(args)
+        print tb
+        print '==========^^^ MR Run Exception: {}==========='.format(args)
+        raise
+
+
 def import_file(filename):
     ''' '''
     import imp

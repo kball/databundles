@@ -307,16 +307,17 @@ class PartitionBase(PartitionInterface):
         return self.data.get('tables',[])
 
 
-    def get_table(self):
+    def get_table(self, table_spec=None):
         '''Return the orm table for this partition, or None if
         no table is specified. 
         '''
         
-        table_spec = self.identity.table
-        
-        if table_spec is None:
-            return None
-        
+        if not table_spec:
+            table_spec = self.identity.table
+            
+            if table_spec is None:
+                return None
+            
         return self.bundle.schema.table(table_spec)
 
 

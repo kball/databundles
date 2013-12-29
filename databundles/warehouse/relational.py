@@ -125,6 +125,8 @@ class RelationalWarehouse(WarehouseInterface):
         table_name be the same as the table as it is in stalled in the database'''
         from ..schema import Schema
 
+        self.library.database.session.execute("SET search_path TO library")
+
         meta, table = Schema.get_table_meta_from_db(self.library.database, 
                                                     table_name, 
                                                     d_vid = d_vid,  
