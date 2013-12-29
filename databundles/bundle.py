@@ -907,7 +907,7 @@ class BuildBundle(Bundle):
         parser.add_argument('--single-config', default=False,action="store_true", help="Load only the config file specified")
     
         parser.add_argument('-m','--multi',  type = int,  nargs = '?',
-                            default = None,
+                            default = 1,
                             const = multiprocessing.cpu_count(),
                             help='Run the build process on multiple processors, if the  method supports it')
     
@@ -1185,7 +1185,7 @@ class BuildBundle(Bundle):
             try:
                 f = getattr(b,str(args.method))
             except AttributeError as e:
-                b.error("Could not find method named '{}': {} ".format(args.method, e))
+                b.error("Could multinot find method named '{}': {} ".format(args.method, e))
                 b.error("Available methods : {} ".format(dir(b)))
           
                 return
@@ -1298,9 +1298,15 @@ class BuildBundle(Bundle):
 
     def run_mp(self, method, arg_sets):
         from run import mp_run
-        from multiprocessing import Pool
+        from multiprocessing import Pool, cpu_count
         
-        pool = Pool(self.run_args.multi)
+        n = int(self.run_args.multi)
+
+        if n == 0:
+            n = cpu_count()
+        
+        
+        pool = Pool(n)
 
         pool.map(mp_run,[ (self.bundle_dir, method.__name__, args) 
                          for args in arg_sets])
