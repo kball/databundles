@@ -19,13 +19,59 @@ class Test(unittest.TestCase):
 
     def test_name(self):
         
-        from databundles.partition import  new_identity
+        from databundles.identity import  new_identity
     
-        idnt = Identity(source='source.com', dataset='dataset', 
-                         subset='subset', variation='variation', 
-                         revision=1, creator='xxx')
-       
-        part = new_identity(dict(table='table',grain='grain', **(idnt.to_dict())))
+        name = Name(source='source.com', 
+                    dataset='dataset', 
+                    subset='subset', 
+                    variation='variation', 
+                    type='type', 
+                    part='part', 
+                    version='0.0.1')
+
+        self.assertEquals('source.com-dataset-subset-type-part-variation', str(name))
+        self.assertEquals('source.com-dataset-subset-type-part-variation=0.0.1', name.vname)
+
+        part_name = PartitionName(time = 'time',
+                                  space='space',
+                                  table='table',
+                                  grain='grain',
+                                  format='format',
+                                  segment='segment',
+                                  **name.dict
+                                  )
+
+        self.assertEquals('source.com-dataset-subset-type-part-variation-time-space-table-grain-format-segment', 
+                          str(part_name))
+        self.assertEquals('source.com-dataset-subset-type-part-variation-time-space-table-grain-format-segment=0.0.1', 
+                          part_name.vname)
+
+        partial_name = PartialName(source='source.com', dataset='dataset', type=None)
+
+        with self.assertRaises(NotImplementedError):
+            partial_name.name
+
+        d =  partial_name.dict
+
+        self.assertEquals('<any>',d['subset'])
+        self.assertEquals('<none>',d['type'])
+        self.assertEquals('dataset',d['dataset'])
+
+    def x_test_something_else(self):
+
+        dnn = 1000000
+        rev = 100
+        
+        dn = DatasetNumber(dnn, rev)
+        
+        idnt = Identity(**dict(name.dict.items()+[('vid',str(dn))]))
+
+        part = new_identity(dict(table='table',grain='grain', **idnt.dict))
+
+        print part.dict
+        print part.sname
+
+        return
 
         print part.name
         print part.vname
@@ -73,24 +119,24 @@ class Test(unittest.TestCase):
         rev = 100
         
         dn = DatasetNumber(dnn)
-        self.assertEquals('a4c92', str(dn))
+        self.assertEquals('d04c92', str(dn))
         
         dn = DatasetNumber(dnn, rev)
-        self.assertEquals('a4c92/01C', str(dn))
+        self.assertEquals('d04c9201C', str(dn))
 
-        self.assertEquals('a4c92/01C', str(ObjectNumber.parse(str(dn))))
+        self.assertEquals('d04c9201C', str(ObjectNumber.parse(str(dn))))
 
         tn = TableNumber(dn, 1)
 
-        self.assertEquals('c4c9201/01C', str(tn))
+        self.assertEquals('t04c920101C', str(tn))
 
-        self.assertEquals('c4c9201/01C', str(ObjectNumber.parse(str(tn))))
+        self.assertEquals('t04c920101C', str(ObjectNumber.parse(str(tn))))
 
         tnnr = tn.rev(None)
         
-        self.assertEquals('c4c9201', str(tnnr))
+        self.assertEquals('t04c9201', str(tnnr))
 
-        self.assertEquals('c4c9201/004', str(tnnr.rev(4)))
+        self.assertEquals('t04c9201004', str(tnnr.rev(4)))
 
 
 if __name__ == "__main__":
