@@ -4,17 +4,10 @@ Created on Apr 11, 2013
 @author: eric
 '''
 
-from pyparsing import oneOf, OneOrMore, originalTextFor, Optional,  Combine, FollowedBy, Regex, MatchFirst, Suppress, ZeroOrMore, Upcase, replaceWith
-from pyparsing import Word, CaselessLiteral, Literal, CaselessKeyword,  White
-from pyparsing import alphas, nums, alphanums, Keyword
-from pyparsing import ParseException
 
-import pkgutil
 import os
 import csv
 import sys
-from functools import partial
-import tokenize, token
 
 class ParseError(Exception):
     pass

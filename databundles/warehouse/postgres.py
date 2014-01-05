@@ -23,19 +23,26 @@ class PostgresWarehouse(RelationalWarehouse):
     def drop_user(self, u):
         e = self.database.connection.execute
         
-        e("DROP SCHEMA {} CASCADE;".format(u))
-        e("DROP OWNED BY {}".format(u))
-        e("DROP ROLE {}".format(u))  
+        
+        try: e("DROP SCHEMA {} CASCADE;".format(u))
+        except: pass
+        
+        try: e("DROP OWNED BY {}".format(u))
+        except: pass
+        
+        try: e("DROP ROLE {}".format(u))  
+        except: pass
               
     def create_user(self, u):
         
         e = self.database.connection.execute
         
+        
         e("CREATE ROLE {0} LOGIN PASSWORD '{0}'".format(u))
         
         e("CREATE SCHEMA {0} AUTHORIZATION {0};".format(u))
         
-        e("ALTER ROLE {0} SET search_path TO library,public,{};".format(u))
+        e("ALTER ROLE {0} SET search_path TO library,public,{0};".format(u))
         
         # From http://stackoverflow.com/a/8247052
         e("GRANT SELECT ON ALL TABLES IN SCHEMA public TO {}".format(u))

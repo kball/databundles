@@ -62,12 +62,10 @@ def warehouse_parser(cmd):
     group.add_argument('-a', '--add' )
     group.add_argument('-d', '--delete')
        
-
     whsp = whp.add_parser('list', help='List the datasets inthe warehouse')
     whsp.set_defaults(subcommand='list')   
     whsp.add_argument('term', type=str, nargs='?', help='Name of bundle, to list partitions')
 
-   
 def warehouse_info(args, w,config):
     
     prt("Warehouse Info")
@@ -76,7 +74,6 @@ def warehouse_info(args, w,config):
     prt("Database: {}",w.database.dsn)
     prt("Library : {}",w.library.database.dsn)
 
- 
 class Logger(object):
     def __init__(self, prefix, lr):
         self.prefix = prefix
@@ -194,16 +191,14 @@ def warehouse_create(args, w,config):
     w.library.database.create()
     
 def warehouse_users(args, w,config):
-    
-    print args
-    
-    if args.action == 'list':
+
+    if args.action == 'list' or ( not bool(args.delete) and not bool(args.add)):
         for name, values in w.users().items():
             prt("{} id={} super={}".format(name, values['id'], values['superuser']))
     elif bool(args.delete):
-        print 'delete'
+        w.drop_user(args.delete)   
     elif bool(args.add):
-        print 'add'
+        w.create_user(args.add)   
 
     #w.configure_default_users()
     

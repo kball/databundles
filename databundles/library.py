@@ -421,8 +421,9 @@ class LibraryDb(object):
                 rows = self.connection.execute(
                             "SELECT * FROM datasets WHERE d_vid = '{}' "
                             .format(ROOT_CONFIG_NAME_V)).fetchone()
-            except Exception as e:
-                raise 
+                            
+            except ProgrammingError as e:
+                # This happens when the datasets table doesnt exist
                 rows = False
 
             if not rows:
@@ -430,8 +431,8 @@ class LibraryDb(object):
             else:
                 return True
         except Exception as e:
-            # Hey! Set the right exception type here!
-            raise
+            # What is the more specific exception here?
+
             return False
         finally:
             self.close_connection()
@@ -551,20 +552,28 @@ class LibraryDb(object):
 
         self.drop()
 
+        orig_schemas = {}
+
         for table in tables:
             it = table.__table__
             
             # These schema shenanigans are almost certainly wrong.
+            # But they are expedient
             if self._schema:
-                orig_schema = it.schema
+                orig_schemas[it] = it.schema
                 it.schema = self._schema
                 
             it.create(bind=self.engine)
             self.commit()
             
-            if self._schema:
+
+        # We have to put the schemas back because when installing to a warehouse. 
+        # the same library classes can be used to access a Sqlite database, which 
+        # does not handle schemas. 
+        if self._schema:
+            for it, orig_schema in orig_schemas.items():
                 it.schema = orig_schema      
-                     
+                 
             
         
         
