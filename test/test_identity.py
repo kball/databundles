@@ -68,16 +68,16 @@ class Test(unittest.TestCase):
                                   **name.dict
                                   )
 
-        self.assertEquals('source.com-dataset-subset-type-part-variation-time-space-table-grain-format-segment', 
+        self.assertEquals('source.com-dataset-subset-type-part-variation-table-time-space-grain-format-segment', 
                           str(part_name))
-        self.assertEquals('source.com-dataset-subset-type-part-variation-time-space-table-grain-format-segment-0.0.1', 
+        self.assertEquals('source.com-dataset-subset-type-part-variation-table-time-space-grain-format-segment-0.0.1', 
                           part_name.vname)
 
         part_name = part_name.clone()
         
-        self.assertEquals('source.com-dataset-subset-type-part-variation-time-space-table-grain-format-segment', 
+        self.assertEquals('source.com-dataset-subset-type-part-variation-table-time-space-grain-format-segment', 
                           str(part_name))
-        self.assertEquals('source.com-dataset-subset-type-part-variation-time-space-table-grain-format-segment-0.0.1', 
+        self.assertEquals('source.com-dataset-subset-type-part-variation-table-time-space-grain-format-segment-0.0.1', 
                           part_name.vname)        
 
         partial_name = PartialName(source='source.com', dataset='dataset', type=None)
@@ -107,9 +107,18 @@ class Test(unittest.TestCase):
 
         self.assertEquals('source.com-orig-2.0.1+foobar',name.vname)  
         
-        name = Name(source='source.com', version='>=0.0.1')
+        name = Name(source='source.com', dataset='dataset',variation='variation', version='>=0.0.1')
 
-        self.assertEquals('source.com-orig>=0.0.1',name.vname)   
+        self.assertEquals('source.com-dataset-variation>=0.0.1',name.vname)   
+
+        name = Name(source='source.com', dataset='dataset',variation='variation', version='0.0.1')
+
+        self.assertEquals('source.com/dataset-variation-0.0.1',name.path)   
+
+        part_name = PartitionName(time = 'time',space='space',table='table',**name.dict)
+        
+        print part_name.path
+
 
     def test_identity(self):
 
@@ -124,17 +133,28 @@ class Test(unittest.TestCase):
         self.assertEquals('source.com-foobar-orig-0.0.1',ident.vname)   
         self.assertEquals('source.com-foobar-orig-0.0.1~d002Bi001',ident.fqname)   
 
-    def test_resolve(self):
+        print ident.path
+
+    def x_test_resolve(self):
         from  testbundle.bundle import Bundle
         
         bundle = Bundle()    
-        
-        bundle.identity
-        
+        bundle.exit_on_fatal = False
+        bundle.clean()
+        bundle.pre_prepare()
+        bundle.prepare()
+        bundle.post_prepare()
+        bundle.pre_build()
+        bundle.build_db_inserter_codes()
+        bundle.post_build()
+                    
         print bundle.identity.vid
         print bundle.identity.name
         print bundle.identity.vname
         print bundle.identity.fqname
+        
+        
+        
 
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']

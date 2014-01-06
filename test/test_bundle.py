@@ -486,7 +486,7 @@ class Test(TestBase):
             w.writerow([i,i,i])
 
   
-    def test_bundle_insert_codes(self):  
+    def test_build_bundle(self):  
         import shutil
               
         bundle = Bundle()

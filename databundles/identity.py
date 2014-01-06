@@ -132,23 +132,48 @@ class Name(object):
             return self.name+'-'+str(self.version)
     
 
+    def _path_join(self,names=None, excludes=None, sep=os.sep):
+
+        d = self._dict(with_name=False)
+
+        if isinstance(excludes,basestring):
+            excludes = set([excludes])
+            
+        if not isinstance(excludes,set):
+            excludes = set(excludes)            
+
+        if not names:
+            if not excludes:
+                excludes = set([])
+            
+            names = set(k for k,_,_ in self.name_parts) - set(excludes)
+        else:
+            names = set(names)
+        
+        return sep.join(
+                   [ str(d[k]) for (k,_,_) in self.name_parts 
+                         if k and d.get(k,False) and k in (names-excludes)])  
+           
+
     @property
     def path(self):
         '''The path of the bundle source. Includes the revision. '''
-        
-        np = self._name_parts(use_revision=True)
-        source = np[0].pop(0)
-       
-        return os.path.join(source, self._combine(np)) 
+
+        # Need to do this to ensure the function produces the
+        # bundle path when called from subclasses
+        names = [ k for k,_,_ in Name._name_parts]
+
+        return os.path.join(
+                self.source,
+                self._path_join(names=names, excludes='source',sep='-')
+             )
+                
     
     @property
     def source_path(self):
         '''The name in a form suitable for use in a filesystem. 
         Excludes the revision'''
-        np = self._name_parts(use_revision=False)
-        source = np[0].pop(0)
-       
-        return os.path.join(source, self._combine(np)) 
+        return self._path_join(excludes=['version'])
 
     @property
     def cache_key(self):
@@ -182,14 +207,46 @@ class PartitionName(Name):
     format = None
     segment = None
 
-    _name_parts = ( Name._name_parts[0:-1] +
-                 [('time',None,True),
-                  ('space',None,True),
+    _local_name_parts = [ 
                   ('table',None,True),
+                  ('time',None,True),
+                  ('space',None,True),
                   ('grain',None,True),
                   ('format',None,True),
-                  ('segment',None,True)] +
+                  ('segment',None,True)]
+
+    _name_parts = ( Name._name_parts[0:-1] +
+                  _local_name_parts +
                   Name._name_parts[-1:])
+
+    @property
+    def path(self):
+        '''The path of the bundle source. Includes the revision. '''
+        
+        local_names = [ k for k,_,_ in self._local_name_parts]
+
+        parts = [super(PartitionName, self).path]
+        
+        if self.table:
+            parts.append(self.table)
+            
+
+        l = []
+        if self.time: l.append(self.time)
+        if self.space: l.append(self.space)
+        
+        if l: parts.append('-'.join(l))
+            
+        
+        l = []
+        if self.grain: l.append(self.grain)
+        if self.segment: l.append(self.segment)
+        
+        if l: parts.append('-'.join(l))
+        
+        # the format value is part of the file extension
+        
+        return os.path.join(*parts)
 
 class PartialMixin(object):
 
@@ -651,6 +708,23 @@ class Identity(object):
         """The fully qualified name, the versioned name and the
         vid. This is the same as str(self)"""
         return str(self)
+ 
+    @property
+    def path(self):
+        '''The path of the bundle source. Includes the revision. '''
+        
+        return self._name.path
+    
+    @property
+    def source_path(self):
+        '''The name in a form suitable for use in a filesystem. 
+        Excludes the revision'''
+        return self._name.source_path
+
+    @property
+    def cache_key(self):
+        '''The name in a form suitable for use as a cache-key'''
+        return self._name.cache_key
  
     def __str__(self):
         return self._name.vname+'~'+self.vid
