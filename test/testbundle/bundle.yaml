@@ -37,13 +37,13 @@ extracts:
 identity:
     creator: creator
     dataset: dataset
-    id: a1DxuZ
+    id: d1DxuZ
     name: source-dataset-subset-variation-ca0d
     revision: 1
     source: source
     subset: subset
     variation: variation
-    vid: a1DxuZ/001
+    vid: d1DxuZ001
     vname: source-dataset-subset-variation-ca0d-r1
 partitions:
 - source-dataset-subset-variation-ca0d.coding

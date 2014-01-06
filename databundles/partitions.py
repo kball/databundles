@@ -6,7 +6,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 import os
 
-from partition import PartitionIdentity
+from identity import PartitionIdentity
 from sqlalchemy.orm.exc import NoResultFound
 
 class Partitions(object):

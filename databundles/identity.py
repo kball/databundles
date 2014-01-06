@@ -9,7 +9,6 @@ import os.path
 
 def new_identity(d, bundle=None):
     """Create a new identity from a dict form """
-    from partition import PartitionIdentity
     from partition import new_identity as p_new_identity
     
     on = ObjectNumber.parse(d.get('vid'))
@@ -55,12 +54,37 @@ class Name(object):
                   ]
 
     def __init__(self, *args, **kwargs):
-
+        
         for k,default, optional in self.name_parts:
             if optional:
                 setattr(self,k, kwargs.get(k,default))
             else:
                 setattr(self,k, kwargs.get(k))
+
+        self.version = self._parse_version(self.version)
+
+      
+    def _parse_version(self,version):
+        import semantic_version as sv  # @UnresolvedImport
+        if version is not None and isinstance(version,basestring):
+
+            if version == PartialName.ANY:
+                pass
+            elif version == PartialName.NONE:
+                pass
+            else:
+                try: 
+                    version = sv.Version(version)
+                except ValueError:
+                    try: version = sv.Spec(version)
+                    except ValueError:
+                        raise ValueError("Could not parse '{}' as a semantic version".format(version))        
+                
+        if not version:
+            version = sv.Version('0.0.0')
+                
+        return version
+                
 
     @property 
     def name_parts(self):
@@ -100,10 +124,13 @@ class Name(object):
         if not self.version:
             raise ValueError("No version set")
         
-        return self.name+'='+self.version
+        import semantic_version  # @UnresolvedImport
+        
+        if isinstance(self.version,semantic_version.Spec):
+            return self.name+str(self.version)
+        else:
+            return self.name+'-'+str(self.version)
     
-    def clone(self):
-        return self.__class__(**self.to_dict())
 
     @property
     def path(self):
@@ -128,6 +155,18 @@ class Name(object):
         '''The name in a form suitable for use as a cache-key'''
         return self.path+self.PATH_EXTENSION
 
+    def clone(self):
+        return self.__class__(**self.dict)
+
+    def version(self, revision):
+        '''Clone and change the version'''
+
+            
+        c = self.clone()
+        
+        c.version = self.version = self._parse_version(self.version)
+        
+        return c
 
     def __str__(self):
         return self.name
@@ -221,235 +260,7 @@ class PartialPartitionName(PartialMixin,PartitionName):
         '''Works with PartialNameMixin.clear_dict to set NONE and ANY values'''
         return [ (k,PartialMixin.ANY, True) 
                 for k,_, _ in super(PartialName, self).name_parts ]
-    
-class Identity(object):
-    '''Identities represent the defining set of information about a 
-    bundle or a partition. Only the vid is actually required to 
-    uniquely identify a bundle or partition, but the identity is also
-    used for generating unique names and for finding bundles and partitions. '''
-    
-    
-    is_bundle = True
-    is_partition = False
-
-
-    PARTITION_SEP = '--'
-    NAME_PART_SEP = '-'
-    
-    on = None
-    name = None
-
-
-    def _name_parts(self, use_revision=True):
-        '''Return the names of the fields in the dict form that
-        in the order they should appear in a name
-        
-        Returns two lists, the first goes before the '--', 
-        the second after. 
-        '''
-        return ([
-                'source',
-                'dataset',
-                'subset',
-                'variation'               
-                ],
-                [
-                 'vid',
-                 'version'
-                 ] if use_revision else ['id']
-                )
-                
  
-    def to_meta(self, md5=None, file=None):
-        '''Return a dictionary of metadata, for use in the Remote api'''
-        import json
-        
-        if not md5:
-            if not file:
-                raise ValueError("Must specify either file or md5")
-        
-            from util import md5_for_file
-            
-            md5 = md5_for_file(file)
-        
-        return {
-                'id':self.id_, 
-                'identity': json.dumps(self.to_dict()),
-                'name':self.name, 
-                'md5':md5}
-
-
- 
-    def as_revision(self, revision):
-        '''Clone and change the revision'''
- 
-        if revision < 0:
-            revision = self.revision-1
-            
-        c = self.clone()
-        
-        c.revision = revision
-        
-        return c
-
-    #
-    # Naming, paths and cache_keys
-    #
-
-    @property
-    def id_(self):
-        '''String version of the object number, without a revision'''
-        
-        if not self.on:
-            return None
-
-        
-        id_ =  str(self.on.rev(None))
-
-        return id_
-
-    @property
-    def vid(self):
-        '''String version of the object number'''
-        
-        if not self.on:
-            return None
-        
-        return str(self.on)
-
-   
-    def _combine(self,np, sep1='-',sep2='--'):
-        d = self._dict(with_name=False)
-
-        p1 = [ d[k] for k in np[0] if k  and d.get(k,False)]
-        
-        if np[1]:
-            p2 = [ d[k] for k in np[1] if k  and d.get(k,False)]
-        else:
-            p2 = None
-
-        pc = [sep1.join(p1)]
-        
-        if p2 and p2[0]:
-            pc.append(sep1.join(p2))
-
-        return sep2.join(pc)
-                        
-   
-    @property
-    def name(self):
-        """The name of the bundle, excluding the revision"""
-        
-        if not self.vid:
-            raise ValueError('Generating an identity name requires a vid. '+
-                             ' Use sname() for names without object numbers ')
-        
-        np = self._name_parts(use_revision=False)
-
-        return self._combine(np)
-
-    @property
-    def sname(self):
-        """A Simple name, excludes the revision and object number"""
-
-        np = self._name_parts(use_revision=False)
-                
-        return self._combine((np[0],None))
-
-
-    @property
-    def vname(self):
-        
-        if not self.vid:
-            raise ValueError('Generating an identity vname requires a vid. '+
-                             ' Use sname() for names without object numbers ')
-        
-        np = self._name_parts(use_revision=True)
-        return self._combine(np)
-
-
-       
-    def __str__(self):
-        return self.name
-       
-
-class PartitionIdentity(Identity):
-    '''Subclass of Identity for partitions'''
-    
-    is_bundle = False
-    is_partition = True
-    
-    time = None
-    space = None
-    table = None
-    grain = None
-    format = None
-    segment = None
-    
-    def __init__(self, *args, **kwargs):
-
-
-        d = {}
-
-        for arg in args:
-            if isinstance(arg, Identity):
-                d = arg.to_dict()
-        
-        d = dict(d.items() + kwargs.items())
-
-        super(PartitionIdentity, self).__init__(d)
-        
-        self.time = d.get('time',None)
-        self.space = d.get('space',None)
-        self.table = d.get('table',None)
-        self.grain = d.get('grain',None)
-        self.format = d.get('format',None)
-        self.segment = d.get('segment',None)
-
-        if self.id_ is not None and self.id_[0] != ObjectNumber.TYPE.PARTITION:
-            self.id_ = None
-       
-    @property
-    def dict(self):
-        '''Returns the identity as a dict. values that are empty are removed'''
-
-        d =  super(PartitionIdentity, self).dict
-
-        d['time'] = self.time
-        d['space'] = self.space
-        d['table'] = self.table
-        d['grain'] = self.grain
-        d['format'] = self.format
-        d['segment'] = self.segment
-
-        return { k:v for k,v in d.items() if v}
-
-    def _name_parts(self, use_revision=True):
-        '''Return the names of the fields in the dict form that
-        in the order they should appear in a name
-        
-        Returns two lists, the first goes before the '--', 
-        the second after. 
-        '''
-        
-        np =  super(PartitionIdentity, self)._name_parts(use_revision)
-        
-        return ( np[0]+['time','space','table','grain','format','segment'],
-                 np[1])
-                
- 
-    @property
-    def as_dataset(self):
-        """Convert this identity to the identity of the corresponding dataset. """
-        
-        on = ObjectNumber.parse(self.id_)
-        d = self.to_dict()
-        d['id'] = str(on.dataset)
-        
-        return  Identity(**d)
-
-
-
 
 class ObjectNumber(object):
     '''
@@ -534,6 +345,8 @@ class ObjectNumber(object):
             i = len(input)-ds_lengths[1]
             revision = int(ObjectNumber.base62_decode(input[i:]))
             input = input[0:i] # remove the revision
+        else:
+            revision = None
             
         input = input[ds_lengths[0]:]
       
@@ -747,6 +560,136 @@ class PartitionNumber(ObjectNumber):
                 DatasetNumber._ds_str(self.dataset)+
                 ObjectNumber.base62_encode(self.partition).rjust(self.DLEN.PARTITION,'0')+
                 ObjectNumber._rev_str(self.revision))
+
+
+   
+class Identity(object):
+    '''Identities represent the defining set of information about a 
+    bundle or a partition. Only the vid is actually required to 
+    uniquely identify a bundle or partition, but the identity is also
+    used for generating unique names and for finding bundles and partitions. '''
+    
+    
+    is_bundle = True
+    is_partition = False
+
+    _on = None
+    _name = None
+
+    def __init__(self, name, object_number):
+        
+        self._on = object_number
+        self._name = name
+
+        self._name.version.patch = self._on.revision
+
+    @classmethod
+    def from_dict(cls, d):
+        name = Name(**d)
+        
+        if 'id' in d and 'revision' in d:
+            # The vid should be constructed from the id and the revision
+            on = (ObjectNumber.parse(d['id']).rev(d['revision']))
+        elif 'vid' in d:
+            on = ObjectNumber.parse(d['vid'])
+        else:
+            raise ValueError("Must have id and revision, or vid")
+                  
+        return cls(name, on)
+
+    def to_meta(self, md5=None, file=None):
+        '''Return a dictionary of metadata, for use in the Remote api'''
+        import json
+        
+        if not md5:
+            if not file:
+                raise ValueError("Must specify either file or md5")
+        
+            from util import md5_for_file
+            
+            md5 = md5_for_file(file)
+        
+        return {
+                'id':self.id_, 
+                'identity': json.dumps(self.to_dict()),
+                'name':self.name, 
+                'md5':md5}
+
+
+    #
+    # Naming, paths and cache_keys
+    #
+
+    @property
+    def on(self):
+        '''Return the object number obect'''
+        return self._on
+
+    @property
+    def id_(self):
+        '''String version of the object number, without a revision'''
+        
+        return str(self._on.rev(None))
+
+    @property
+    def vid(self):
+        '''String version of the object number'''
+        return str(self._on)
+   
+    @property
+    def name(self):
+        """The name of the bundle, excluding the revision"""
+        return self._name
+
+    @property
+    def vname(self):
+        ''' '''
+        return self._name.vname
+ 
+    @property
+    def fqname(self):
+        """The fully qualified name, the versioned name and the
+        vid. This is the same as str(self)"""
+        return str(self)
+ 
+    def __str__(self):
+        return self._name.vname+'~'+self.vid
+       
+
+class PartitionIdentity(Identity):
+    '''Subclass of Identity for partitions'''
+    
+
+    @property
+    def as_dataset(self):
+        """Convert this identity to the identity of the corresponding dataset. """
+        
+        on = ObjectNumber.parse(self.id_)
+        d = self.to_dict()
+        d['id'] = str(on.dataset)
+        
+        return  Identity(**d)
+
+
+
+
+class Resolver(object):
+    
+    def resolve(self,s):
+        pass
+    
+    
+    def parse(self,s):
+        
+        name, id = s.split('--')
+    
+        # If the version
+    
+
+def make_resolver(library=None, bundle=None):
+    '''Return a resolver object constructed on a library or bundle '''
+
+
 
 
 
