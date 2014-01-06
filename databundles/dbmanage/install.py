@@ -5,6 +5,12 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 from ..dbmanage import prt
 
+def install_parser(cmd):
+    lib_p = cmd.add_parser('install', help='Install configuration files')
+    lib_p.set_defaults(command='install')
+    asp = lib_p.add_subparsers(title='Install', help='Install configuration files')
+    
+
 def install_command(args, rc, src):
     import yaml, pkgutil
     import os

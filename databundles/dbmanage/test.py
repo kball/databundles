@@ -4,6 +4,20 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 from ..dbmanage import prt
+
+def test_parser(cmd):
+    lib_p = cmd.add_parser('test', help='Test and debugging')
+    lib_p.set_defaults(command='test')
+    asp = lib_p.add_subparsers(title='Test commands', help='command help')
+    
+    sp = asp.add_parser('config', help='Dump the configuration')
+    sp.set_defaults(subcommand='config')
+    group.add_argument('-v', '--version',  default=False, action='store_true', help='Display module version')
+ 
+    sp = asp.add_parser('spatialite', help='Test spatialite configuration')
+    sp.set_defaults(subcommand='spatialite')
+         
+       
                     
 def test_command(args,rc, src):
     

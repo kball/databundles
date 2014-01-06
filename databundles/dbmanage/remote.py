@@ -5,6 +5,32 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 from . import prt, err, _print_info, _find #@UnresolvedImport
 
+def remote_parser(cmd):
+    lib_p = cmd.add_parser('remote', help='Access the remote library')
+    lib_p.set_defaults(command='remote')
+    asp = lib_p.add_subparsers(title='remote commands', help='Access the remote library')
+    lib_p.add_argument('-n','--name',  default='default',  help='Select a different name for the library, from which the remote is located')
+ 
+    group = lib_p.add_mutually_exclusive_group()
+    group.add_argument('-s', '--server',  default=False, dest='is_server',  action='store_true', help = 'Select the server configuration')
+    group.add_argument('-c', '--client',  default=False, dest='is_server',  action='store_false', help = 'Select the client configuration')
+        
+    sp = asp.add_parser('info', help='Display the remote configuration')
+    sp.set_defaults(subcommand='info')
+    sp.add_argument('term',  nargs='?', type=str,help='Name or ID of the bundle or partition to print information for')
+    
+  
+    sp = asp.add_parser('list', help='List remote files')
+    sp.set_defaults(subcommand='list')
+    sp.add_argument('-m','--meta', default=False,  action='store_true',  help="Force fetching metadata for remotes that don't provide it while listing, like S3")
+    sp.add_argument('datasets', nargs=argparse.REMAINDER)
+        
+    sp = asp.add_parser('find', help='Search for the argument as a bundle or partition name or id')
+    sp.set_defaults(subcommand='find')   
+    sp.add_argument('term', type=str, nargs=argparse.REMAINDER,help='Query term')
+
+
+
 def remote_command(args, rc, src):
     from databundles.library import new_library
 

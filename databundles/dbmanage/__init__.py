@@ -281,132 +281,34 @@ def _print_info(l,d,p, list_partitions=False):
             prt("P Web Path  : {}",remote_p['urls']['db'])
             
 
-
 def main():
     import argparse
-    from .library import library_command #@UnresolvedImport
-    from .warehouse import warehouse_command, warehouse_parser #@UnresolvedImport
-    from .remote import remote_command  #@UnresolvedImport 
-    from .library import library_parser
-    from test import test_command #@UnresolvedImport
-    from install import install_command #@UnresolvedImport
-    from ckan import ckan_command #@UnresolvedImport
-    from source import source_command, source_parser  #@UnresolvedImport    
+    
     parser = argparse.ArgumentParser(prog='python -mdatabundles',
                                      description='Databundles {}. Management interface for databundles, libraries and repositories. '.format(__version__))
-    
-    #parser.add_argument('command', nargs=1, help='Create a new bundle') 
- 
+       
     parser.add_argument('-c','--config', default=None, action='append', help="Path to a run config file") 
     parser.add_argument('-v','--verbose', default=None, action='append', help="Be verbose") 
     parser.add_argument('--single-config', default=False,action="store_true", help="Load only the config file specified")
 
-  
     cmd = parser.add_subparsers(title='commands', help='command help')
     
+    from .library import library_parser, library_command #@UnresolvedImport
+    from .warehouse import warehouse_command, warehouse_parser #@UnresolvedImport
+    from .remote import remote_parser,remote_command  #@UnresolvedImport 
+    from test import test_parser, test_command #@UnresolvedImport
+    from install import install_parser, install_command #@UnresolvedImport
+    from ckan import ckan_parser, ckan_command #@UnresolvedImport
+    from source import source_command, source_parser  #@UnresolvedImport 
 
-    #
-    # library  Command
-    #
-
-    library_parser(cmd)
-
-    #
-    # warehouse  Command
-    #
-    
+    library_parser(cmd)  
     warehouse_parser(cmd)
- 
-    #
-    # ckan Command
-    #
-    lib_p = cmd.add_parser('ckan', help='Access a CKAN repository')
-    lib_p.set_defaults(command='ckan')
-    lib_p.add_argument('-n','--name',  default='default',  help='Select the configuration name for the repository')
-    asp = lib_p.add_subparsers(title='CKAN commands', help='Access a CKAN repository')
-    
-    sp = asp.add_parser('package', help='Dump a package by name, as json or yaml')
-    sp.set_defaults(subcommand='package')   
-    sp.add_argument('term', type=str,help='Query term')
-    group = sp.add_mutually_exclusive_group()
-    group.add_argument('-y', '--yaml',  default=True, dest='use_json',  action='store_false')
-    group.add_argument('-j', '--json',  default=True, dest='use_json',  action='store_true')
-    
-    #
-    # Install Command
-    #
-    lib_p = cmd.add_parser('install', help='Install configuration files')
-    lib_p.set_defaults(command='install')
-    asp = lib_p.add_subparsers(title='Install', help='Install configuration files')
-    
-    #
-    # Config Command
-    #
-    sp = asp.add_parser('config', help='Install the global configuration')
-    sp.set_defaults(subcommand='config')
-    sp.add_argument('-p', '--print',  dest='prt', default=False, action='store_true', help='Print, rather than save, the config file')
-    sp.add_argument('-f', '--force',  default=False, action='store_true', help="Force using the default config; don't re-use the xisting config")
-    sp.add_argument('-r', '--root',  default=None,  help="Set the root dir")
-    sp.add_argument('-R', '--remote',  default=None,  help="Url of remote library")
-
-
+    ckan_parser(cmd)
+    install_parser(cmd)
     source_parser(cmd)
-   
-    #
-    # Remote Command
-    #
-    
-    lib_p = cmd.add_parser('remote', help='Access the remote library')
-    lib_p.set_defaults(command='remote')
-    asp = lib_p.add_subparsers(title='remote commands', help='Access the remote library')
-    lib_p.add_argument('-n','--name',  default='default',  help='Select a different name for the library, from which the remote is located')
- 
-    group = lib_p.add_mutually_exclusive_group()
-    group.add_argument('-s', '--server',  default=False, dest='is_server',  action='store_true', help = 'Select the server configuration')
-    group.add_argument('-c', '--client',  default=False, dest='is_server',  action='store_false', help = 'Select the client configuration')
-        
-    sp = asp.add_parser('info', help='Display the remote configuration')
-    sp.set_defaults(subcommand='info')
-    sp.add_argument('term',  nargs='?', type=str,help='Name or ID of the bundle or partition to print information for')
-    
-  
-    sp = asp.add_parser('list', help='List remote files')
-    sp.set_defaults(subcommand='list')
-    sp.add_argument('-m','--meta', default=False,  action='store_true',  help="Force fetching metadata for remotes that don't provide it while listing, like S3")
-    sp.add_argument('datasets', nargs=argparse.REMAINDER)
-        
-    sp = asp.add_parser('find', help='Search for the argument as a bundle or partition name or id')
-    sp.set_defaults(subcommand='find')   
-    sp.add_argument('term', type=str, nargs=argparse.REMAINDER,help='Query term')
+    remote_parser(cmd)
+    test_parser(cmd)
 
-
-    #
-    # BigQuery
-    #
-    lib_p = cmd.add_parser('bq', help='BigQuery administration')
-    lib_p.set_defaults(command='bq')
-    asp = lib_p.add_subparsers(title='Bigquerry Commands', help='command help')
-    
-    sp = asp.add_parser('cred', help='Setup access credentials')
-    sp.set_defaults(subcommand='cred')
-    
-    sp = asp.add_parser('list', help='List datasets')
-    sp.set_defaults(subcommand='list')
-          
-    #
-    # Test Command
-    #
-    lib_p = cmd.add_parser('test', help='Test and debugging')
-    lib_p.set_defaults(command='test')
-    asp = lib_p.add_subparsers(title='Test commands', help='command help')
-    
-    sp = asp.add_parser('config', help='Dump the configuration')
-    sp.set_defaults(subcommand='config')
-    group.add_argument('-v', '--version',  default=False, action='store_true', help='Display module version')
- 
-    sp = asp.add_parser('spatialite', help='Test spatialite configuration')
-    sp.set_defaults(subcommand='spatialite')
-         
     args = parser.parse_args()
 
     if args.single_config:
