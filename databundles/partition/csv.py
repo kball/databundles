@@ -15,12 +15,11 @@ class CsvPartitionIdentity(PartitionIdentity):
 class CsvPartition(PartitionBase):
     ''' '''
     
-    FORMAT = 'csv'    
+    FORMAT = 'csv' 
+    _db_class = CsvDb   
     
     def __init__(self, bundle, record, **kwargs):
         super(CsvPartition, self).__init__(bundle, record)
-
-        self._db_class = CsvDb
 
 
     @property

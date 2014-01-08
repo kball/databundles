@@ -107,6 +107,8 @@ class PartitionInterface(object):
 
 class PartitionBase(PartitionInterface):
 
+    _db_class = None
+
     def __init__(self, db, record, **kwargs):
         
         self.bundle = db
@@ -123,8 +125,7 @@ class PartitionBase(PartitionInterface):
         #    sqlalchemy.orm.exc.DetachedInstanceError: Instance <Table at 0x1077d5450> 
         #    is not bound to a Session; attribute refresh operation cannot proceed
         self.record_count = self.record.count
-        
-        self._db_class = None
+
         self._database =  None
 
     @classmethod

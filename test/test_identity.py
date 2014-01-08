@@ -325,12 +325,31 @@ class Test(unittest.TestCase):
         bundle.database.create()
         bp = bundle.partitions
      
-        p = bp.find_or_new(time = 't2', space='s1')
+        p = bp.new_db_partition(time = 't1', space='s1')
+        self.assertEquals('source-dataset-subset-variation-t1-s1-0.0.1~p1DxuZ001001', p.identity.fqname)
         
-        print p.identity.fqname
-        
-        return 
+        p = bp.find_or_new(time = 't1', space='s2')
+        self.assertEquals('source-dataset-subset-variation-t1-s2-0.0.1~p1DxuZ002001', p.identity.fqname)
 
+        # Duplicate
+        p = bp.find_or_new(time = 't1', space='s2')
+        self.assertEquals('source-dataset-subset-variation-t1-s2-0.0.1~p1DxuZ002001', p.identity.fqname)
+        
+        p = bp.find_or_new_hdf(time = 't2', space='s1')
+        self.assertEquals('source-dataset-subset-variation-t2-s1-hdf-0.0.1~p1DxuZ003001', p.identity.fqname)
+        
+        p = bp.find_or_new_csv(time = 't2', space='s1')
+        self.assertEquals('source-dataset-subset-variation-t2-s1-csv-0.0.1~p1DxuZ004001', p.identity.fqname)
+        
+        p = bp.find_or_new_geo(time = 't2', space='s1')
+        self.assertEquals('source-dataset-subset-variation-t2-s1-geo-0.0.1~p1DxuZ005001', p.identity.fqname)
+        
+ 
+        # Ok! Build!
+ 
+        bundle = Bundle()  
+        bundle.exit_on_fatal = False
+        
         bundle.clean()
         bundle.pre_prepare()
         bundle.prepare()
@@ -339,10 +358,10 @@ class Test(unittest.TestCase):
         bundle.build_db_inserter_codes()
         bundle.post_build()
                 
-        self.assertEquals('source.com/foobar-orig-0.0.1',bundle.identity.vid) 
-        self.assertEquals('source.com/foobar-orig-0.0.1.db',bundle.identity.name) 
-        self.assertEquals('source.com/foobar-orig-0.0.1',bundle.identity.vname) 
-        self.assertEquals('source.com/foobar-orig',bundle.identity.fqname)
+        self.assertEquals('d1DxuZ001',bundle.identity.vid) 
+        self.assertEquals('source-dataset-subset-variation',bundle.identity.sname) 
+        self.assertEquals('source-dataset-subset-variation-0.0.1',bundle.identity.vname) 
+        self.assertEquals('source-dataset-subset-variation-0.0.1~d1DxuZ001',bundle.identity.fqname)
 
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']

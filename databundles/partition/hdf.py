@@ -15,11 +15,10 @@ class HdfPartition(PartitionBase):
     '''A Partition that hosts a Spatialite for geographic data'''
     
     FORMAT = 'hdf'
+    _db_class = HdfDb
     
     def __init__(self, bundle, record, **kwargs):
         super(HdfPartition, self).__init__(bundle, record)
-
-        self._db_class = HdfDb
 
 
     @property

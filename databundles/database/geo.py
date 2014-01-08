@@ -70,6 +70,10 @@ class GeoDb(PartitionDb):
 
         super(GeoDb, self).__init__(bundle, partition, base_path, **kwargs)  
 
+    @classmethod
+    def make_path(cls, container):
+        return container.path + cls.EXTENSION
+
     @property
     def engine(self):
         return self._get_engine(_on_connect_geo)

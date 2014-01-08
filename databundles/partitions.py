@@ -9,6 +9,7 @@ import os
 from identity import PartitionIdentity, PartitionNameQuery, PartitionName, PartialPartitionName, NameQuery
 from sqlalchemy.orm.exc import NoResultFound
 from util.typecheck import accepts, returns
+from dbexceptions import ConflictError
 
 class Partitions(object):
     '''Continer and manager for the set of partitions. 
@@ -306,8 +307,8 @@ class Partitions(object):
         assert type(pname) == PartialPartitionName, "Expected PartialPartitionName, got {}".format(type(pname))
         
    
-        if tables and not isinstance(tables, (list,tuple)):
-            raise ValueError("If specified, 'tables' must be a ist or tuple")
+        if tables and not isinstance(tables, (list,tuple, set)):
+            raise ValueError("If specified, 'tables' must be a list, set or tuple")
      
         if not data:
             data = {}
@@ -327,6 +328,9 @@ class Partitions(object):
                 raise NotFoundError('Failed to find table for name or id: {}'.format(pname.table))
         else:
             table = None
+
+        if tables:
+            tables = list(tables)
 
         if tables and pname and pname.table and pname.table not in tables:
             tables = list(tables)
@@ -370,174 +374,107 @@ class Partitions(object):
         from databundles.orm import Partition as OrmPartition
    
         session.query(OrmPartition).delete()
-        
-    def _new_part_args(self,kwargs):
-        
-        pnq = PartitionNameQuery(**kwargs)
-        
-        ppn = PartialPartitionName(**kwargs)
-        
-        tables = set(kwargs.get('tables', []))
-        data = kwargs.get('data', None)
-        
-        if pnq.table:
-            tables.add(pnq.table)
 
-        return pnq, ppn, list(tables), data
         
-    def _new_partition(self, pname, tables=None, data=None):
+    def _new_partition(self, ppn, tables=None, data=None, clean = False, create=True):
         '''Creates a new OrmPartition record'''
         
-        assert type(pname) == PartialPartitionName, "Expected PartialPartitionName, got {}".format(type(pname))
+        assert type(ppn) == PartialPartitionName, "Expected PartialPartitionName, got {}".format(type(ppn))
+
         
         with self.bundle.session as s:
-            op = self._new_orm_partition(pname, tables=tables, data=data)
+            op = self._new_orm_partition(ppn, tables=tables, data=data)
           
             # Return the partition from the managed session, which prevents the
             #  partition from being tied to a session that is closed.  
 
             fqname = op.fqname
 
-        return self.find(PartitionNameQuery(fqname=fqname))
+        partition =  self.find(PartitionNameQuery(fqname=fqname))
 
-
-    def new_partition(self, pid=None, **kwargs):
-        return self.new_db_partition( pid, **kwargs)
-
-    def new_db_partition(self, pid=None, **kwargs):
-        
-        if pid:
-            pid.format = 'db'
-        else: 
-            kwargs['format'] = 'db'
+        if create:
+            if tables:   
+                partition.create_with_tables(tables, clean)  
+            else:
+                partition.create()
             
-        p =  self._new_partition(pid, **kwargs)
-        p.create()
-        
-        return p
-    
-    def new_geo_partition(self, pid=None, **kwargs):
-        from sqlalchemy.orm.exc import  NoResultFound
-        
-        if pid:
-            pid.format = 'geo'
-        else: 
-            kwargs['format'] = 'geo'
-        
-        # We'll need to load a table from the shapefile, so that has to be created before
-        # we create the partition. 
-        table_name = kwargs.get('table',pid.table if pid else None)
-        
-        if not table_name:
-            raise ValueError("Pid must have a table name")
+        return partition
 
-        try:
-            self.bundle.schema.table(table_name)
-        except NoResultFound:
-            with self.bundle.session:
-                t = self.bundle.schema.add_table(table_name)
+    def _find_or_new(self, kwargs, clean=False, format=None, tables=None, data=None, create=True):
+        '''
+        
+        Returns True if the partition was found, not created, False if it
+        was created
+        '''
+        
+        pnq = PartitionNameQuery(**kwargs)
+        
+        ppn = PartialPartitionName(**kwargs)
+        
+        if tables:
+            tables = set(tables)
 
-        p = self._new_partition(pid, **kwargs)
+        if ppn.table:
+            if not tables:
+                tables = set()
+      
+            tables.add(ppn.table)
 
-        if kwargs.get('shape_file'):
-            p.load_shapefile( kwargs.get('shape_file'), **kwargs)
-     
-        return p
-        
-    def new_hdf_partition(self, pid=None, **kwargs):
-        
-        if pid:
-            pid.format = 'hdf'
-        else: 
-            kwargs['format'] = 'hdf'
-            
-        return self._new_partition(pid, **kwargs)
-        
-    def new_csv_partition(self, pid=None, **kwargs):
-        
-        if pid:
-            pid.format = 'csv'
-        else: 
-            kwargs['format'] = 'csv'
-        
-        return self._new_partition(pid, **kwargs)
-        
-    def _find_or_new(self, pnq, ppn, clean = False,  tables=None, data=None):
-        
-        assert isinstance(pnq,PartitionNameQuery), "Expected NameQuery, got {}".format(type(pnq))
-        assert type(ppn) == PartialPartitionName, "Expected PartialPartitionName, got {}".format(type(ppn))
+        if format:
+            ppn.format = format
+            pnq.format = format
 
         partition =  self.find(pnq)
 
         if partition:
-            return partition
+            return partition, True
 
-        partition =  self._new_partition(ppn, tables=tables, data=data)
-        
-        if tables:   
-            partition.create_with_tables(tables, clean)  
-        else:
-            partition.create()
+        partition =  self._new_partition(ppn, tables=tables, data=data, create=create)
 
-        return partition;        
-        
-        
+        return partition, False      
+
+
+    def new_partition(self, clean=False, tables=None, data=None, **kwargs):
+        return self.new_db_partition(clean=clean, tables=tables, data=data, **kwargs)
+
     def find_or_new(self, clean = False,  tables=None, data=None, **kwargs):
         return self.find_or_new_db(tables=tables, clean = clean, data=data, **kwargs)
 
+    def new_db_partition(self, clean=False, tables=None, data=None,  **kwargs):
+
+        p, found =  self._find_or_new(kwargs, clean = False,  tables=None, data=None, format='db')
+        
+        if found:
+            raise ConflictError("Partition {} alread exists".format(p.name))
+
+        return p
+  
     def find_or_new_db(self, clean = False,  tables=None, data=None, **kwargs):
         '''Find a partition identified by pid, and if it does not exist, create it. 
         
         Args:
             pid A partition Identity
-            tables String or array of tables to copy form the main partition
+            tables. String or array of tables to copy form the main partition
+            data. add a data field to the partition in the database
+            clean. Clean the database when it is created
+            kwargs. time,space,gran, etc; parameters to name the partition
         '''
-        
-        pnq, ppn, tables, data = self._new_part_args(kwargs)
-        
-        ppn.format = 'db'
-        
-        return self._find_or_new(pnq, ppn, clean = False,  tables=None, data=None)
     
-    def find_or_new_geo(self, pid=None, **kwargs):
-        '''Find a partition identified by pid, and if it does not exist, create it. 
+        p, _ =  self._find_or_new(kwargs, clean = False,  tables=None, data=None, format='db')
         
-        Args:
-            pid A partition Identity
-            tables String or array of tables to copy form the main partition
-        '''
+        return p
+ 
+         
+    def new_hdf_partition(self, clean=False, tables=None, data=None, **kwargs):
         
-        if pid:
-            pid.format = 'geo'
-        else: 
-            kwargs['format'] = 'geo'
+        p, found =  self._find_or_new(kwargs,format='hdf')
         
-        try: partition =  self.find(pid, **kwargs)
-        except: partition = None
+        if found:
+            raise ConflictError("Partition {} alread exists".format(p.name))
+
+        return p
     
-        if partition:
-            return partition
-
-        tables = kwargs.get('tables',kwargs.get('table',pid.table if pid else None))
-    
-        if tables and not isinstance(tables, (list,tuple)):
-            tables = [tables]
-    
-        if tables and pid and pid.table and pid.table not in tables:
-            tables.append(partition.identity.table)
-
-        partition = self.new_geo_partition(pid, **kwargs)
-
-
-        if tables:   
-            partition.create_with_tables(tables)  
-        else:
-            partition.create()
-
-
-        return partition;
-    
-    def find_or_new_hdf(self, pid=None, **kwargs):
+    def find_or_new_hdf(self, clean = False,  tables=None, data=None, **kwargs):
         '''Find a partition identified by pid, and if it does not exist, create it. 
         
         Args:
@@ -545,20 +482,20 @@ class Partitions(object):
             tables String or array of tables to copy form the main partition
         '''
 
-        if pid:
-            pid.format = 'hdf'
-        else: 
-            kwargs['format'] = 'hdf'
-
-        try: partition =  self.find(pid, **kwargs)
-        except: partition = None
+        p, _ =  self._find_or_new(kwargs, clean = False,  tables=None, data=None, create=False, format='hdf')
+        
+        return p
     
-        if partition:
-            return partition
+ 
+    def new_csv_partition(self, pid=None, **kwargs):
+        
+        p, found =  self._find_or_new(kwargs,format='csv')
+        
+        if found:
+            raise ConflictError("Partition {} alread exists".format(p.name))
 
-        partition = self.new_hdf_partition(pid, **kwargs)
+        return p
 
-        return partition;
 
     def find_or_new_csv(self, pid=None, **kwargs):
         '''Find a partition identified by pid, and if it does not exist, create it. 
@@ -568,20 +505,41 @@ class Partitions(object):
             tables String or array of tables to copy form the main partition
         '''
 
-        if pid:
-            pid.format = 'csv'
-        else: 
-            kwargs['format'] = 'csv'
-
-        try: partition =  self.find(pid, **kwargs)
-        except: partition = None
+        p, _ =  self._find_or_new(kwargs, clean = False,  tables=None, data=None, format='csv')
+        
+        return p
     
-        if partition:
-            return partition
+ 
+    
+    def new_geo_partition(self, clean=False, tables=None, data=None, shape_file=None,  **kwargs):
+        from sqlalchemy.orm.exc import  NoResultFound
+        
+        p, found =  self._find_or_new(kwargs,format='geo')
+        
+        if found:
+            raise ConflictError("Partition {} alread exists".format(p.name))
 
-        partition = self.new_csv_partition(pid, **kwargs)
+        if shape_file:
+            p.load_shapefile(shape_file)
 
-        return partition;
+        return p
+
+    def find_or_new_geo(self, clean=False, tables=None, data=None, 
+                        create = False, shape_file=None,  **kwargs):
+        '''Find a partition identified by pid, and if it does not exist, create it. 
+        
+        Args:
+            pid A partition Identity
+            tables String or array of tables to copy form the main partition
+        '''
+        
+        p, _ =  self._find_or_new(kwargs, clean = False,  tables=None, 
+                                  data=None, create=False, format='geo')
+        
+        if shape_file:
+            p.load_shapefile(shape_file)
+        
+        return p
 
     def delete(self, partition):
         from databundles.orm import Partition as OrmPartition

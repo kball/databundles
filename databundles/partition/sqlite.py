@@ -83,8 +83,10 @@ class SqlitePartition(PartitionBase):
         if not tables: 
             raise ValueError("'tables' cannot be empty")
 
-        if not isinstance(tables, (list, tuple)):
+        if not isinstance(tables, (list, set, tuple)):
             tables = [tables]
+        else:
+            tables = list(tables)
 
         if clean:
             self.database.delete()

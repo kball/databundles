@@ -18,6 +18,8 @@ class GeoPartition(SqlitePartition):
     
     FORMAT = 'geo'
     
+    _db_class = GeoDb
+    
     def __init__(self, bundle, record, **kwargs):
         super(GeoPartition, self).__init__(bundle, record)
 
@@ -224,7 +226,7 @@ class GeoPartition(SqlitePartition):
         
         #ogr_create="ogr2ogr -explodecollections -skipfailures -f SQLite {output} -nlt  {type} -nln \"{table}\" {input}  -dsco SPATIALITE=yes"
         
-        ogr_create="ogr2ogr  -progress -skipfailures -f SQLite {output} -gt 65536 {t_srs} -nlt  {type} -nln \"{table}\" {input}  -dsco SPATIALITE=yes"
+        ogr_create="ogr2ogr  -overwrite -progress -skipfailures -f SQLite {output} -gt 65536 {t_srs} -nlt  {type} -nln \"{table}\" {input}  -dsco SPATIALITE=yes"
 
         dir_ = os.path.dirname(self.database.path)
         if not os.path.exists(dir_):
