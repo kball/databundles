@@ -374,7 +374,7 @@ class RelationalBundleDatabaseMixin(object):
     def _create(self):
         """Create the database from the base SQL"""
         from databundles.orm import  Dataset, Partition, Table, Column, File
-        from ..identity import new_identity
+        from ..identity import Identity
         from sqlalchemy.orm import sessionmaker
 
 
@@ -388,10 +388,12 @@ class RelationalBundleDatabaseMixin(object):
         
         ds = Dataset(**self.bundle.config.identity)
 
-        ident = new_identity(self.bundle.config.identity)
+        ident = Identity.from_dict(self.bundle.config.identity)
         
-        ds.name = ident.name
+        ds.name = ident.sname
         ds.vname = ident.vname
+        ds.fqname = ident.fqname
+        ds.creator = ident.creator
 
         session.add(ds)
         session.commit()
@@ -400,9 +402,11 @@ class RelationalBundleDatabaseMixin(object):
         from ..orm import Dataset
         # Now patch up the Dataset object
         
-        ds = Dataset(**self.bundle.identity.to_dict())
-        ds.name = self.bundle.identity.name
+        ds = Dataset(**self.bundle.identity.dict)
+        ds.name = self.bundle.identity.sname
         ds.vname = self.bundle.identity.vname
+        ds.fqname = self.bundle.identity.fqname
+        ds.creator = self.bundle.identity.creator
 
         self.session.merge(ds)
 

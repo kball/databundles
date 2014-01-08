@@ -2,7 +2,8 @@
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from . import PartitionBase, PartitionIdentity
+from . import PartitionBase
+from ..identity import PartitionIdentity
 from ..database.partition import  PartitionDb
    
 class SqlitePartitionIdentity(PartitionIdentity):

@@ -1,7 +1,7 @@
 
 
 import os
-from ..identity import Identity
+from ..identity import Identity, Name, NameQuery
 from ..identity import ObjectNumber, PartitionNumber
 
 
@@ -32,7 +32,7 @@ def new_partition(bundle, orm_partition, **kwargs):
 def new_identity(d, bundle=None):
 
     if bundle:
-        d = dict(d.items() + bundle.identity.to_dict().items())
+        d = dict(d.items() + bundle.identity.dict.items())
 
     if not 'format' in d:
         d['format'] = 'db'
@@ -40,22 +40,23 @@ def new_identity(d, bundle=None):
       
     if d['format'] == 'geo':
         from geo import GeoPartitionIdentity
-        return GeoPartitionIdentity(**d)
+        return GeoPartitionIdentity.from_dict(d)
     
     elif d['format'] == 'hdf':
         from hdf import HdfPartitionIdentity
-        return HdfPartitionIdentity(**d)
+        return HdfPartitionIdentity.from_dict(d)
     
     elif d['format'] == 'csv':
         from csv import CsvPartitionIdentity
-        return CsvPartitionIdentity(**d)
+        return CsvPartitionIdentity.from_dict(d)
     
     elif d['format'] == 'db':
         from sqlite import SqlitePartitionIdentity
-        return SqlitePartitionIdentity(**d)
+        return SqlitePartitionIdentity.from_dict(d)
     
-    elif d['format'] == Identity.ANY:
-        return PartitionIdentity(**d)
+    elif d['format'] == NameQuery.ANY:
+        from ..identity import PartitionIdentity
+        return PartitionIdentity.from_dict(d)
     
     else:
         raise ValueError("Unknown format in : '{}' ".format(d))
@@ -145,7 +146,7 @@ class PartitionBase(PartitionInterface):
         '''Return a pathname for the partition, relative to the containing 
         directory of the bundle. '''
 
-        return self.bundle.sub_path(self.identity.partition_path)
+        return self.bundle.sub_path(self.identity.path)
 
 
     def sub_dir(self, *args):

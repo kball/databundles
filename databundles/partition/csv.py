@@ -3,7 +3,8 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 
   
-from . import PartitionBase, PartitionIdentity
+from . import PartitionBase
+from ..identity import PartitionIdentity
 from ..database.csv import CsvDb
    
 class CsvPartitionIdentity(PartitionIdentity):

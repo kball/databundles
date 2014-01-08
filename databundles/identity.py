@@ -6,34 +6,8 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 import os.path
-
-def new_identity(d, bundle=None):
-    """Create a new identity from a dict form """
-    from partition import new_identity as p_new_identity
-    
-    on = ObjectNumber.parse(d.get('vid'))
-    
-    if  on: 
-        if isinstance(on, DatasetNumber):
-            return Identity(**d)
-        elif isinstance(on, PartitionNumber):
-
-            return p_new_identity(d)
-        else:
-            raise ValueError("parameter was not  dataset nor partition id: {} ".format(d))
-
-    elif bundle:
-        return p_new_identity(d, bundle=bundle)
-    
-    elif set(['time','space','table','grain', 'format']).intersection(set(d.keys())):    
-        return p_new_identity(d)
-    
-    else:
-        return Identity(**d)
-        try : return Identity(**d)
-        except Exception as e:
-            raise Exception("Failed for {}: {}".format(d, e))
-
+from semantic_version import Version 
+from util.typecheck import returns, accepts
 
 class Name(object):
     '''The Name part of an identity ''' 
@@ -41,6 +15,7 @@ class Name(object):
 
     PATH_EXTENSION = '.db'
 
+    # Name, Default Value, Is Optional
     _name_parts = [('source',None,False),
                   ('dataset',None,False),
                   ('subset',None,True),
@@ -53,35 +28,56 @@ class Name(object):
                   ('version',None,True)
                   ]
 
+    source = None
+    dataset = None
+    subset = None
+    type = None
+    part = None
+    variation = None
+    version = None
+
     def __init__(self, *args, **kwargs):
         
+
         for k,default, optional in self.name_parts:
             if optional:
                 setattr(self,k, kwargs.get(k,default))
             else:
                 setattr(self,k, kwargs.get(k))
 
+
         self.version = self._parse_version(self.version)
 
+        self.is_valid()
+
       
+    def is_valid(self):
+        
+        for k, _, optional in self.name_parts:
+            if not optional and not bool(getattr(self,k)):
+                raise ValueError("Name requires field '{}' to have a value"
+                                 .format(k))
+        
+    @returns(str, debug=2)  
     def _parse_version(self,version):
         import semantic_version as sv  # @UnresolvedImport
+        
         if version is not None and isinstance(version,basestring):
 
-            if version == PartialName.ANY:
+            if version == NameQuery.ANY:
                 pass
-            elif version == PartialName.NONE:
+            elif version == NameQuery.NONE:
                 pass
             else:
                 try: 
-                    version = sv.Version(version)
+                    version = str(sv.Version(version))
                 except ValueError:
-                    try: version = sv.Spec(version)
+                    try: version = str(sv.Spec(version))
                     except ValueError:
                         raise ValueError("Could not parse '{}' as a semantic version".format(version))        
                 
         if not version:
-            version = sv.Version('0.0.0')
+            version = str(sv.Version('0.0.0'))
                 
         return version
                 
@@ -113,11 +109,15 @@ class Name(object):
 
     @property
     def name(self):
-
+        '''String version of the name, excluding the version, and
+        excluding the format, if the format is 'db' '''
+        
         d = self._dict(with_name=False)
     
         return '-'.join([ d[k] for (k,_,_) in self.name_parts 
-                         if k and d.get(k,False) and k != 'version'])
+                         if k and d.get(k,False) 
+                         and k != 'version'
+                         and not (k == 'format' and d[k] == 'db') ])
     
     @property
     def vname(self):
@@ -173,7 +173,16 @@ class Name(object):
     def source_path(self):
         '''The name in a form suitable for use in a filesystem. 
         Excludes the revision'''
-        return self._path_join(excludes=['version'])
+        # Need to do this to ensure the function produces the
+        # bundle path when called from subclasses
+        names = [ k for k,_,_ in Name._name_parts]
+
+        return os.path.join(
+                self.source,
+                self._path_join(names=names,
+                                excludes=['source','version'],sep='-')
+             )
+                
 
     @property
     def cache_key(self):
@@ -183,23 +192,70 @@ class Name(object):
     def clone(self):
         return self.__class__(**self.dict)
 
-    def version(self, revision):
+    def ver(self, revision):
         '''Clone and change the version'''
 
             
         c = self.clone()
         
-        c.version = self.version = self._parse_version(self.version)
+        c.version =  self._parse_version(self.version)
         
         return c
 
+    def type_is_compatible(self, o):
+
+        if type(o) != DatasetNumber:
+            return False
+        else:
+            return True
+      
+    # The name always stores the version number as a string, so these
+    # convenience functions make it easier to update specific parts
+    @property
+    def version_minor(self): return Version(self.version).minor
+    
+    @version_minor.setter
+    def version_minor(self, value):  
+        v = Version(self.version)
+        v.minor = value
+        self.version = str(v)
+ 
+    @property
+    def version_major(self): return Version(self.version).minor
+    
+    @version_major.setter
+    def version_major(self, value):  
+        v = Version(self.version)
+        v.major = value
+        self.version = str(v)
+    
+    @property
+    def version_patch(self): return Version(self.version).patch
+    
+    @version_patch.setter
+    def version_patch(self, value):  
+        v = Version(self.version)
+        v.patch = value
+        self.version = str(v)
+ 
+
+    @property
+    def version_build(self): return Version(self.version).build
+    
+    @version_build.setter
+    def version_build(self, value):  
+        v = Version(self.version)
+        v.build = value
+        self.version = str(v)
+ 
+    
     def __str__(self):
         return self.name
 
-
-class PartitionName(Name):
-    '''A Partition Name'''
-
+class PartialPartitionName(Name):
+    '''For specifying a PartitionName within the context of a bundle. 
+    '''
+    
     time = None
     space = None
     table = None
@@ -207,7 +263,7 @@ class PartitionName(Name):
     format = None
     segment = None
 
-    _local_name_parts = [ 
+    _name_parts = [ 
                   ('table',None,True),
                   ('time',None,True),
                   ('space',None,True),
@@ -215,29 +271,38 @@ class PartitionName(Name):
                   ('format',None,True),
                   ('segment',None,True)]
 
-    _name_parts = ( Name._name_parts[0:-1] +
-                  _local_name_parts +
+    def promote(self, name):
+        '''Promote to a PartitionName by combining with 
+        a bundle Name'''
+
+        
+        return PartitionName(**dict(name.dict.items() +
+                                    self.dict.items() ))
+        
+
+    def is_valid(self): pass
+    
+class PartitionName(PartialPartitionName, Name):
+    '''A Partition Name'''
+
+
+    _name_parts = ( Name._name_parts[0:-1] + 
+                  PartialPartitionName._name_parts +
                   Name._name_parts[-1:])
 
-    @property
-    def path(self):
-        '''The path of the bundle source. Includes the revision. '''
+    def _local_parts(self):
         
-        local_names = [ k for k,_,_ in self._local_name_parts]
-
-        parts = [super(PartitionName, self).path]
+        parts = []
         
         if self.table:
             parts.append(self.table)
             
-
         l = []
         if self.time: l.append(self.time)
         if self.space: l.append(self.space)
         
         if l: parts.append('-'.join(l))
             
-        
         l = []
         if self.grain: l.append(self.grain)
         if self.segment: l.append(self.segment)
@@ -246,12 +311,55 @@ class PartitionName(Name):
         
         # the format value is part of the file extension
         
-        return os.path.join(*parts)
+        return parts
+ 
+ 
+    @property
+    def name(self):
+
+        d = self._dict(with_name=False)
+
+        return '-'.join([ d[k] for (k,_,_) in self.name_parts 
+                         if k and d.get(k,False) 
+                         and k != 'version'
+                         and (k != 'format' or str(d[k]) != 'db') ])
+    
+        
+    @property
+    def path(self):
+        '''The path of the bundle source. Includes the revision. '''
+
+        return os.path.join(*(
+                              [super(PartitionName, self).path]+
+                              self._local_parts())
+                            )
+
+    @property
+    def source_path(self):
+        '''The path of the bundle source. Includes the revision. '''
+
+        return os.path.join(*(
+                              [super(PartitionName, self).source_path]+
+                              self._local_parts()) 
+                            )
+
+    def type_is_compatible(self, o):
+        
+        if type(o) != PartitionNumber:
+            return False
+        else:
+            return True
+        
 
 class PartialMixin(object):
 
+    use_clear_dict = True
+
     def clear_dict(self, d):
-        return { k:v if v is not None else self.NONE for k,v in d.items() }
+        if self.use_clear_dict:
+            return { k:v if v is not None else self.NONE for k,v in d.items() }
+        else:
+            return d
 
     NONE = '<none>'
     ANY = '<any>'
@@ -264,13 +372,29 @@ class PartialMixin(object):
             
         return self.clear_dict(d) 
     
-    @property
-    def name(self):
-        raise NotImplementedError("Can't get a string name from a partial name")
+    def with_none(self):
+        '''Convert the NameQuery.NONE to None. This is needed because on the
+        kwargs list, a None value means the field is not specified, which 
+        equates to ANY. The _find_orm() routine, however, is easier to write if
+        the NONE value is actually None 
+        
+        Returns a clone of the origin, with NONE converted to None
+        '''
     
-    @property
-    def vname(self):
-        raise NotImplementedError("Can't get a string name from a partial name")
+        n = self.clone()
+    
+        for k,_,_ in n.name_parts:
+            
+            if getattr(n,k) == n.NONE:
+                delattr(n,k)
+
+        n.use_clear_dict = False
+    
+        return n
+    
+    def is_valid(self):
+        return True
+
 
     @property
     def path(self):
@@ -284,7 +408,7 @@ class PartialMixin(object):
     def cache_key(self):
         raise NotImplementedError("Can't get a cache_key from a partial name")
 
-class PartialName(PartialMixin, Name):
+class NameQuery(PartialMixin, Name):
     '''A partition name used for finding and searching. 
     does not have an expectation of having all parts completely
     defined, and can't be used to generate a string 
@@ -297,27 +421,52 @@ class PartialName(PartialMixin, Name):
     NONE = PartialMixin.NONE
     ANY = PartialMixin.ANY
 
+    # These are valid values for a name query
+    name = None
+    vname = None
+    fqname = None
+
+
     @property 
     def name_parts(self):
         '''Works with PartialNameMixin.clear_dict to set NONE and ANY values'''
+        
+        default = PartialMixin.ANY
 
-        np =  [ (k,PartialMixin.ANY, True) 
-                for k,_, _ in super(PartialName, self).name_parts ]
+        np =  ([ (k,default, True) 
+                for k,_, _ in super(NameQuery, self).name_parts ]
+               + 
+               [('name',default,True),
+                ('vname',default,True),
+                ('fqname',default,True)]
+               )
   
         return np
         
 
-class PartialPartitionName(PartialMixin,PartitionName):
+class PartitionNameQuery(PartialMixin,PartitionName):
     '''A partition name used for finding and searching. 
     does not have an expectation of having all parts completely
     defined, and can't be used to generate a string '''
 
+    # These are valid values for a name query
+    name = None
+    vname = None
+    fqname = None
+
     @property 
     def name_parts(self):
         '''Works with PartialNameMixin.clear_dict to set NONE and ANY values'''
-        return [ (k,PartialMixin.ANY, True) 
-                for k,_, _ in super(PartialName, self).name_parts ]
- 
+        
+        default = PartialMixin.ANY
+
+        return ([ (k,default, True) 
+                for k,_, _ in PartitionName._name_parts ]
+                + 
+               [('name',default,True),
+                ('vname',default,True),
+                ('fqname',default,True)]
+               )
 
 class ObjectNumber(object):
     '''
@@ -374,7 +523,7 @@ class ObjectNumber(object):
     SMALL_DS_MAX = 62**DLEN.DATASET[0] -1
     TCMAXVAL = 62**DLEN.TABLE -1; # maximum for table values. 
     CCMAXVAL = 62**DLEN.COLUMN -1; # maximum for column values. 
-    PARTMAXVAL = 62*DLEN.PARTITION -1; # maximum for table and column values. 
+    PARTMAXVAL = 62**DLEN.PARTITION -1; # maximum for table and column values. 
      
     EPOCH = 1325376000 # Jan 1, 2012 in UNIX time
 
@@ -599,11 +748,14 @@ class PartitionNumber(ObjectNumber):
         dataset -- Must be a DatasetNumber
         partition -- an integer, from 0 to 62^3
         '''
+        
+        partition = int(partition)
+        
         if not isinstance(dataset, DatasetNumber):
             raise ValueError("Constructor requires a DatasetNumber")
 
         if partition > ObjectNumber.PARTMAXVAL:
-            raise ValueError("Value is too large")
+            raise ValueError("Value is too large. Max is: {}".format(ObjectNumber.PARTMAXVAL))
 
         self.dataset = dataset
         self.partition = partition
@@ -630,20 +782,32 @@ class Identity(object):
     is_bundle = True
     is_partition = False
 
+    _name_class = Name
+
     _on = None
     _name = None
+    creator = None
 
-    def __init__(self, name, object_number):
-        
+    def __init__(self, name, object_number, creator=None):
+
         self._on = object_number
         self._name = name
+        self.creator = creator
 
-        self._name.version.patch = self._on.revision
+        if not self._name.type_is_compatible(self._on):
+            raise TypeError("The name and the object number must be "+
+                            "of compatible types: got {} and {}"
+                            .format(type(name), type(object_number)))
+
+        # Update the patch number to always be the revision
+        nv = Version(self._name.version)
+        nv.patch = self._on.revision
+        self._name.version = str(nv)
 
     @classmethod
     def from_dict(cls, d):
-        name = Name(**d)
-        
+        name = cls._name_class(**d)
+
         if 'id' in d and 'revision' in d:
             # The vid should be constructed from the id and the revision
             on = (ObjectNumber.parse(d['id']).rev(d['revision']))
@@ -651,8 +815,8 @@ class Identity(object):
             on = ObjectNumber.parse(d['vid'])
         else:
             raise ValueError("Must have id and revision, or vid")
-                  
-        return cls(name, on)
+          
+        return cls(name, on, d.get('creator'))
 
     def to_meta(self, md5=None, file=None):
         '''Return a dictionary of metadata, for use in the Remote api'''
@@ -677,6 +841,9 @@ class Identity(object):
     # Naming, paths and cache_keys
     #
 
+    def is_valid(self):
+        self._name.is_valid()
+
     @property
     def on(self):
         '''Return the object number obect'''
@@ -695,8 +862,14 @@ class Identity(object):
    
     @property
     def name(self):
-        """The name of the bundle, excluding the revision"""
+        """The name object"""
         return self._name
+
+    @property
+    def sname(self):
+        """The name of the bundle, as a string, excluding the revision"""
+        return str(self._name)
+
 
     @property
     def vname(self):
@@ -726,13 +899,35 @@ class Identity(object):
         '''The name in a form suitable for use as a cache-key'''
         return self._name.cache_key
  
+    @property
+    def dict(self):
+        d = self._name.dict
+        
+        d['vid'] = str(self._on)
+        d['id'] = str(self._on.rev(None))
+        d['revision'] = int(self._on.revision)
+        d['creator'] = self.creator
+        
+        return d
+ 
+    @staticmethod
+    def _compose_fqname(vname, vid):
+        return vname+'~'+vid
+ 
     def __str__(self):
-        return self._name.vname+'~'+self.vid
+        return self._compose_fqname(self._name.vname,self.vid)
+       
+    
        
 
 class PartitionIdentity(Identity):
     '''Subclass of Identity for partitions'''
     
+    _name_class = PartitionName
+
+    @property
+    def table(self):
+        return self._name.table
 
     @property
     def as_dataset(self):

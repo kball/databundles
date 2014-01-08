@@ -203,12 +203,14 @@ class Dataset(Base):
     id_ = SAColumn('d_id',String(16), )
     name = SAColumn('d_name',String(200), unique=False, nullable=False)
     vname = SAColumn('d_vname',String(200), unique=True, nullable=False)
+    fqname = SAColumn('d_fqname',String(200), unique=True, nullable=False)
     source = SAColumn('d_source',Text, nullable=False)
     dataset = SAColumn('d_dataset',Text, nullable=False)
     subset = SAColumn('d_subset',Text)
     variation = SAColumn('d_variation',Text)
     creator = SAColumn('d_creator',Text, nullable=False)
-    revision = SAColumn('d_revision',Integer)
+    revision = SAColumn('d_revision',Integer, nullable=False)
+    version = SAColumn('d_version',String(10), nullable=False)
 
     data = SAColumn('d_data', MutationDict.as_mutable(JSONEncodedObj))
 
@@ -223,12 +225,14 @@ class Dataset(Base):
         self.id_ = kwargs.get("oid",kwargs.get("id",kwargs.get("id_", None)) )
         self.name = kwargs.get("name",None) 
         self.vname = kwargs.get("vname",None) 
+        self.fqname = kwargs.get("fqname",None) 
         self.source = kwargs.get("source",None) 
         self.dataset = kwargs.get("dataset",None) 
         self.subset = kwargs.get("subset",None) 
         self.variation = kwargs.get("variation",None) 
         self.creator = kwargs.get("creator",None) 
         self.revision = kwargs.get("revision",None) 
+        self.version = kwargs.get("version",None) 
 
         if not self.id_:
             dn = DatasetNumber(None, self.revision )
@@ -237,13 +241,7 @@ class Dataset(Base):
         elif not self.vid:
             self.vid = str(ObjectNumber.parse(self.id_).rev(self.revision))
 
- 
-    @property
-    def creatorcode(self):
-        from identity import Identity
-        return Identity._creatorcode(self)
-    
-   
+
     def __repr__(self):
         return """<datasets: id={} vid={} name={} source={} ds={} ss={} var={} creator={} rev={}>""".format(
                     self.id_, self.vid, self.name, self.source,
@@ -255,19 +253,22 @@ class Dataset(Base):
     def identity(self):
         from identity import Identity
         return Identity(**self.to_dict() )
-        
-    def to_dict(self):
+       
+    @property 
+    def dict(self):
         return {
                 'id':self.id_, 
                 'vid':self.vid,
                 'name':self.name,
-                'vname':self.vname, 
+                'vname':self.fqname, 
+                'fqname':self.vname, 
                 'source':self.source,
                 'dataset':self.dataset, 
                 'subset':self.subset, 
                 'variation':self.variation, 
                 'creator':self.creator, 
                 'revision':self.revision, 
+                'version':self.version, 
                 }
         
 def _clean_flag( in_flag):
@@ -920,6 +921,7 @@ class Partition(Base):
     id_ = SAColumn('p_id',String(16), nullable=False)
     name = SAColumn('p_name',String(200), nullable=False)
     vname = SAColumn('p_vname',String(200), unique=True, nullable=False)
+    fqname = SAColumn('p_fqname',String(200), unique=True, nullable=False)
     sequence_id = SAColumn('p_sequence_id',Integer)
     t_vid = SAColumn('p_t_vid',String(16),ForeignKey('tables.t_vid'))
     t_id = SAColumn('p_t_id',String(16))
@@ -949,6 +951,7 @@ class Partition(Base):
         self.id_ = kwargs.get("id",kwargs.get("id_",None)) 
         self.name = kwargs.get("name",kwargs.get("name",None)) 
         self.vname = kwargs.get("vname",None) 
+        self.fqname = kwargs.get("fqname",None) 
         self.sequence_id = kwargs.get("sequence_id",None) 
         self.d_id = kwargs.get("d_id",None) 
         self.space = kwargs.get("space",None) 
@@ -961,6 +964,7 @@ class Partition(Base):
         
         self.d_id = dataset.id_
         self.d_vid = dataset.vid
+        
         # See before_insert for setting self.vid and self.id_
         
         if self.t_id:
@@ -982,39 +986,42 @@ class Partition(Base):
         else:
             ds = self.dataset
             
-        d = dict(ds.to_dict().items() + self.to_dict().items())
+        d = dict(ds.dict.items() + self.dict.items())
 
             
         return new_identity(d)
     
 
-    def to_dict(self):
+    @property
+    def dict(self):
 
         return {
                  'id':self.id_, 
                  'vid':self.vid,
+                 'name':self.name,
+                 'vname':self.fqname, 
+                 'fqname':self.vname, 
                  'd_id': self.d_id,
                  'd_vid': self. d_vid,
                  't_id': self.t_id,
                  't_vid': self. t_vid,
                  'space':self.space, 
                  'time':self.time, 
-                 'format':self.time,
                  'table': self.table.name if self.t_vid is not None else None,
                  'grain':self.grain, 
                  'segment':self.segment, 
                  'format': self.format if self.format else 'db'
                 }
       
-        return self.identity.to_dict()
-
     def __repr__(self):
         return "<{} partition: {}>".format(self.format, self.vname)
 
     @staticmethod
     def before_insert(mapper, conn, target):
-        '''event.listen method for Sqlalchemy to set the seqience_id for this  
+        '''event.listen method for Sqlalchemy to set the sequence for this  
         object and create an ObjectNumber value for the id_'''
+        from identity import Identity
+        
         if target.sequence_id is None:
             sql = text('''SELECT max(p_sequence_id)+1 FROM Partitions WHERE p_d_id = :did''')
     
@@ -1028,10 +1035,13 @@ class Partition(Base):
             
         don = ObjectNumber.parse(target.d_vid)
         pon = PartitionNumber(don, target.sequence_id)
+        
         target.vid = str(pon)
         target.id_ = str(pon.rev(None))
-        
+        target.fqname = Identity._compose_fqname(target.vname,target.vid)
+
         Partition.before_update(mapper, conn, target)
+
 
     @staticmethod
     def before_update(mapper, conn, target):

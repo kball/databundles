@@ -6,8 +6,9 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 import os
 
-from identity import PartitionIdentity
+from identity import PartitionIdentity, PartitionNameQuery, PartitionName, PartialPartitionName, NameQuery
 from sqlalchemy.orm.exc import NoResultFound
+from util.typecheck import accepts, returns
 
 class Partitions(object):
     '''Continer and manager for the set of partitions. 
@@ -29,7 +30,7 @@ class Partitions(object):
 
         from databundles.orm import Partition as OrmPartition
         from databundles.identity import PartitionNumber
-        from partition import PartitionIdentity
+        from identity import PartitionIdentity
         from sqlalchemy import or_
         from sqlalchemy.util._collections import KeyedTuple
         
@@ -185,22 +186,17 @@ class Partitions(object):
  
         return q.first()
 
-    def find(self, pid=None, use_library=False, **kwargs):
+    def find(self, pnq, use_library=False, **kwargs):
         '''Return a Partition object from the database based on a PartitionId.
         The object returned is immutable; changes are not persisted'''
         import sqlalchemy.orm.exc
-        from identity import Identity
-        
-        try:
-            
-            if pid and not pid.format:
-                    pid.format = Identity.ANY
-            elif not 'format' in kwargs:
-                    kwargs['format'] = Identity.ANY
-                
+
+        assert isinstance(pnq,PartitionNameQuery), "Expected NameQuery, got {}".format(type(pnq))
    
+        try:
+
             partitions = [ self.partition(op, memory=kwargs.get('memory',False)) 
-                          for op in self._find_orm(pid, **kwargs).all()];
+                          for op in self._find_orm(pnq).all()];
 
             if len(partitions) == 1:
                 p =  partitions.pop()
@@ -236,67 +232,60 @@ class Partitions(object):
         from identity import Identity
         
         if pid and not pid.format:
-                pid.format = Identity.ANY
+                pid.format = NameQuery.ANY
         elif not 'format' in kwargs:
-                kwargs['format'] = Identity.ANY
+                kwargs['format'] = NameQuery.ANY
 
         ops = self._find_orm(pid, **kwargs).all()
         
         return [ self.partition(op) for op in ops]
 
-    def _pid_or_args_to_pid(self, bundle,  pid, args):
-        from databundles.identity import Identity, new_identity
-        
 
-        if isinstance(pid, Identity):
-            return pid, None
-        elif isinstance(pid,basestring):
-            return None, pid # pid is actually the name
-        elif args.get('name', False):
-            return None, args.get('name', None)
-        else:
-            return new_identity(args, bundle=bundle), None
 
-    
-    def  _find_orm(self, pid=None,  **kwargs):
+    def  _find_orm(self, pnq=None):
         '''Return a Partition object from the database based on a PartitionId.
         An ORM object is returned, so changes can be persisted. '''
-        import sqlalchemy.orm.exc
-
-        from databundles.identity import Identity
-        from databundles.orm import Partition as OrmPartition
         
-        pid, name = self._pid_or_args_to_pid(self.bundle, pid, kwargs)
+        assert isinstance(pnq,PartitionNameQuery), "Expected NameQuery, got {}".format(type(pnq))
+    
+        pnq = pnq.with_none()
+    
+        import sqlalchemy.orm.exc
+        from databundles.orm import Partition as OrmPartition
 
         q =  self.bundle.database.session.query(OrmPartition)
         
-        if name is not None:
-            q = q.filter(OrmPartition.name==name)
+        if pnq.fqname is not NameQuery.ANY:
+            q = q.filter(OrmPartition.fqname==pnq.fqname)
+        elif pnq.vname is not NameQuery.ANY:
+            q = q.filter(OrmPartition.vname==pnq.vname)        
+        elif pnq.name is not NameQuery.ANY:
+            q = q.filter(OrmPartition.name==pnq.name)
         else:       
-            if pid.time is not Identity.ANY:
-                q = q.filter(OrmPartition.time==pid.time)
-    
-            if pid.space is not Identity.ANY:
-                    q = q.filter(OrmPartition.space==pid.space)
+            if pnq.time is not NameQuery.ANY:
+                    q = q.filter(OrmPartition.time==pnq.time)
+                
+            if pnq.space is not NameQuery.ANY:
+                    q = q.filter(OrmPartition.space==pnq.space)
         
-            if pid.grain is not Identity.ANY:
-                q = q.filter(OrmPartition.grain==pid.grain)
+            if pnq.grain is not NameQuery.ANY:
+                q = q.filter(OrmPartition.grain==pnq.grain)
        
-            if pid.format is not Identity.ANY:
-                q = q.filter(OrmPartition.format==pid.format)
+            if pnq.format is not NameQuery.ANY:
+                q = q.filter(OrmPartition.format==pnq.format)
 
-            if pid.segment is not Identity.ANY:
-                q = q.filter(OrmPartition.segment==pid.segment)
+            if pnq.segment is not NameQuery.ANY:
+                q = q.filter(OrmPartition.segment==pnq.segment)
 
-            if pid.table is not Identity.ANY:
+            if pnq.table is not NameQuery.ANY:
             
-                if pid.table is None:
+                if pnq.table is None:
                     q = q.filter(OrmPartition.t_id==None)
                 else:    
-                    tr = self.bundle.schema.table(pid.table)
+                    tr = self.bundle.schema.table(pnq.table)
                     
                     if not tr:
-                        raise ValueError("Didn't find table named {} in {} bundle path = {}".format(pid.table, pid.vname, self.bundle.database.path))
+                        raise ValueError("Didn't find table named {} in {} bundle path = {}".format(pnq.table, pnq.vname, self.bundle.database.path))
                     
                     q = q.filter(OrmPartition.t_id==tr.id_)
  
@@ -307,39 +296,49 @@ class Partitions(object):
         q = q.order_by(OrmPartition.vid.asc()).order_by(OrmPartition.segment.asc())
 
         return q
-
-    def _new_orm_partition(self, pid,  **kwargs):
+    
+    def _new_orm_partition(self, pname, tables=None, data=None):
         '''Create a new ORM Partrition object, or return one if
         it already exists '''
         from databundles.orm import Partition as OrmPartition, Table
+        from sqlalchemy.orm.exc import  NoResultFound
+   
+        assert type(pname) == PartialPartitionName, "Expected PartialPartitionName, got {}".format(type(pname))
+        
+   
+        if tables and not isinstance(tables, (list,tuple)):
+            raise ValueError("If specified, 'tables' must be a ist or tuple")
+     
+        if not data:
+            data = {}
+     
+        pname = pname.promote(self.bundle.identity)
+     
+        pname.is_valid()
      
         session = self.bundle.database.session
 
-        if pid.table:
-            q =session.query(Table).filter( (Table.name==pid.table) |  (Table.id_==pid.table) )
-            table = q.one()
+        if pname.table:
+            q =session.query(Table).filter( (Table.name==pname.table) |  (Table.id_==pname.table) )
+            try:
+                table = q.one()
+            except:
+                from dbexceptions import NotFoundError
+                raise NotFoundError('Failed to find table for name or id: {}'.format(pname.table))
         else:
             table = None
-     
-        # 'tables' are additional tables that are part of the partion ,beyond the one in the identity
-        # Probably a bad idea. 
-        tables = kwargs.get('tables',kwargs.get('table',pid.table if pid else None))
-    
-        if tables and not isinstance(tables, (list,tuple)):
-            tables = [tables]
-    
-        if tables and pid and pid.table and pid.table not in tables:
-            tables = list(tables)
-            tables.append(pid.table)
-         
-        data=kwargs.get('data',{})
-        
-        data['tables'] = tables
 
-        d = pid.to_dict()
+        if tables and pname and pname.table and pname.table not in tables:
+            tables = list(tables)
+            tables.append(pname.table)
+         
+        if tables:
+            data['tables'] = tables
+
+        d = pname.dict
         
         if not 'format' in d:
-            d['format']  = kwargs.get('format', 'db')
+            d['format']  = 'db'
         
         try: del d['table'] # OrmPartition requires t_id instead
         except: pass
@@ -352,15 +351,18 @@ class Partitions(object):
                 self.bundle.get_dataset(session),         
                 t_id = table.id_ if table else None,
                 data=data,
-                state=kwargs.get('state',None),
                 **d
              )  
         
         session.add(op)   
         
+        # We need to do this here to ensure that the before_commit()
+        # routine is run, which sets the fqname and vid, which are needed later
+        session.commit()
+        
+        
         if not op.format:
             raise Exception("Must have a format!")
-            
 
         return op
 
@@ -369,23 +371,34 @@ class Partitions(object):
    
         session.query(OrmPartition).delete()
         
-    def _new_partition(self, pid=None, session = None,**kwargs):
+    def _new_part_args(self,kwargs):
+        
+        pnq = PartitionNameQuery(**kwargs)
+        
+        ppn = PartialPartitionName(**kwargs)
+        
+        tables = set(kwargs.get('tables', []))
+        data = kwargs.get('data', None)
+        
+        if pnq.table:
+            tables.add(pnq.table)
+
+        return pnq, ppn, list(tables), data
+        
+    def _new_partition(self, pname, tables=None, data=None):
         '''Creates a new OrmPartition record'''
         
-        with self.bundle.session:
-            pid, _ = self._pid_or_args_to_pid(self.bundle, pid, kwargs)
-    
-            extant = self._find_orm(pid, **kwargs).all()
-            
-            for p in extant:
-                if p.name == pid.name:
-                    return self.partition(p)
-           
-            op = self._new_orm_partition(pid, **kwargs)
-            
-        # Return the partition from the managed session, which prevents the
-        #  partition from being tied to a session that is closed.   
-        return self.find(pid)
+        assert type(pname) == PartialPartitionName, "Expected PartialPartitionName, got {}".format(type(pname))
+        
+        with self.bundle.session as s:
+            op = self._new_orm_partition(pname, tables=tables, data=data)
+          
+            # Return the partition from the managed session, which prevents the
+            #  partition from being tied to a session that is closed.  
+
+            fqname = op.fqname
+
+        return self.find(PartitionNameQuery(fqname=fqname))
 
 
     def new_partition(self, pid=None, **kwargs):
@@ -449,10 +462,30 @@ class Partitions(object):
         
         return self._new_partition(pid, **kwargs)
         
-    def find_or_new(self, pid=None, clean = False,  **kwargs):
-        return self.find_or_new_db(pid, clean = False,  **kwargs)
+    def _find_or_new(self, pnq, ppn, clean = False,  tables=None, data=None):
+        
+        assert isinstance(pnq,PartitionNameQuery), "Expected NameQuery, got {}".format(type(pnq))
+        assert type(ppn) == PartialPartitionName, "Expected PartialPartitionName, got {}".format(type(ppn))
 
-    def find_or_new_db(self, pid=None, clean = False,  **kwargs):
+        partition =  self.find(pnq)
+
+        if partition:
+            return partition
+
+        partition =  self._new_partition(ppn, tables=tables, data=data)
+        
+        if tables:   
+            partition.create_with_tables(tables, clean)  
+        else:
+            partition.create()
+
+        return partition;        
+        
+        
+    def find_or_new(self, clean = False,  tables=None, data=None, **kwargs):
+        return self.find_or_new_db(tables=tables, clean = clean, data=data, **kwargs)
+
+    def find_or_new_db(self, clean = False,  tables=None, data=None, **kwargs):
         '''Find a partition identified by pid, and if it does not exist, create it. 
         
         Args:
@@ -460,34 +493,11 @@ class Partitions(object):
             tables String or array of tables to copy form the main partition
         '''
         
-        if pid:
-            pid.format = 'db'
-        else: 
-            kwargs['format'] = 'db'
+        pnq, ppn, tables, data = self._new_part_args(kwargs)
         
-
-        try: partition =  self.find(pid **kwargs)
-        except: partition = None
-    
-        if partition:
-            return partition
-    
-        tables = kwargs.get('tables',kwargs.get('table',pid.table if pid else None))
-    
-        if tables and not isinstance(tables, (list,tuple)):
-            tables = [tables]
-    
-        if tables and pid and pid.table and pid.table not in tables:
-            tables.append(partition.identity.table)
-   
-        partition =  self._new_partition(pid, **kwargs)
+        ppn.format = 'db'
         
-        if tables:   
-            partition.create_with_tables(tables, clean)  
-        else:
-            partition.create()
-
-        return partition;
+        return self._find_or_new(pnq, ppn, clean = False,  tables=None, data=None)
     
     def find_or_new_geo(self, pid=None, **kwargs):
         '''Find a partition identified by pid, and if it does not exist, create it. 

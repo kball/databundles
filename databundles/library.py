@@ -12,7 +12,6 @@ import databundles.util
 from databundles.run import  get_runconfig #@UnresolvedImport
 from databundles.util import temp_file_name
 from databundles.dbexceptions import ConfigurationError, NotFoundError
-from databundles.identity import new_identity
 from databundles.bundle import DbBundle
 
 from collections import namedtuple

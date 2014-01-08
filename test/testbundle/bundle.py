@@ -13,7 +13,7 @@ class Bundle(BuildBundle):
     
 
     def prepare(self):
-        from databundles.partition import PartitionIdentity 
+        from databundles.identity import PartitionIdentity 
         
         super(self.__class__, self).prepare()
     

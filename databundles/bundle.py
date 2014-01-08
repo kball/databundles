@@ -349,6 +349,10 @@ class BuildBundle(Bundle):
     def path(self):
         return os.path.join(self.build_dir, self.identity.path) 
 
+    @property
+    def db_path(self):
+        return self.path+'.db'
+
     def sub_path(self, *args):
         '''For constructing paths to partitions'''
         return os.path.join(self.build_dir, self.identity.path, *args) 
@@ -358,7 +362,7 @@ class BuildBundle(Bundle):
         from .database.sqlite import BuildBundleDb #@UnresolvedImport
 
         if self._database is None:
-            self._database  = BuildBundleDb(self, self.path)
+            self._database  = BuildBundleDb(self, self.db_path)
 
         return self._database
 
@@ -380,8 +384,8 @@ class BuildBundle(Bundle):
         # sections. 
 
         self.config.rewrite(
-                         identity=self.identity.to_dict(),
-                         partitions=[p.identity.name for p in self.partitions]
+                         identity=self.identity.dict,
+                         partitions=[p.identity.sname for p in self.partitions]
                          )
         
         # Reload some of the values from bundle.yaml into the database configuration
@@ -549,13 +553,18 @@ class BuildBundle(Bundle):
      
             return False
         
-        b = self.library.get(self.identity.id_)
+        try:
+            b = self.library.get(self.identity.id_)
+            
+            if b and b.identity.revision >= self.identity.revision:
+                self.fatal(("Can't build this version. Library has version {} "
+                            " which is greater than or equal this version {}")
+                           .format(b.identity.revision, self.identity.revision))
+                return False
+            
+        except Exception as e:
+            self.error("Error in consulting library: {}".format(e.message))
         
-        if b and b.identity.revision >= self.identity.revision:
-            self.fatal(("Can't build this version. Library has version {} "
-                        " which is greater than or equal this version {}")
-                       .format(b.identity.revision, self.identity.revision))
-            return False
 
         return True
 
@@ -1025,7 +1034,7 @@ class BundleDbConfigDict(AttrDict):
 
         # Load the dataset
         self['identity'] = {}
-        for k,v in parent.dataset.to_dict().items():
+        for k,v in parent.dataset.dict.items():
             self['identity'][k] = v
             
         for row in parent.database.session.query(SAConfig).all():

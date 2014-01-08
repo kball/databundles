@@ -3,7 +3,8 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 
   
-from . import PartitionBase, PartitionIdentity
+from . import PartitionBase
+from ..identity import PartitionIdentity
 from ..database.hdf import HdfDb
    
 class HdfPartitionIdentity(PartitionIdentity):
