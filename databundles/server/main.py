@@ -22,7 +22,7 @@ logger = databundles.util.get_logger(__name__)
 logger.setLevel(logging.DEBUG)
 
 #
-# The LibraryPlugin allows the library to be inserted into a reuest handler with a
+# The LibraryPlugin allows the library to be inserted into a request handler with a
 # 'library' argument. 
 class LibraryPlugin(object):
     

@@ -56,7 +56,13 @@ class TooLarge(HttpException):
     def __init__(self, message): 
         super(HttpException, self).__init__(self.http_message+":"+str(message)) 
         
-  
+class TooManyRequests(HttpException):
+    code = 429
+    http_message = 'Too many requests'
+    def __init__(self, message):
+        super(HttpException, self).__init__(self.http_message+":"+str(message))
+
+
 class InternalError(HttpException):
     code = 500
     http_message = 'Internal Server Error'

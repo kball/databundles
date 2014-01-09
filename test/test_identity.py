@@ -20,24 +20,44 @@ class Test(unittest.TestCase):
         rev = 100
         
         dn = DatasetNumber(dnn)
-        self.assertEquals('d04c92', str(dn))
+        self.assertEquals('d000004c92', str(dn))
         
         dn = DatasetNumber(dnn, rev)
-        self.assertEquals('d04c9201C', str(dn))
+        self.assertEquals('d000004c9201C', str(dn))
 
-        self.assertEquals('d04c9201C', str(ObjectNumber.parse(str(dn))))
+        self.assertEquals('d000004c9201C', str(ObjectNumber.parse(str(dn))))
 
         tn = TableNumber(dn, 1)
 
-        self.assertEquals('t04c920101C', str(tn))
+        self.assertEquals('t000004c920101C', str(tn))
 
-        self.assertEquals('t04c920101C', str(ObjectNumber.parse(str(tn))))
+        self.assertEquals('t000004c920101C', str(ObjectNumber.parse(str(tn))))
 
         tnnr = tn.rev(None)
         
-        self.assertEquals('t04c9201', str(tnnr))
+        self.assertEquals('t000004c9201', str(tnnr))
 
-        self.assertEquals('t04c9201004', str(tnnr.rev(4)))
+        self.assertEquals('t000004c9201004', str(tnnr.rev(4)))
+
+
+        # Other assignment classes
+        
+        dnn = 62*62+11
+        
+        dn = DatasetNumber(62**3-1,None,'authoritative')
+        self.assertEquals('dZZZ', str(dn))
+        
+        dn = DatasetNumber(62**3-1,None,'registered')
+        self.assertEquals('d00ZZZ', str(dn))
+        
+        dn = DatasetNumber(62**3-1,None,'unregistered')
+        self.assertEquals('d0000ZZZ', str(dn))
+
+        dn = DatasetNumber(62**3-1,None,'self')
+        self.assertEquals('d000000ZZZ', str(dn))
+        
+        tn = TableNumber(dn, 1)
+        print str(tn)
 
 
     def test_name(self):
@@ -177,7 +197,7 @@ class Test(unittest.TestCase):
     def test_identity(self):
 
         name = Name(source='source.com', dataset='foobar',  version='0.0.1')
-        dn = DatasetNumber(10000, 1)
+        dn = DatasetNumber(10000, 1, assignment_class='registered')
         
         ident = Identity(name, dn)
 
@@ -362,6 +382,20 @@ class Test(unittest.TestCase):
         self.assertEquals('source-dataset-subset-variation',bundle.identity.sname) 
         self.assertEquals('source-dataset-subset-variation-0.0.1',bundle.identity.vname) 
         self.assertEquals('source-dataset-subset-variation-0.0.1~d1DxuZ001',bundle.identity.fqname)
+
+    def test_number_service(self):
+        
+        from databundles.identity import NumberServer
+        from databundles.run import  get_runconfig
+        rc = get_runconfig()
+    
+        ng = rc.group('numbers')
+        
+        print dict(host=ng['host'], port=ng['port'], key=ng['key'])
+        
+        ns = NumberServer(host=ng['host'], port=ng['port'], key=ng['key'])
+        
+        print ns.next()
 
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']

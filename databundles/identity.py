@@ -37,8 +37,12 @@ class Name(object):
     version = None
 
     def __init__(self, *args, **kwargs):
-        
 
+        """
+
+        :param args:
+        :param kwargs:
+        """
         for k,default, optional in self.name_parts:
             if optional:
                 setattr(self,k, kwargs.get(k,default))
@@ -50,9 +54,15 @@ class Name(object):
 
         self.is_valid()
 
-      
+
+
     def is_valid(self):
-        
+
+        """
+
+
+        :raise ValueError:
+        """
         for k, _, optional in self.name_parts:
             if not optional and not bool(getattr(self,k)):
                 raise ValueError("Name requires field '{}' to have a value"
@@ -479,6 +489,7 @@ class ObjectNumber(object):
     # if the value's use depends on whether the user specified a version 
     # number, since all values are resolved to versioned ONs
     orig = None
+    assignment_class = 'self'
     
     class _const:
         class ConstError(TypeError): pass
@@ -497,35 +508,52 @@ class ObjectNumber(object):
     
     DLEN=_const()
     
-    DLEN.DATASET = (5,9)
+    # Number of digits in each assignment class
+    DLEN.DATASET = (3,5,7,9)
+    DLEN.DATASET_CLASSES=dict(authoritative=DLEN.DATASET[0], # Datasets registered by number authority . 
+                              registered=DLEN.DATASET[1], # For registered users of a numbering authority
+                              unregistered=DLEN.DATASET[2], # For unregistered users of a numebring authority
+                              self=DLEN.DATASET[3]) # Self registered
     DLEN.PARTITION = 3
     DLEN.TABLE = 2
     DLEN.COLUMN = 3
     DLEN.REVISION = (0,3)
     
-    # Because the dataset numebr can be 5 or 9 characters, 
+    # Because the dataset number can be 3, 5, 7 or 9 characters, 
     # And the revision is optional, the datasets ( and thus all 
     # other objects ) , can have several differnt lengths. We
     # Use these different lengths to determine what kinds of
     # fields to parse 
     # 's'-> short dataset, 'l'->long datset, 'r' -> has revision
-    DATASET_LENGTHS = {5:(5,None),
-                       8:(5,3),
-                       9:(9,None),
-                       12:(9,3)}
-    
+    #
+    # generate with:
+    #     {
+    #         ds_len+rl:(ds_len, (rl if rl != 0 else None), cls)
+    #         for cls, ds_len in self.DLEN.ATASET_CLASSES.items()
+    #         for rl in self.DLEN.REVISION
+    #     }
+    #     
+    DATASET_LENGTHS = {
+                        3: (3, None, 'authoritative'),
+                        5: (5, None, 'registered'),
+                        6: (3, 3, 'authoritative'),
+                        7: (7, None, 'unregistered'),
+                        8: (5, 3, 'registered'),
+                        9: (9, None, 'self'),
+                        10: (7, 3, 'unregistered'),
+                        12: (9, 3, 'self')}
+
     # Length of the caracters that aren't the dataset and revisions
     NDS_LENGTH = {'d': 0,
                   'p': DLEN.PARTITION,
                   't': DLEN.TABLE,
                   'c': DLEN.TABLE+DLEN.COLUMN}
-    
-    SMALL_DS_MAX = 62**DLEN.DATASET[0] -1
+   
     TCMAXVAL = 62**DLEN.TABLE -1; # maximum for table values. 
     CCMAXVAL = 62**DLEN.COLUMN -1; # maximum for column values. 
     PARTMAXVAL = 62**DLEN.PARTITION -1; # maximum for table and column values. 
      
-    EPOCH = 1325376000 # Jan 1, 2012 in UNIX time
+    EPOCH = 1389210331 # About Jan 8, 2014
 
     @classmethod
     def parse(cls, input): #@ReservedAssignment
@@ -545,6 +573,8 @@ class ObjectNumber(object):
         
         ds_lengths = cls.DATASET_LENGTHS[len(input)-cls.NDS_LENGTH[type_]]
         
+        assignment_class = ds_lengths[2]
+        
         dataset = int(ObjectNumber.base62_decode(input[0:ds_lengths[0]]))
         
         if ds_lengths[1]: 
@@ -557,21 +587,25 @@ class ObjectNumber(object):
         input = input[ds_lengths[0]:]
       
         if type_ == cls.TYPE.DATASET:
-            return DatasetNumber(dataset, revision=revision)
+            return DatasetNumber(dataset, revision=revision, assignment_class=assignment_class)
         
         elif type_ == cls.TYPE.TABLE:   
             table = int(ObjectNumber.base62_decode(input))
-            return TableNumber(DatasetNumber(dataset), table, revision=revision)
+            return TableNumber(DatasetNumber(dataset, assignment_class=assignment_class), 
+                               table, revision=revision)
         
         elif type_ == cls.TYPE.PARTITION:
             partition = int(ObjectNumber.base62_decode(input))
-            return PartitionNumber(DatasetNumber(dataset), partition, revision=revision)   
+            return PartitionNumber(DatasetNumber(dataset, assignment_class=assignment_class), 
+                                   partition, revision=revision)   
                    
         elif type_ == cls.TYPE.COLUMN:     
             table = int(ObjectNumber.base62_decode(input[0:cls.DLEN.TABLE]))
             column = int(ObjectNumber.base62_decode(input[cls.DLEN.TABLE:]))
 
-            return ColumnNumber(TableNumber(DatasetNumber(dataset), table), column, revision=revision)
+            return ColumnNumber(TableNumber(
+                                DatasetNumber(dataset, assignment_class=assignment_class), table), 
+                                column, revision=revision)
         
         else:
             raise ValueError('Unknow type character: '+input[0]+ ' in '+str(input))
@@ -638,40 +672,40 @@ class ObjectNumber(object):
     def _rev_str(cls, revision):
 
         return (ObjectNumber.base62_encode(revision).rjust(cls.DLEN.REVISION[1],'0') 
-                if revision else '')
+                if bool(revision) else '')
 
 class DatasetNumber(ObjectNumber):
     '''An identifier for a dataset'''
-    def __init__(self, dataset=None, revision=None):
+    def __init__(self, dataset=None, revision=None, assignment_class='self'):
         '''
         Constructor
         '''
-      
+
+        self.assignment_class = assignment_class
+
         if dataset is None:
-            import time
-            dataset = int(time.time())
-    
-        # For Datasets, integer values are time 
-        # This calc is OK until 31 Dec 2053 00:00:00 GMT
-        if dataset > ObjectNumber.EPOCH:
-            dataset = dataset - ObjectNumber.EPOCH
+
+            import random
+            digit_length = self.DLEN.DATASET_CLASSES[self.assignment_class]
+            # On 64 bit machine, max is about 10^17, 2^53
+            # That should be random enough to prevent 
+            # collisions for a small number of self assigned numbers
+            max = 62**digit_length
+            dataset = random.randint(0,max)
           
+        
         self.dataset = dataset
         self.revision = revision
+ 
+    def _ds_str(self):
         
-    @classmethod
-    def _ds_str(cls, dataset):
+        ds_len = self.DLEN.DATASET_CLASSES[self.assignment_class]
         
-        if isinstance(dataset, DatasetNumber):
-            dataset = dataset.dataset
-        
-        return (ObjectNumber.base62_encode(dataset).rjust(cls.DLEN.DATASET[0],'0') 
-                 if dataset < cls.SMALL_DS_MAX
-                 else ObjectNumber.base62_encode(dataset).rjust(cls.DLEN.DATASET[1],'0') )
+        return (ObjectNumber.base62_encode(self.dataset).rjust(ds_len,'0') )
 
     def __str__(self):        
         return (ObjectNumber.TYPE.DATASET+
-                self._ds_str(self.dataset)+
+                self._ds_str()+
                 ObjectNumber._rev_str(self.revision))
            
  
@@ -699,7 +733,7 @@ class TableNumber(ObjectNumber):
          
     def __str__(self):        
         return (ObjectNumber.TYPE.TABLE+
-                DatasetNumber._ds_str(self.dataset)+
+                self.dataset._ds_str()+
                 ObjectNumber.base62_encode(self.table).rjust(self.DLEN.TABLE,'0')+
                 ObjectNumber._rev_str(self.revision))
                   
@@ -733,7 +767,7 @@ class ColumnNumber(ObjectNumber):
          
     def __str__(self):        
         return (ObjectNumber.TYPE.COLUMN+
-                DatasetNumber._ds_str(self.dataset)+
+                self.dataset._ds_str()+
                 ObjectNumber.base62_encode(self.table.table).rjust(self.DLEN.TABLE,'0')+
                 ObjectNumber.base62_encode(self.column).rjust(self.DLEN.COLUMN,'0')+
                 ObjectNumber._rev_str(self.revision)
@@ -766,7 +800,7 @@ class PartitionNumber(ObjectNumber):
         
     def __str__(self):        
         return (ObjectNumber.TYPE.PARTITION+
-                DatasetNumber._ds_str(self.dataset)+
+                self.dataset._ds_str()+
                 ObjectNumber.base62_encode(self.partition).rjust(self.DLEN.PARTITION,'0')+
                 ObjectNumber._rev_str(self.revision))
 
@@ -940,6 +974,30 @@ class PartitionIdentity(Identity):
         return  Identity(**d)
 
 
+
+class NumberServer(object):
+    
+    def __init__(self, host='numbers.ambry.io', port='80', key=None):
+        
+        self.host = host
+        self.port = port
+        self.key = key
+        self.port_str = ':'+str(port) if port else ''
+
+    def next(self):
+        import requests
+        
+        if self.key:
+            params = dict(access_key=self.key)
+        else:
+            params = dict()
+        
+        r = requests.get('http://{}{}/next'.format(self.host, self.port_str), params=params)
+        r.raise_for_status()
+        
+        d = r.json()
+        
+        return d['number']
 
 
 class Resolver(object):

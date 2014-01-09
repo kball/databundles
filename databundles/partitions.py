@@ -24,6 +24,8 @@ class Partitions(object):
         '''Get a local partition object from either a Partion ORM object, or
         a partition name
         
+        :param arg: 
+        :param kwargs: 
         Arguments:
         arg    -- a orm.Partition or Partition object. 
         
@@ -67,7 +69,9 @@ class Partitions(object):
     
     @property 
     def all(self): #@ReservedAssignment
-        '''Return an iterator of all partitions'''
+        '''Return an iterator of all partitions
+        :type self: object
+        '''
         from databundles.orm import Partition as OrmPartition
         import sqlalchemy.exc
 
@@ -173,7 +177,9 @@ class Partitions(object):
         return None
 
     def find_id(self, id_):
-        '''Find a partition from an id or vid'''
+        '''Find a partition from an id or vid
+        :param id_:
+        '''
         
         from databundles.orm import Partition as OrmPartition
         from sqlalchemy import or_

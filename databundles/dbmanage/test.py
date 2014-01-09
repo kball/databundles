@@ -3,9 +3,15 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from ..dbmanage import prt
+from ..dbmanage import prt,err
 
 def test_parser(cmd):
+
+    return
+
+    err('Test command is broken ...')
+
+
     lib_p = cmd.add_parser('test', help='Test and debugging')
     lib_p.set_defaults(command='test')
     asp = lib_p.add_subparsers(title='Test commands', help='command help')
