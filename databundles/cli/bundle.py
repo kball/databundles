@@ -5,8 +5,8 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 
 
-from ..dbmanage import prt, err, warn
-from ..dbmanage import _library_list, _source_list, load_bundle, _print_bundle_list
+from ..cli import prt, err, warn
+from ..cli import _library_list, _source_list, load_bundle, _print_bundle_list
 
 import os
 import yaml
@@ -22,22 +22,21 @@ def bundle_parser(cmd):
     bundle_p = cmd.add_parser('bundle', help='Manage bundle files')
     bundle_p.set_defaults(command='bundle')
     bundle_p.add_argument('-l','--library',  default='default',  help='Select a different name for the library')
+    bundle_p.add_argument('-f','--bundle-file', required=True,   help='Path to the bundle .py file')
+
     asp = bundle_p.add_subparsers(title='bundle commands', help='command help')  
 
     sp = asp.add_parser('info', help='Information about the bundle configuration')
     sp.set_defaults(subcommand='info')
 
-    
-    return 
-    
-    
-    
+    parser = None
+
     # Commands: meta, prepare, build, install, extract, submit, 
     
     #parser.add_argument('command', nargs=1, help='Create a new bundle') 
     
-    parser.add_argument('-c','--config', default=None, action='append', help="Path to a run config file") 
-    parser.add_argument('-v','--verbose', default=None, action='append', help="Be verbose") 
+    parser.add_argument('-c','--config', default=None, action='append', help="Path to a run config file")
+    parser.add_argument('-v','--verbose', default=None, action='append', help="Be verbose")
     parser.add_argument('-r','--reset',  default=False, action="store_true",  help='')
     parser.add_argument('-t','--test',  default=False, action="store_true", help='Enable bundle-specific test behaviour')
     parser.add_argument('--single-config', default=False,action="store_true", help="Load only the config file specified")
@@ -48,16 +47,16 @@ def bundle_parser(cmd):
                         help='Run the build process on multiple processors, if the  method supports it')
     
     # These are args that Aptana / PyDev adds to runs. 
-    parser.add_argument('--port', default=None, help="PyDev Debugger arg") 
-    parser.add_argument('--verbosity', default=None, help="PyDev Debugger arg") 
+    parser.add_argument('--port', default=None, help="PyDev Debugger arg")
+    parser.add_argument('--verbosity', default=None, help="PyDev Debugger arg")
     
     cmd = parser.add_subparsers(title='commands', help='command help')
-    
+
     command_p = cmd.add_parser('config', help='Operations on the bundle configuration file')
     command_p.set_defaults(command='config')
        
     asp = command_p.add_subparsers(title='Config subcommands', help='Subcommand for operations on a bundl file')
-    
+
     sp = asp.add_parser('rewrite', help='Re-write the bundle file, updating the formatting')     
     sp.set_defaults(subcommand='rewrite')
     

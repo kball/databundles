@@ -293,13 +293,14 @@ def main():
 
     cmd = parser.add_subparsers(title='commands', help='command help')
     
-    from .library import library_parser, library_command #@UnresolvedImport
-    from .warehouse import warehouse_command, warehouse_parser #@UnresolvedImport
-    from .remote import remote_parser,remote_command  #@UnresolvedImport 
-    from test import test_parser, test_command #@UnresolvedImport
-    from install import install_parser, install_command #@UnresolvedImport
-    from ckan import ckan_parser, ckan_command #@UnresolvedImport
-    from source import source_command, source_parser  #@UnresolvedImport 
+    from .library import library_parser, library_command
+    from .warehouse import warehouse_command, warehouse_parser
+    from .remote import remote_parser,remote_command
+    from test import test_parser, test_command
+    from install import install_parser, install_command
+    from ckan import ckan_parser, ckan_command
+    from source import source_command, source_parser
+    from bundle import bundle_command, bundle_parser
 
     library_parser(cmd)  
     warehouse_parser(cmd)
@@ -308,6 +309,7 @@ def main():
     source_parser(cmd)
     remote_parser(cmd)
     test_parser(cmd)
+    bundle_parser(cmd)
 
     args = parser.parse_args()
 
@@ -322,6 +324,7 @@ def main():
         rc_path = args.config
   
     funcs = {
+        'bundle':bundle_command,
         'library':library_command,
         'warehouse':warehouse_command,
         'remote':remote_command,

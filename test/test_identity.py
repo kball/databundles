@@ -385,16 +385,39 @@ class Test(unittest.TestCase):
 
     def test_number_service(self):
         
+        ## For this test, setup these access keys in the
+        ## Redis Server:
+        ##
+        ## redis-cli set assignment_class:test-ac-authoritative authoritative
+        ## redis-cli set assignment_class:test-ac-registered registered
+        
         from databundles.identity import NumberServer
         from databundles.run import  get_runconfig
         rc = get_runconfig()
     
         ng = rc.group('numbers')
-        
-        print dict(host=ng['host'], port=ng['port'], key=ng['key'])
-        
-        ns = NumberServer(host=ng['host'], port=ng['port'], key=ng['key'])
-        
+
+        ns = NumberServer(host=ng['host'], port=ng['port'], key='test-ac-registered')
+
+        n = ns.next()
+        self.assertEqual(6,len(str(n)))
+
+        # Next request is authoritative, so no need to sleep here.
+
+        ns = NumberServer(host=ng['host'], port=ng['port'], key='test-ac-authoritative')
+
+        n = ns.next()
+        self.assertEqual(4,len(str(n)))
+
+        ns.sleep() # Avoid being rate limited
+
+        ns = NumberServer(host=ng['host'], port=ng['port'])
+        n = ns.next()
+        self.assertEqual(8,len(str(n)))
+
+        # Try it with the key assigned in the configuration.
+
+        ns = NumberServer(**get_runconfig().group('numbers'))
         print ns.next()
 
 if __name__ == "__main__":

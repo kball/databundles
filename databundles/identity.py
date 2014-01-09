@@ -977,27 +977,59 @@ class PartitionIdentity(Identity):
 
 class NumberServer(object):
     
-    def __init__(self, host='numbers.ambry.io', port='80', key=None):
-        
+    def __init__(self, host='numbers.ambry.io', port='80', key=None, **kwargs):
+
+        """
+
+        :param host:
+        :param port:
+        :param key: Key to set the assignment class. The number servers redis server mush have the
+        key value set to the assignment class, such as:
+            set assignment_class:<key> authoritative
+        Two values are supported, "authoritative" and "registered". If neither value is set, the
+        assignment class is "unregistered"
+        :param kwargs: No used; sucks up other parameters that may be in the configuration when the
+        object is constructed with the config, as in NumberServer(**get_runconfig().group('numbers'))
+        """
         self.host = host
         self.port = port
         self.key = key
         self.port_str = ':'+str(port) if port else ''
 
+        self.last_response = None
+        self.next_time = None
+
     def next(self):
         import requests
+        
         
         if self.key:
             params = dict(access_key=self.key)
         else:
             params = dict()
-        
+
         r = requests.get('http://{}{}/next'.format(self.host, self.port_str), params=params)
+
         r.raise_for_status()
         
         d = r.json()
-        
-        return d['number']
+
+        self.last_response = d
+
+        import time
+
+        self.next_time = time.time() + self.last_response['wait']
+
+        return ObjectNumber.parse(d['number'])
+
+    def sleep(self):
+        '''Wait for the sleep time of the last response, to
+         avoid being rate limited. '''
+
+        import time
+
+        if self.next_time and time.time() < self.next_time:
+            time.sleep(self.next_time - time.time())
 
 
 class Resolver(object):

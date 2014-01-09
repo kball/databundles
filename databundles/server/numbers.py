@@ -17,13 +17,17 @@ numbers:
 For Clients:
 
 numbers:
-    key: de4788b7-ecb6-4625-b7c7-45e83b000d47
+    key: this-is-a-long-uid-key
 
 
 The key is a secret key that the client will use to assign an assignment class.
 The two classes are 'authoritative' and 'registered' Only central authority operators
 ( like Clarinova ) should use the authoritative class. Other users can use the
 'registered' class. Without a key and class assignment, the callers us the 'unregistered' class.
+
+Set the assignment class with the redis-cli:
+
+    set assignment_class:this-is-a-long-uid-key authoritative
 
 There is only one uri to call:
 

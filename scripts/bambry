@@ -1,8 +1,8 @@
 #!/bin/sh
-#Management program interface for bundles. Equivalent to calling "python -mdatabundles
+#Management program interface for bundles. Equivalent to calling "python bundle.py"
 #in a bundle directory
 
 # Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 # Revised BSD License, included in this distribution as LICENSE.txt
 
-exec python -mdatabundles.dbmanage $@
+python -m databundles.cli bundle -f $(pwd)/bundle.py $@

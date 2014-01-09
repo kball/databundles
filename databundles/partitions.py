@@ -249,16 +249,15 @@ class Partitions(object):
 
 
 
-    def  _find_orm(self, pnq=None):
+    def  _find_orm(self, pnq):
         '''Return a Partition object from the database based on a PartitionId.
         An ORM object is returned, so changes can be persisted. '''
-        
+        import sqlalchemy.orm.exc
+        from databundles.orm import Partition as OrmPartition
+               
         assert isinstance(pnq,PartitionNameQuery), "Expected NameQuery, got {}".format(type(pnq))
     
         pnq = pnq.with_none()
-    
-        import sqlalchemy.orm.exc
-        from databundles.orm import Partition as OrmPartition
 
         q =  self.bundle.database.session.query(OrmPartition)
         

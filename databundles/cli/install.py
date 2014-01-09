@@ -3,7 +3,7 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from ..dbmanage import prt
+from ..cli import prt
 
 def install_parser(cmd):
     lib_p = cmd.add_parser('install', help='Install configuration files')

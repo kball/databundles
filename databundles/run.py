@@ -307,7 +307,7 @@ def mp_run(mp_run_args):
         bundle_file = sys.argv[1]
         
         if not os.path.exists(os.path.join(os.getcwd(), 'bundle.yaml')):
-            print >> sys.stderr, "ERROR: Current directory '{}' does not have a bundle.yaml file, so it isn't a bundle file. Did you mean to run 'dbmanage'?".format(os.getcwd())
+            print >> sys.stderr, "ERROR: Current directory '{}' does not have a bundle.yaml file, so it isn't a bundle file. Did you mean to run 'cli'?".format(os.getcwd())
             sys.exit(1)
     
         # Import the bundle file from the 
@@ -343,15 +343,15 @@ def import_file(filename):
        
             
 if __name__ == '__main__':
-    '''When dbundle is run, this routine will load the bundle module from a file
-    wire it into the namespace and run it with the arguments passed into dbundle. '''
+    '''When bambry is run, this routine will load the bundle module from a file
+    wire it into the namespace and run it with the arguments passed into bambry. '''
     import sys
     args = list(sys.argv)
 
     bundle_file = sys.argv[1]
     
     if not os.path.exists(os.path.join(os.getcwd(), 'bundle.yaml')):
-        print >> sys.stderr, "ERROR: Current directory '{}' does not have a bundle.yaml file, so it isn't a bundle file. Did you mean to run 'dbmanage'?".format(os.getcwd())
+        print >> sys.stderr, "ERROR: Current directory '{}' does not have a bundle.yaml file, so it isn't a bundle file. Did you mean to run 'cli'?".format(os.getcwd())
         sys.exit(1)
 
     # Import the bundle file from the 
