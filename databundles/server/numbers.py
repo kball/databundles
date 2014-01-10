@@ -344,11 +344,9 @@ if __name__ == '__main__':
     from databundles.run import  get_runconfig
     rc = get_runconfig()
 
-    ng = rc.group('numbers')
+    group = rc.group('numbers')
 
-    redis_config = ng['redis']
-
-    d = rc.group('numbers')
+    d = group['server']
 
     parser = argparse.ArgumentParser(prog='python -mdatabundles.server.numbers',
                                      description='Run an Ambry numbers server')
