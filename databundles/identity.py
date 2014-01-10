@@ -52,9 +52,24 @@ class Name(object):
 
         self.version = self._parse_version(self.version)
 
+        self.clean()
+
         self.is_valid()
 
 
+    def clean(self):
+        import re
+        for k,default, optional in self.name_parts:
+            v = getattr(self,k)
+
+            if not v:
+                continue
+
+            # The < and > chars are only there to  for <any> and <none> and version specs.
+            # . is needes for source, and + is needed for version specs
+            nv = re.sub(r'[^a-zA-Z0-9\.\<\>=]','_',v).lower()
+            if v != nv:
+                setattr(self,k, nv)
 
     def is_valid(self):
 
@@ -113,7 +128,8 @@ class Name(object):
             d['name'] =  self.name
             try: d['vname'] = self.vname
             except ValueError: pass 
-            
+
+
         return self.clear_dict(d) 
 
 
@@ -262,6 +278,7 @@ class Name(object):
     def __str__(self):
         return self.name
 
+
 class PartialPartitionName(Name):
     '''For specifying a PartitionName within the context of a bundle. 
     '''
@@ -291,7 +308,8 @@ class PartialPartitionName(Name):
         
 
     def is_valid(self): pass
-    
+
+
 class PartitionName(PartialPartitionName, Name):
     '''A Partition Name'''
 
@@ -359,7 +377,7 @@ class PartitionName(PartialPartitionName, Name):
             return False
         else:
             return True
-        
+
 
 class PartialMixin(object):
 
@@ -418,6 +436,7 @@ class PartialMixin(object):
     def cache_key(self):
         raise NotImplementedError("Can't get a cache_key from a partial name")
 
+
 class NameQuery(PartialMixin, Name):
     '''A partition name used for finding and searching. 
     does not have an expectation of having all parts completely
@@ -452,7 +471,7 @@ class NameQuery(PartialMixin, Name):
                )
   
         return np
-        
+
 
 class PartitionNameQuery(PartialMixin,PartitionName):
     '''A partition name used for finding and searching. 
@@ -477,6 +496,7 @@ class PartitionNameQuery(PartialMixin,PartitionName):
                 ('vname',default,True),
                 ('fqname',default,True)]
                )
+
 
 class ObjectNumber(object):
     '''
@@ -684,6 +704,7 @@ class ObjectNumber(object):
         return (ObjectNumber.base62_encode(revision).rjust(cls.DLEN.REVISION[1],'0') 
                 if bool(revision) else '')
 
+
 class DatasetNumber(ObjectNumber):
     '''An identifier for a dataset'''
     def __init__(self, dataset=None, revision=None, assignment_class='self'):
@@ -717,10 +738,7 @@ class DatasetNumber(ObjectNumber):
         return (ObjectNumber.TYPE.DATASET+
                 self._ds_str()+
                 ObjectNumber._rev_str(self.revision))
-           
- 
 
- 
 
 class TableNumber(ObjectNumber):
     '''An identifier for a table'''
@@ -746,8 +764,8 @@ class TableNumber(ObjectNumber):
                 self.dataset._ds_str()+
                 ObjectNumber.base62_encode(self.table).rjust(self.DLEN.TABLE,'0')+
                 ObjectNumber._rev_str(self.revision))
-                  
-         
+
+
 class ColumnNumber(ObjectNumber):
     '''An identifier for a column'''
     def __init__(self, table, column, revision=None):
@@ -782,7 +800,7 @@ class ColumnNumber(ObjectNumber):
                 ObjectNumber.base62_encode(self.column).rjust(self.DLEN.COLUMN,'0')+
                 ObjectNumber._rev_str(self.revision)
                 )
-           
+
 
 class PartitionNumber(ObjectNumber):
     '''An identifier for a partition'''
@@ -815,7 +833,6 @@ class PartitionNumber(ObjectNumber):
                 ObjectNumber._rev_str(self.revision))
 
 
-   
 class Identity(object):
     '''Identities represent the defining set of information about a 
     bundle or a partition. Only the vid is actually required to 
@@ -961,9 +978,7 @@ class Identity(object):
  
     def __str__(self):
         return self._compose_fqname(self._name.vname,self.vid)
-       
-    
-       
+
 
 class PartitionIdentity(Identity):
     '''Subclass of Identity for partitions'''
@@ -983,7 +998,6 @@ class PartitionIdentity(Identity):
         d['id'] = str(on.dataset)
         
         return  Identity(**d)
-
 
 
 class NumberServer(object):
@@ -1054,12 +1068,8 @@ class Resolver(object):
         name, id = s.split('--')
     
         # If the version
-    
+
 
 def make_resolver(library=None, bundle=None):
     '''Return a resolver object constructed on a library or bundle '''
-
-
-
-
 

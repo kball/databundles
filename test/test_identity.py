@@ -62,6 +62,16 @@ class Test(unittest.TestCase):
 
     def test_name(self):
 
+        name = Name(source='Source.com',
+                    dataset='data set',
+                    subset='sub set',
+                    variation='vari ation',
+                    type='Ty-pe',
+                    part='Pa?rt',
+                    version='0.0.1')
+
+        self.assertEquals('source.com-data_set-sub_set-ty_pe-pa_rt-vari_ation-0.0.1', name.vname)
+
         name = Name(source='source.com', 
                     dataset='dataset', 
                     subset='subset', 

@@ -315,6 +315,13 @@ def get_test(redis):
                 nxt=nxt,
                 delay=delay)
 
+
+@get('/echo/<term>')
+def get_echo_term(term, redis):
+    '''Test function to see if the server is working '''
+
+    return [term]
+
 def _run(host, port, unregistered_key,  reloader=False, **kwargs):
 
     redis_config = kwargs.get('redis')
@@ -333,7 +340,7 @@ def _run(host, port, unregistered_key,  reloader=False, **kwargs):
     return run( host=host, port=port, reloader=reloader, server='paste')
     
 if __name__ == '__main__':
-
+    import argparse
     from databundles.run import  get_runconfig
     rc = get_runconfig()
 
@@ -341,6 +348,22 @@ if __name__ == '__main__':
 
     redis_config = ng['redis']
 
-    _run(**rc.group('numbers'))
+    d = rc.group('numbers')
+
+    parser = argparse.ArgumentParser(prog='python -mdatabundles.server.numbers',
+                                     description='Run an Ambry numbers server')
+
+    parser.add_argument('-H','--host', default=None, help="Server host. Defaults to configured value: {}".format(d['host']))
+    parser.add_argument('-p','--port', default=None, help="Server port. Defaults to configured value: {}".format(d['port']))
+
+    args = parser.parse_args()
+
+    if args.port:
+        d['port'] = args.port
+
+    if args.host:
+        d['host'] = args.host
+
+    _run(**d)
     
 

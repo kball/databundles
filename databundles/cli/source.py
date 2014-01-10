@@ -173,8 +173,6 @@ def source_clone(args,rc, src):
 
     l = library.new_library(rc.library(args.library))
 
-    
-
     def get_by_group(group):
         return [f for f in  l.database.get_file_by_type('source') if f.group == group]
 

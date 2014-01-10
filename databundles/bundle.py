@@ -979,10 +979,16 @@ class BundleFileConfig(BundleConfig):
 
         ident._on = ds.rev(self._run_config.identity.revision)
 
-        print ident.dict
+        d =  ident.dict
+        d['creator'] = 'eric@sandiegodata.org'
+        d['fqname'] = ident.fqname
 
-        self.rewrite()
+        self.rewrite(**dict(identity=d))
         self._run_config = get_runconfig(self.local_file)
+
+        import sys
+        sys.exit(1)
+
 
     @property
     def config(self): #@ReservedAssignment
