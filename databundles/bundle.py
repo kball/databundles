@@ -965,15 +965,24 @@ class BundleFileConfig(BundleConfig):
             raise ConfigurationError("Can't find bundle config file: ")
 
     def init_dataset_number(self):
-        from databundles.identity import DatasetNumber, NumberServer
+        from databundles.identity import Identity, DatasetNumber, NumberServer
 
-        ns = NumberServer(**self._run_config.group('numbers'))
-        print ns.next()
+        try:
+            ns = NumberServer(**self._run_config.group('numbers'))
+            ds = ns.next()
+        except Exception as e:
+            self.error("Failed to get number from number sever; using self assigned: {}"
+                .format(e.message))
+            ds = DatasetNumber()
 
-        return
+        ident = Identity.from_dict(self._run_config.identity)
 
-        self._run_config.identity.id = str(DatasetNumber())
+        ident._on = ds.rev(self._run_config.identity.revision)
+
+        print ident.dict
+
         self.rewrite()
+        self._run_config = get_runconfig(self.local_file)
 
     @property
     def config(self): #@ReservedAssignment

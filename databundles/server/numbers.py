@@ -324,6 +324,8 @@ def _run(host, port, unregistered_key,  reloader=False, **kwargs):
 
     rds = redis.Redis(connection_pool=pool)
 
+    # This is the key that can be distributed publically. It is only to
+    # keep bots and spiders from sucking up a bunch of numbers.
     rds.set("assignment_class:"+unregistered_key,'unregistered')
 
     install(RedisPlugin(pool))

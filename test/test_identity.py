@@ -390,6 +390,7 @@ class Test(unittest.TestCase):
         ##
         ## redis-cli set assignment_class:test-ac-authoritative authoritative
         ## redis-cli set assignment_class:test-ac-registered registered
+        ## redis-cli set assignment_class:fe78d179-8e61-4cc5-ba7b-263d8d3602b9 unregistered
         
         from databundles.identity import NumberServer
         from databundles.run import  get_runconfig
@@ -397,21 +398,29 @@ class Test(unittest.TestCase):
     
         ng = rc.group('numbers')
 
-        ns = NumberServer(host=ng['host'], port=ng['port'], key='test-ac-registered')
+        host = "numbers"
+        port = 7977
+        unregistered_key = 'fe78d179-8e61-4cc5-ba7b-263d8d3602b9'
+
+        ns = NumberServer(host=host, port=port, key='test-ac-registered')
 
         n = ns.next()
         self.assertEqual(6,len(str(n)))
 
         # Next request is authoritative, so no need to sleep here.
 
-        ns = NumberServer(host=ng['host'], port=ng['port'], key='test-ac-authoritative')
+
+        ns = NumberServer(host=host, port=port, key='test-ac-authoritative')
 
         n = ns.next()
         self.assertEqual(4,len(str(n)))
 
         ns.sleep() # Avoid being rate limited
 
-        ns = NumberServer(host=ng['host'], port=ng['port'])
+        # Override to use a local numbers server:
+
+
+        ns = NumberServer(host=host, port=port, key= unregistered_key)
         n = ns.next()
         self.assertEqual(8,len(str(n)))
 
