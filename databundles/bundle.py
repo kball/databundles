@@ -958,14 +958,23 @@ class BundleFileConfig(BundleConfig):
         # write the configuration back out. 
    
         if not self._run_config.identity.get('id',False):
-            from databundles.identity import DatasetNumber
-            self._run_config.identity.id = str(DatasetNumber())
-            self.rewrite()
+            self.init_dataset_number()
+
    
         if not os.path.exists(self.local_file):
             raise ConfigurationError("Can't find bundle config file: ")
 
-        
+    def init_dataset_number(self):
+        from databundles.identity import DatasetNumber, NumberServer
+
+        ns = NumberServer(**self._run_config.group('numbers'))
+        print ns.next()
+
+        return
+
+        self._run_config.identity.id = str(DatasetNumber())
+        self.rewrite()
+
     @property
     def config(self): #@ReservedAssignment
         '''Return a dict/array object tree for the bundle configuration'''

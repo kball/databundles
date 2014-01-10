@@ -668,7 +668,22 @@ def _on_connect_update_sqlite_schema(conn):
         
         conn.execute('PRAGMA user_version = 13')        
     
-   
+
+    if  True or version < 14:
+
+        try: conn.execute('ALTER TABLE datasets ADD COLUMN d_fqname VARCHAR(200);')
+        except: pass
+
+        try: conn.execute('ALTER TABLE datasets ADD COLUMN d_version VARCHAR(20);')
+        except: pass
+
+
+        try: conn.execute('ALTER TABLE partitions ADD COLUMN p_fqname VARCHAR(50);')
+        except: pass
+
+
+        conn.execute('PRAGMA user_version = 14')
+
 
 class BuildBundleDb(SqliteBundleDatabase):
     '''For Bundle databases when they are being built, and the path is computed from 

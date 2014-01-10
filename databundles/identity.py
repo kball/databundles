@@ -227,7 +227,7 @@ class Name(object):
     @version_minor.setter
     def version_minor(self, value):  
         v = Version(self.version)
-        v.minor = value
+        v.minor = int(value)
         self.version = str(v)
  
     @property
@@ -236,7 +236,7 @@ class Name(object):
     @version_major.setter
     def version_major(self, value):  
         v = Version(self.version)
-        v.major = value
+        v.major = int(value)
         self.version = str(v)
     
     @property
@@ -245,7 +245,7 @@ class Name(object):
     @version_patch.setter
     def version_patch(self, value):  
         v = Version(self.version)
-        v.patch = value
+        v.patch = int(value)
         self.version = str(v)
  
 
@@ -556,59 +556,65 @@ class ObjectNumber(object):
     EPOCH = 1389210331 # About Jan 8, 2014
 
     @classmethod
-    def parse(cls, input): #@ReservedAssignment
+    def parse(cls, on_str): #@ReservedAssignment
         '''Parse a string into one of the object number classes. '''
         
-        if input is None:
+        if on_str is None:
             return None
         
-        if not input:
+        if not on_str:
             raise Exception("Didn't get input")
 
-        if  isinstance(input, unicode):
-            dataset = input.encode('ascii')
+        if  isinstance(on_str, unicode):
+            dataset = on_str.encode('ascii')
       
-        type_ = input[0]
-        input = input[1:]
-        
-        ds_lengths = cls.DATASET_LENGTHS[len(input)-cls.NDS_LENGTH[type_]]
+        type_ = on_str[0]
+        on_str = on_str[1:]
+
+        # There are some old values to need to be translated:
+        if type_ == 'a':
+            type_  = cls.TYPE.DATASET
+            on_str = cls.TYPE.DATASET + on_str[1:]
+
+
+        ds_lengths = cls.DATASET_LENGTHS[len(on_str)-cls.NDS_LENGTH[type_]]
         
         assignment_class = ds_lengths[2]
         
-        dataset = int(ObjectNumber.base62_decode(input[0:ds_lengths[0]]))
+        dataset = int(ObjectNumber.base62_decode(on_str[0:ds_lengths[0]]))
         
         if ds_lengths[1]: 
-            i = len(input)-ds_lengths[1]
-            revision = int(ObjectNumber.base62_decode(input[i:]))
-            input = input[0:i] # remove the revision
+            i = len(on_str)-ds_lengths[1]
+            revision = int(ObjectNumber.base62_decode(on_str[i:]))
+            on_str = on_str[0:i] # remove the revision
         else:
             revision = None
             
-        input = input[ds_lengths[0]:]
+        on_str = on_str[ds_lengths[0]:]
       
         if type_ == cls.TYPE.DATASET:
             return DatasetNumber(dataset, revision=revision, assignment_class=assignment_class)
         
         elif type_ == cls.TYPE.TABLE:   
-            table = int(ObjectNumber.base62_decode(input))
+            table = int(ObjectNumber.base62_decode(on_str))
             return TableNumber(DatasetNumber(dataset, assignment_class=assignment_class), 
                                table, revision=revision)
         
         elif type_ == cls.TYPE.PARTITION:
-            partition = int(ObjectNumber.base62_decode(input))
+            partition = int(ObjectNumber.base62_decode(on_str))
             return PartitionNumber(DatasetNumber(dataset, assignment_class=assignment_class), 
                                    partition, revision=revision)   
                    
         elif type_ == cls.TYPE.COLUMN:     
-            table = int(ObjectNumber.base62_decode(input[0:cls.DLEN.TABLE]))
-            column = int(ObjectNumber.base62_decode(input[cls.DLEN.TABLE:]))
+            table = int(ObjectNumber.base62_decode(on_str[0:cls.DLEN.TABLE]))
+            column = int(ObjectNumber.base62_decode(on_str[cls.DLEN.TABLE:]))
 
             return ColumnNumber(TableNumber(
                                 DatasetNumber(dataset, assignment_class=assignment_class), table), 
                                 column, revision=revision)
         
         else:
-            raise ValueError('Unknow type character: '+input[0]+ ' in '+str(input))
+            raise ValueError('Unknow type character: '+on_str[0]+ ' in '+str(on_str))
        
 
     @classmethod
@@ -671,6 +677,10 @@ class ObjectNumber(object):
     @classmethod
     def _rev_str(cls, revision):
 
+        if not revision:
+            return ''
+
+        revision = int(revision)
         return (ObjectNumber.base62_encode(revision).rjust(cls.DLEN.REVISION[1],'0') 
                 if bool(revision) else '')
 
@@ -835,7 +845,8 @@ class Identity(object):
 
         # Update the patch number to always be the revision
         nv = Version(self._name.version)
-        nv.patch = self._on.revision
+        nv.patch = int(self._on.revision)
+
         self._name.version = str(nv)
 
     @classmethod

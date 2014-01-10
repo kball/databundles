@@ -149,7 +149,7 @@ def _source_list(dir_):
             bundle_class = load_bundle(root)
             bundle = bundle_class(root)
             
-            ident = bundle.identity.to_dict()
+            ident = bundle.identity.dict
             ident['in_source'] = True
             ident['source_dir'] = root
             ident['source_built'] = True if bundle.is_built else False
@@ -224,7 +224,7 @@ def _print_bundle_list(*args,**kwargs):
                  ]
         
         if subset_names is None or k in subset_names: 
-            prt("{} {:35s}",''.join(flags), k, v['source_dir'])
+            prt("{} {:35s}",''.join(flags), k, v.get('source_dir','<none'))
 
        
 def _print_info(l,d,p, list_partitions=False):

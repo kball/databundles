@@ -210,7 +210,7 @@ class Dataset(Base):
     variation = SAColumn('d_variation',Text)
     creator = SAColumn('d_creator',Text, nullable=False)
     revision = SAColumn('d_revision',Integer, nullable=False)
-    version = SAColumn('d_version',String(10), nullable=False)
+    version = SAColumn('d_version',String(20), nullable=False)
 
     data = SAColumn('d_data', MutationDict.as_mutable(JSONEncodedObj))
 
@@ -252,7 +252,7 @@ class Dataset(Base):
     @property
     def identity(self):
         from identity import Identity
-        return Identity(**self.to_dict() )
+        return Identity.from_dict(self.dict )
        
     @property 
     def dict(self):

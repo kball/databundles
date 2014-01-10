@@ -25,3 +25,7 @@ filesystem:
 
     extracts: 
         dir: '{root}/cache/extracts'
+ numbers:
+    host: numbers.ambry.io
+    port: 80
+    key: fe78d179-8e61-4cc5-ba7b-263d8d3602b9

@@ -13,34 +13,43 @@ import yaml
 import shutil
 
 def bundle_command(args, rc, src):
+    import os
+    from ..run import import_file
+
+    bundle_file = os.path.abspath(args.bundle_file)
+
+    if not os.path.exists(bundle_file):
+        err("Bundle code file does not exist: {}".format(bundle_file) )
+
+    bundle_dir = os.path.dirname(bundle_file)
+
+    config_file = os.path.join(bundle_dir, 'bundle.yaml')
+
+    if not os.path.exists(config_file):
+        err("Bundle config file does not exist: {}".format(bundle_file) )
+
+    # Import the bundle file from the
+    rp = os.path.realpath(bundle_file)
+    mod = import_file(rp)
+
+    dir_ = os.path.dirname(rp)
+    b = mod.Bundle(dir_)
+
+    print b.identity.fqname
+
+
+    return
 
     globals()['bundle_'+args.subcommand](args, rc,src)
 
 def bundle_parser(cmd):
     import argparse, multiprocessing
     
-    bundle_p = cmd.add_parser('bundle', help='Manage bundle files')
-    bundle_p.set_defaults(command='bundle')
-    bundle_p.add_argument('-l','--library',  default='default',  help='Select a different name for the library')
-    bundle_p.add_argument('-f','--bundle-file', required=True,   help='Path to the bundle .py file')
-
-    asp = bundle_p.add_subparsers(title='bundle commands', help='command help')  
-
-    sp = asp.add_parser('info', help='Information about the bundle configuration')
-    sp.set_defaults(subcommand='info')
-
-    parser = None
-
-    # Commands: meta, prepare, build, install, extract, submit, 
-    
-    #parser.add_argument('command', nargs=1, help='Create a new bundle') 
-    
-    parser.add_argument('-c','--config', default=None, action='append', help="Path to a run config file")
-    parser.add_argument('-v','--verbose', default=None, action='append', help="Be verbose")
-    parser.add_argument('-r','--reset',  default=False, action="store_true",  help='')
+    parser = cmd.add_parser('bundle', help='Manage bundle files')
+    parser.set_defaults(command='bundle')
+    parser.add_argument('-l','--library',  default='default',  help='Select a different name for the library')
+    parser.add_argument('-f','--bundle-file', required=True,   help='Path to the bundle .py file')
     parser.add_argument('-t','--test',  default=False, action="store_true", help='Enable bundle-specific test behaviour')
-    parser.add_argument('--single-config', default=False,action="store_true", help="Load only the config file specified")
-    
     parser.add_argument('-m','--multi',  type = int,  nargs = '?',
                         default = 1,
                         const = multiprocessing.cpu_count(),
@@ -50,32 +59,55 @@ def bundle_parser(cmd):
     parser.add_argument('--port', default=None, help="PyDev Debugger arg")
     parser.add_argument('--verbosity', default=None, help="PyDev Debugger arg")
     
-    cmd = parser.add_subparsers(title='commands', help='command help')
+    sub_cmd = parser.add_subparsers(title='commands', help='command help')
 
-    command_p = cmd.add_parser('config', help='Operations on the bundle configuration file')
+    command_p = sub_cmd.add_parser('config', help='Operations on the bundle configuration file')
     command_p.set_defaults(command='config')
        
     asp = command_p.add_subparsers(title='Config subcommands', help='Subcommand for operations on a bundl file')
 
+
+    #
+    # rewrite Command
+    #
+
     sp = asp.add_parser('rewrite', help='Re-write the bundle file, updating the formatting')     
     sp.set_defaults(subcommand='rewrite')
-    
+
+    #
+    # Dump Command
+    #
+
     sp = asp.add_parser('dump', help='dump the configuration')     
     sp.set_defaults(subcommand='dump') 
-    
+
+    #
+    # Schema Command
+    #
+
     sp = asp.add_parser('schema', help='Print the schema')     
     sp.set_defaults(subcommand='schema') 
-    
+
+    #
+    # info command
+    #
+    command_p = sub_cmd.add_parser('info', help='Print information about the bundle')
+    command_p.set_defaults(command='info')
+    command_p.set_defaults(subcommand='info')
+    command_p.add_argument('-s','--schema',  default=False,action="store_true",
+                           help='Dump the schema as a CSV. The bundle must have been prepared')
+
+
     #
     # Clean Command
     #
-    command_p = cmd.add_parser('clean', help='Return bundle to state before build, prepare and extracts')
+    command_p = sub_cmd.add_parser('clean', help='Return bundle to state before build, prepare and extracts')
     command_p.set_defaults(command='clean')   
     
     #
     # Meta Command
     #
-    command_p = cmd.add_parser('meta', help='Build or install metadata')
+    command_p = sub_cmd.add_parser('meta', help='Build or install metadata')
     command_p.set_defaults(command='meta')   
     
     command_p.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')     
@@ -83,7 +115,7 @@ def bundle_parser(cmd):
     #
     # Prepare Command
     #
-    command_p = cmd.add_parser('prepare', help='Prepare by creating the database and schemas')
+    command_p = sub_cmd.add_parser('prepare', help='Prepare by creating the database and schemas')
     command_p.set_defaults(command='prepare')   
     
     command_p.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')
@@ -92,7 +124,7 @@ def bundle_parser(cmd):
     #
     # Build Command
     #
-    command_p = cmd.add_parser('build', help='Build the data bundle and partitions')
+    command_p = sub_cmd.add_parser('build', help='Build the data bundle and partitions')
     command_p.set_defaults(command='build')   
     command_p.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')
     
@@ -103,7 +135,7 @@ def bundle_parser(cmd):
     #
     # Update Command
     #
-    command_p = cmd.add_parser('update', help='Build the data bundle and partitions from an earlier version')
+    command_p = sub_cmd.add_parser('update', help='Build the data bundle and partitions from an earlier version')
     command_p.set_defaults(command='update')   
     command_p.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')
     
@@ -111,7 +143,7 @@ def bundle_parser(cmd):
     #
     # Extract Command
     #
-    command_p = cmd.add_parser('extract', help='Extract data into CSV and TIFF files. ')
+    command_p = sub_cmd.add_parser('extract', help='Extract data into CSV and TIFF files. ')
     command_p.set_defaults(command='extract')   
     command_p.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')
     command_p.add_argument('-n','--name', default=None,action="store", help='Run only the named extract, and its dependencies')
@@ -121,7 +153,7 @@ def bundle_parser(cmd):
     #
     # Submit Command
     #
-    command_p = cmd.add_parser('submit', help='Submit extracts to the repository ')
+    command_p = sub_cmd.add_parser('submit', help='Submit extracts to the repository ')
     command_p.set_defaults(command='submit')    
     command_p.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')   
     command_p.add_argument('-r','--repo',  default=None, help='Name of the repository, defined in the config file')
@@ -131,7 +163,7 @@ def bundle_parser(cmd):
     #
     # Install Command
     #
-    command_p = cmd.add_parser('install', help='Install bundles and partitions to the library')
+    command_p = sub_cmd.add_parser('install', help='Install bundles and partitions to the library')
     command_p.set_defaults(command='install')  
     command_p.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')
     command_p.add_argument('-l','--library',  help='Name of the library, defined in the config file')
@@ -141,24 +173,18 @@ def bundle_parser(cmd):
     #
     # run Command
     #
-    command_p = cmd.add_parser('run', help='Run a method on the bundle')
+    command_p = sub_cmd.add_parser('run', help='Run a method on the bundle')
     command_p.set_defaults(command='run')               
     command_p.add_argument('method', metavar='Method', type=str, 
                    help='Name of the method to run')    
     command_p.add_argument('args',  nargs='*', type=str,help='additional arguments')
     
-    #
-    # info command
-    #
-    command_p = cmd.add_parser('info', help='Print information about the bundle')
-    command_p.set_defaults(command='info')               
-    command_p.add_argument('-s','--schema',  default=False,action="store_true",
-                           help='Dump the schema as a CSV. The bundle must have been prepared')
+
      
     #
     # repopulate
     #
-    command_p = cmd.add_parser('repopulate', help='Load data previously submitted to the library back into the build dir')
+    command_p = sub_cmd.add_parser('repopulate', help='Load data previously submitted to the library back into the build dir')
     command_p.set_defaults(command='repopulate')               
     
     
@@ -166,17 +192,39 @@ def bundle_parser(cmd):
     # Source Commands
     #
     
-    command_p = cmd.add_parser('commit', help='Commit the source')
+    command_p = sub_cmd.add_parser('commit', help='Commit the source')
     command_p.set_defaults(command='commit', command_group='source')  
     command_p.add_argument('-m','--message', default=None, help='Git commit message')
     
-    command_p = cmd.add_parser('push', help='Commit and push to the git origin')
+    command_p = sub_cmd.add_parser('push', help='Commit and push to the git origin')
     command_p.set_defaults(command='push', command_group='source')  
     command_p.add_argument('-m','--message', default=None, help='Git commit message')
     
-    command_p = cmd.add_parser('pull', help='Pull from the git origin')
+    command_p = sub_cmd.add_parser('pull', help='Pull from the git origin')
     command_p.set_defaults(command='pull', command_group='source')  
 
+
+def bundle_info(args, rc, src):
+    if args.schema:
+        print b.schema.as_csv()
+    else:
+        b.log("----Info ---")
+        b.log("VID  : "+b.identity.vid)
+        b.log("Name : "+b.identity.name)
+        b.log("VName: "+b.identity.vname)
+        b.log("Parts: {}".format(b.partitions.count))
+
+        if b.config.build.get('dependencies',False):
+            b.log("---- Dependencies ---")
+            for k,v in b.config.build.dependencies.items():
+                b.log("    {}: {}".format(k,v))
+
+        if b.partitions.count < 5:
+            b.log("---- Partitions ---")
+            for partition in b.partitions:
+                b.log("    "+partition.name)
+
+    return
 
     def run_prepare(self):
         b = self
@@ -272,27 +320,7 @@ def bundle_parser(cmd):
             import time
             time.sleep(1)
     
-        if 'info' in phases:
-            if args.schema:
-                print b.schema.as_csv()
-            else:
-                b.log("----Info ---")
-                b.log("VID  : "+b.identity.vid)
-                b.log("Name : "+b.identity.name)
-                b.log("VName: "+b.identity.vname)
-                b.log("Parts: {}".format(b.partitions.count))
-                
-                if b.config.build.get('dependencies',False):
-                    b.log("---- Dependencies ---")
-                    for k,v in b.config.build.dependencies.items():
-                        b.log("    {}: {}".format(k,v))
 
-                if b.partitions.count < 5:
-                    b.log("---- Partitions ---")
-                    for partition in b.partitions:
-                        b.log("    "+partition.name)
-                
-            return
         
         if 'run' in phases:
             #

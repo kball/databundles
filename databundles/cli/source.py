@@ -1,6 +1,9 @@
 """
 Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
+
+
+
 """
 
 
@@ -81,6 +84,10 @@ def source_parser(cmd):
     sp = asp.add_parser('run', help='Run a shell command in source directories')
     sp.set_defaults(subcommand='run')
     sp.add_argument('-d','--dir', nargs='?', help='Directory to start recursing from ')
+    sp.add_argument('-P','--python', default=None, help=
+                    'Path to a python class file to run. Loads as module and calls run(). The '+
+                    'run() function can have any combination of arguments of these names: bundle_dir,'+
+                    ' bundle, repo')
     sp.add_argument('-m','--message', nargs='+', default='.', help='Directory to start recursing from ')
     sp.add_argument('shell_command',nargs=argparse.REMAINDER, type=str,help='Shell command to run')  
     group = sp.add_mutually_exclusive_group()
@@ -163,7 +170,7 @@ def source_clone(args,rc, src):
     '''Clone one or more registered source packages ( via sync ) into the source directory '''
     import databundles.library as library
     from ..dbexceptions import ConflictError
-    from ..identity import new_identity
+
     l = library.new_library(rc.library(args.library))
 
     
@@ -184,7 +191,7 @@ def source_clone(args,rc, src):
 def source_new(args,rc, src):   
     '''Clone one or more registered source packages ( via sync ) into the source directory '''
     from ..source.repository import new_repository
-    from ..identity import new_identity, DatasetNumber
+    from ..identity import DatasetNumber
     
     
     repo = new_repository(rc.sourcerepo(args.name))  
@@ -383,10 +390,20 @@ def source_build(args,rc, src):
 
             
 def source_run(args,rc, src):
-
+    from databundles.run import import_file
     from databundles.source.repository.git import GitRepository
 
+
     dir_ = args.dir
+
+    if args.python:
+        import inspect
+        mod = import_file(args.python)
+
+        run_args = inspect.getargspec(mod.run)
+
+    else:
+        mod = None
 
     if not dir_:
         dir_ = rc.sourcerepo.dir
@@ -395,8 +412,25 @@ def source_run(args,rc, src):
         if 'bundle.yaml' in files:
             repo = GitRepository(None, root)
             repo.bundle_dir = root
-            
-            if args.repo_command == 'commit' and repo.needs_commit():
+
+            if args.python:
+                a = {}
+
+                if 'bundle_dir' in run_args.args:
+                    a['bundle_dir'] = root
+
+                if 'repo' in run_args.args:
+                    a['repo'] = repo
+
+                if 'bundle' in run_args.args:
+                    rp = os.path.join(root, 'bundle.py')
+                    bundle_mod = import_file(rp)
+                    dir_ = os.path.dirname(rp)
+                    a['bundle'] = bundle_mod.Bundle(dir_)
+
+                mod.run(**a)
+
+            elif args.repo_command == 'commit' and repo.needs_commit():
                 prt("--- {} {}",args.repo_command, root)
                 repo.commit(' '.join(args.message))
                 
@@ -478,7 +512,6 @@ def source_init(args,rc, src):
 def source_sync(args,rc, src):
     '''Synchronize all of the repositories with the local library'''
     import databundles.library as library
-    from databundles.identity import new_identity
 
     l = library.new_library(rc.library(args.library))
 
@@ -524,5 +557,4 @@ def source_deps(args,rc, src):
             for j, name in enumerate(level):
                 prt("{:3d} {:3d} {}",i,j,name)
             
-             
-            
+

@@ -276,7 +276,7 @@ class LibraryDb(object):
         for r in self.session.query(Dataset).filter(Dataset.id_ != 'a0').all():
             
             if r.identity.cache_key not in datasets:
-                v = r.identity.to_dict()
+                v = r.identity.dict
                 v['location'] = [' ','L']
                 v['library_version'] = v['revision']
                 v['remote_version'] = 0

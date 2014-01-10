@@ -57,6 +57,8 @@ logger.setLevel(logging.DEBUG)
 
 
 
+
+
 def capture_return_exception(e):
     
     import sys
@@ -185,9 +187,7 @@ def enable_cors():
 @get('/')
 def get_root(redis):
 
-    return [
-           'this','is','foobar'
-           ]
+    return []
 
 
 def request_delay(nxt,delay,delay_factor):
@@ -269,7 +269,7 @@ def get_test(redis):
         assignment_class = redis.get(assignment_class_key )
 
     if not assignment_class:
-        assignment_class = 'unregistered'
+        raise exc.NotAuthorized('Use an access key to gain access to this service')
 
     # The number space depends on the assignment class.
 
@@ -315,10 +315,16 @@ def get_test(redis):
                 nxt=nxt,
                 delay=delay)
 
-def _run(host, port, redis_config, reloader=False):
+def _run(host, port, unregistered_key,  reloader=False, **kwargs):
+
+    redis_config = kwargs.get('redis')
 
     pool = redis.ConnectionPool(host=redis_config['host'],
                                 port=redis_config['port'], db=0)
+
+    rds = redis.Redis(connection_pool=pool)
+
+    rds.set("assignment_class:"+unregistered_key,'unregistered')
 
     install(RedisPlugin(pool))
 
@@ -333,6 +339,6 @@ if __name__ == '__main__':
 
     redis_config = ng['redis']
 
-    _run(ng.host,ng.port, redis_config)
+    _run(**rc.group('numbers'))
     
 
