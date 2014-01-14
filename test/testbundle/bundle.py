@@ -58,7 +58,20 @@ class Bundle(BuildBundle):
                                                                                      random.randint(1,25), random.randint(0, 23), random.randint(0, 59))),
                   ('time', lambda: "{:02d}:{:02d}".format(random.randint(0, 23), random.randint(0, 59)))
                   ]
-  
+
+    def build_small(self):
+        p = self.partitions.find_or_new_db(table='tthree')
+        table = p.table
+
+        field_gen =  self.fields3
+
+        with p.inserter() as ins:
+
+            for i in range(5000):
+                row = { f[0]:f[1]() for f in field_gen }
+                ins.insert(row)
+
+        return True
     def build(self):
 
         self.log("=== Build db, using an inserter")
@@ -66,7 +79,7 @@ class Bundle(BuildBundle):
 
         self.log("=== Build geo")
         self.build_geo()
-        
+
         self.log("=== Build missing")
         self.build_with_missing()
         

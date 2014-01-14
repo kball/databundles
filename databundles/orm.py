@@ -199,8 +199,8 @@ class SavableMixin(object):
 class Dataset(Base):
     __tablename__ = 'datasets'
     
-    vid = SAColumn('d_vid',String(16), primary_key=True)
-    id_ = SAColumn('d_id',String(16), )
+    vid = SAColumn('d_vid',String(20), primary_key=True)
+    id_ = SAColumn('d_id',String(20), )
     name = SAColumn('d_name',String(200), unique=False, nullable=False)
     vname = SAColumn('d_vname',String(200), unique=True, nullable=False)
     fqname = SAColumn('d_fqname',String(200), unique=True, nullable=False)
@@ -239,7 +239,11 @@ class Dataset(Base):
             self.vid = str(dn)
             self.id_ = str(dn.rev(None))
         elif not self.vid:
-            self.vid = str(ObjectNumber.parse(self.id_).rev(self.revision))
+            try:
+                self.vid = str(ObjectNumber.parse(self.id_).rev(self.revision))
+            except ValueError as e:
+                print repr(self)
+                raise ValueError('Could not parse id value; '+e.message)
 
 
     def __repr__(self):
@@ -281,11 +285,11 @@ def _clean_flag( in_flag):
 class Column(Base):
     __tablename__ = 'columns'
 
-    vid = SAColumn('c_vid',String(16), primary_key=True)
-    id_ = SAColumn('c_id',String(16))
+    vid = SAColumn('c_vid',String(20), primary_key=True)
+    id_ = SAColumn('c_id',String(20))
     sequence_id = SAColumn('c_sequence_id',Integer)
-    t_vid = SAColumn('c_t_vid',String(16),ForeignKey('tables.t_vid'))
-    t_id = SAColumn('c_t_id',String(16))
+    t_vid = SAColumn('c_t_vid',String(20),ForeignKey('tables.t_vid'))
+    t_id = SAColumn('c_t_id',String(20))
     name = SAColumn('c_name',Text)
     altname = SAColumn('c_altname',Text)
     datatype = SAColumn('c_datatype',Text)
@@ -494,10 +498,10 @@ event.listen(Column, 'before_update', Column.before_update)
 class Table(Base):
     __tablename__ ='tables'
 
-    vid = SAColumn('t_vid',String(16), primary_key=True)
-    id_ = SAColumn('t_id',String(16), primary_key=False)
-    d_id = SAColumn('t_d_id',String(16))
-    d_vid = SAColumn('t_d_vid',String(16),ForeignKey('datasets.d_vid'), nullable = False)
+    vid = SAColumn('t_vid',String(20), primary_key=True)
+    id_ = SAColumn('t_id',String(20), primary_key=False)
+    d_id = SAColumn('t_d_id',String(20))
+    d_vid = SAColumn('t_d_vid',String(20),ForeignKey('datasets.d_vid'), nullable = False)
     sequence_id = SAColumn('t_sequence_id',Integer, nullable = False)
     name = SAColumn('t_name',String(200), nullable = False)
     altname = SAColumn('t_altname',Text)
@@ -917,16 +921,16 @@ class File(Base, SavableMixin):
 class Partition(Base):
     __tablename__ = 'partitions'
 
-    vid = SAColumn('p_vid',String(16), primary_key=True, nullable=False)
-    id_ = SAColumn('p_id',String(16), nullable=False)
+    vid = SAColumn('p_vid',String(20), primary_key=True, nullable=False)
+    id_ = SAColumn('p_id',String(20), nullable=False)
     name = SAColumn('p_name',String(200), nullable=False)
     vname = SAColumn('p_vname',String(200), unique=True, nullable=False)
     fqname = SAColumn('p_fqname',String(200), unique=True, nullable=False)
     sequence_id = SAColumn('p_sequence_id',Integer)
-    t_vid = SAColumn('p_t_vid',String(16),ForeignKey('tables.t_vid'))
-    t_id = SAColumn('p_t_id',String(16))
-    d_vid = SAColumn('p_d_vid',String(16),ForeignKey('datasets.d_vid'))
-    d_id = SAColumn('p_d_id',String(16))
+    t_vid = SAColumn('p_t_vid',String(20),ForeignKey('tables.t_vid'))
+    t_id = SAColumn('p_t_id',String(20))
+    d_vid = SAColumn('p_d_vid',String(20),ForeignKey('datasets.d_vid'))
+    d_id = SAColumn('p_d_id',String(20))
     time = SAColumn('p_time',String(20))
     space = SAColumn('p_space',String(50))
     grain = SAColumn('p_grain',String(50))
@@ -976,7 +980,7 @@ class Partition(Base):
     def identity(self):
         '''Return this partition information as a PartitionId'''
         from sqlalchemy.orm import object_session
-        from partition import new_identity
+        from identity import PartitionIdentity
 
         if self.dataset is None:
             # The relationship will be null until the object is committed
@@ -989,7 +993,7 @@ class Partition(Base):
         d = dict(ds.dict.items() + self.dict.items())
 
             
-        return new_identity(d)
+        return PartitionIdentity.from_dict(d)
     
 
     @property

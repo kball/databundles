@@ -64,6 +64,7 @@ class RunConfig(object):
             if f is not None and os.path.exists(f):
                 try:
                     loaded = True
+
                     self.config.loaded.append(f)
                     self.config.update_yaml(f)
                 except TypeError:

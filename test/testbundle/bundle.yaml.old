@@ -35,16 +35,20 @@ extracts:
     query: select * from  {p_table}
     title: 'Extract for table: {p_table}, a={dima}, b={dimb} and c={dimc}'
 identity:
-    creator: eric@clarinova.com
     dataset: dataset
-    id: d1DxuZ
+    id: diEGPXmDC8
     name: source-dataset-subset-variation
     revision: 1
     source: source
     subset: subset
     variation: variation
     version: 0.0.1
-    vid: d1DxuZ001
+    vid: diEGPXmDC8001
+    vname: source-dataset-subset-variation-0.0.1
+names:
+    fqname: source-dataset-subset-variation-0.0.1~diEGPXmDC8001
+    name: source-dataset-subset-variation
+    vid: diEGPXmDC8001
     vname: source-dataset-subset-variation-0.0.1
 partitions:
 - source-dataset-subset-variation-coding

@@ -102,7 +102,8 @@ class Bundle(object):
 
         if not self._identity: 
 
-            self._identity =  Identity.from_dict(self.config.identity)
+            self._identity =  Identity.from_dict(dict(self.config.identity.items()+
+                                                      self.config.names.items()))
             
         return self._identity            
 
@@ -379,24 +380,32 @@ class BuildBundle(Bundle):
         return BundleDbConfig(self, self.database)
 
     def update_configuration(self):
-
+        from dbexceptions import DatabaseError
         # Re-writes the undle.yaml file, with updates to the identity and partitions
         # sections. 
+        from dbexceptions import  DatabaseMissingError
+
+        if self.database.exists():
+            partitions = [p.identity.sname for p in self.partitions]
+        else:
+            partitions = []
 
         self.config.rewrite(
-                         identity=self.identity.dict,
-                         partitions=[p.identity.sname for p in self.partitions]
+                         identity=self.identity.ident_dict,
+                         names=self.identity.names_dict,
+                         partitions=partitions
                          )
         
         # Reload some of the values from bundle.yaml into the database configuration
 
-        if self.config.build.get('dependencies'):
-            dbc = self.db_config
-            for k,v in self.config.build.get('dependencies').items():
-                dbc.set_value('odep', k, v)
+        if self.database.exists():
 
-           
-        self.database.rewrite_dataset()
+            if self.config.build.get('dependencies'):
+                dbc = self.db_config
+                for k,v in self.config.build.get('dependencies').items():
+                    dbc.set_value('odep', k, v)
+
+            self.database.rewrite_dataset()
                 
         
     @classmethod
@@ -648,7 +657,8 @@ class BuildBundle(Bundle):
             self.db_config.set_value('process','prepared',datetime.now().isoformat())
 
             self._revise_schema()
-                    
+
+
         return True
 
     @property
@@ -716,7 +726,6 @@ class BuildBundle(Bundle):
 
         self.post_build_write_stats()
 
-    
         return True
     
     def post_build_write_stats(self):
@@ -971,24 +980,22 @@ class BundleFileConfig(BundleConfig):
             ns = NumberServer(**self._run_config.group('numbers'))
             ds = ns.next()
         except Exception as e:
-            self.error("Failed to get number from number sever; using self assigned: {}"
+            from .util import get_logger
+            logger = get_logger(__name__)
+
+            logger.error("Failed to get number from number sever; need to use self assigned number: {}"
                 .format(e.message))
-            ds = DatasetNumber()
+            raise
 
         ident = Identity.from_dict(self._run_config.identity)
 
         ident._on = ds.rev(self._run_config.identity.revision)
 
-        d =  ident.dict
-        d['creator'] = 'eric@sandiegodata.org'
-        d['fqname'] = ident.fqname
-
-        self.rewrite(**dict(identity=d))
+        self.rewrite(**dict(
+            identity=ident.ident_dict,
+            names=ident.names_dict
+        ))
         self._run_config = get_runconfig(self.local_file)
-
-        import sys
-        sys.exit(1)
-
 
     @property
     def config(self): #@ReservedAssignment

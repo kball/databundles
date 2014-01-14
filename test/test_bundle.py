@@ -27,7 +27,7 @@ class Test(TestBase):
       
     def test_objectnumber(self):
           
-        values = ['a17PY5','c17PY50a','d17PY50a0a','b17PY500a']
+        values = ['d17PY5','t17PY50a','c17PY50a0a','p17PY500a']
         
         for v in values:
             x = ObjectNumber.parse(v)   
@@ -93,7 +93,7 @@ class Test(TestBase):
         
       
     def test_identity(self):
-        from databundles.identity import new_identity
+
         self.assertEqual('source', self.bundle.identity.source)
         self.assertEqual('dataset', self.bundle.identity.dataset)
         self.assertEqual('subset', self.bundle.identity.subset)
@@ -110,7 +110,8 @@ class Test(TestBase):
         self.assertEquals('source-dataset-subset-variation-ca0d', str(new_identity(pid.to_dict())))
         
         d['id'] = 'foobar'
-        self.assertRaises(ValueError, new_identity, (d))
+        ident = Identity.from_dict(d)
+        #self.assertRaises(ValueError, new_identity, (d))
         
         del d['id']
         
@@ -130,8 +131,8 @@ class Test(TestBase):
         b.clean()
         
         self.assertTrue(b.identity.id_ is not None)
-        self.assertEquals('source-dataset-subset-variation-ca0d', b.identity.name)
-        self.assertEquals('source-dataset-subset-variation-ca0d-r1', b.identity.vname)
+        self.assertEquals('source-dataset-subset-variation', b.identity.sname)
+        self.assertEquals('source-dataset-subset-variation-0.0.1', b.identity.vname)
         
         b.database.create()
         
@@ -139,9 +140,9 @@ class Test(TestBase):
         
         dbb = DbBundle(db_path)
         
-        self.assertEqual("source-dataset-subset-variation-ca0d", dbb.identity.name)
-        self.assertEqual("source-dataset-subset-variation-ca0d-r1", dbb.identity.vname)
-        self.assertEqual("source-dataset-subset-variation-ca0d", dbb.config.identity.name)
+        self.assertEqual("source-dataset-subset-variation", dbb.identity.name)
+        self.assertEqual("source-dataset-subset-variation-0.0.1", dbb.identity.vname)
+        self.assertEqual("source-dataset-subset-variation", dbb.config.identity.name)
 
     def test_paths(self):
         ''' Test that abuild bundle and a db bundle both produce the same paths. '''
@@ -188,8 +189,8 @@ class Test(TestBase):
         
         #print self.bundle.schema.as_csv()
         
-        self.assertIn('c1DxuZ01', [t.id_ for t in self.bundle.schema.tables])
-        self.assertIn('c1DxuZ02', [t.id_ for t in self.bundle.schema.tables])
+        self.assertIn('tiEGPXmDC801', [t.id_ for t in self.bundle.schema.tables])
+        self.assertIn('tiEGPXmDC802', [t.id_ for t in self.bundle.schema.tables])
         self.assertNotIn('cTest03', [t.id_ for t in self.bundle.schema.tables])
     
         t = self.bundle.schema.table('table_3')
@@ -357,7 +358,7 @@ class Test(TestBase):
         
     def test_partition(self):
         
-        from  databundles.partition import  PartitionIdentity
+        from  databundles.identity import  PartitionIdentity
 
         ## TODO THis does does not test the 'table' parameter of the ParitionId
           

@@ -397,8 +397,15 @@ class Partitions(object):
 
         partition =  self.find(PartitionNameQuery(fqname=fqname))
 
+        try:
+            assert bool(partition), '''Failed to find partition that was just created'''
+        except AssertionError:
+            self.bundle.error("Failed to get partition for: created={}, fqname={}, database={} "
+            .format(ppn, fqname, self.bundle.database.dsn))
+            raise
+
         if create:
-            if tables:   
+            if tables and hasattr(partition, 'create_with_tables'):
                 partition.create_with_tables(tables, clean)  
             else:
                 partition.create()

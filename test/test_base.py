@@ -29,7 +29,7 @@ class TestBase(unittest.TestCase):
         bundle = Bundle()  
         idnt = bundle.identity
         idnt.revision = 1
-        bundle.config.rewrite(identity=idnt.to_dict())
+        bundle.config.rewrite(identity=idnt.dict)
 
         bundle = Bundle()  
         marker = bundle.filesystem.build_path('test-marker')

@@ -8,7 +8,7 @@ import os.path
 from  testbundle.bundle import Bundle
 from sqlalchemy import * #@UnusedWildImport
 from databundles.run import  get_runconfig, RunConfig
-from databundles.library import QueryCommand, new_library
+from databundles.library.query import QueryCommand
 import logging
 import databundles.util
 
@@ -51,6 +51,7 @@ class Test(TestBase):
         
     def get_library(self, name = 'default'):
         """Clear out the database before the test run"""
+        from databundles.library import new_library
 
         config = self.rc.library(name)
 
@@ -63,8 +64,98 @@ class Test(TestBase):
     def tearDown(self):
         pass
 
+    @staticmethod
+    def new_db():
+        from databundles.util import temp_file_name
+        from databundles.library.database import LibraryDb
+        db_file = temp_file_name()+".db"
+
+        db = LibraryDb(driver='sqlite', dbname=db_file)
+
+        return db_file, db
+
+    def test_database(self):
+
+        f,db = self.new_db()
+
+        ##
+        ## Test basic creation
+        ##
+
+        self.assertFalse(db.exists())
+
+        db.create()
+
+        self.assertTrue(db.exists())
+
+        db.set_config_value('test','one',1)
+        db.set_config_value('test','two',2)
+
+        self.assertEquals(1,db.get_config_value('test','one').value)
+        self.assertEquals(2,db.get_config_value('test','two').value)
+
+        self.assertIn(('test', 'one'),db.config_values)
+        self.assertIn(('test', 'two'),db.config_values)
+        self.assertEquals(2,db.config_values[('test', 'two')])
+
+        self.assertEquals(0, len(db.list()))
+
+        db.drop()
+
+        self.assertTrue(os.path.exists(f))
+        self.assertFalse(db.exists())
+
+        os.remove(f)
+
+    def test_database_query(self):
+        from databundles.orm import Dataset, Partition
+        from databundles.library.query import Resolver
+        from databundles.library.database import ROOT_CONFIG_NAME_V
+
+        f,db = self.new_db()
+        print 'Testing ', f
+        db.create()
+
+        db.install_bundle(self.bundle)
+
+        #
+        # Get a bunch of names from the existing bundles. This will check the simple
+        # queries for single objects.
+        #
+
+        tests = {}
+        for r in db.session.query(Dataset, Partition).filter(Dataset.vid != ROOT_CONFIG_NAME_V).all():
+
+            di = r.Dataset.identity
+
+            tests[di.sname] = di.vid
+            tests[di.vname] = di.vid
+            tests[di.fqname] = di.vid
+            tests[di.vid] = di.vid
+
+            pi = r.Partition.identity
+
+            tests[pi.sname] = pi.vid
+            tests[pi.vname] = pi.vid
+            tests[pi.fqname] = pi.vid
+            tests[pi.vid] = pi.vid
+
+        r = Resolver(db.session)
+
+
+        for ref, vid in tests.items():
+            ip, results = r.resolve_ref_all(ref)
+
+            self.assertEqual(1, len(results))
+
+            first= results.values().pop(0)
+            vid2 = first.vid if not first.partitions  else first.partitions.values()[0].vid
+
+            self.assertEquals(vid, vid2)
+
+
     def test_simple_install(self):
-        from databundles.library import QueryCommand
+
         from databundles.util import temp_file_name
         import pprint
         import os
@@ -130,21 +221,8 @@ class Test(TestBase):
         self.assertTrue(l.database.needs_dump())
       
       
-    def test_resolve(self):
-        """Test the resolve_id() function"""
-        from databundles import resolve_id
-        
-        self.assertEquals(self.bundle.identity.id_, resolve_id(self.bundle) )
-        self.assertEquals(self.bundle.identity.id_, resolve_id(self.bundle.identity))
-        self.assertEquals(self.bundle.identity.id_, resolve_id(self.bundle.identity.id_))
-        self.assertEquals(self.bundle.identity.id_, resolve_id(str(self.bundle.identity.id_)))
 
-        for partition in self.bundle.partitions.all:
-            self.assertEquals(partition.identity.id_, resolve_id(partition))
-            self.assertEquals(partition.identity.id_, resolve_id(partition.identity))
-            self.assertEquals(partition.identity.id_, resolve_id(partition.identity.id_))
-            self.assertEquals(partition.identity.id_, resolve_id(str(partition.identity.id_)))            
-            
+
     def test_library_install(self):
         '''Install the bundle and partitions, and check that they are
         correctly installed. Check that installation is idempotent'''
@@ -234,52 +312,148 @@ class Test(TestBase):
         self.assertIn('source-dataset-subset-variation-ca0d', ds_names)
 
 
+
     def test_versions(self):
         import testbundle.bundle
         from databundles.run import get_runconfig
+        from databundles.library.query import Resolver
+        import shutil
         idnt = self.bundle.identity
        
-        #Test.rm_rf(self.bundle.filesystem.build_path())
+        f,db = self.new_db()
+        print 'Testing ', f
+        db.create()
 
-        l = self.get_library()
-        print "Database: ", l.database.dsn
+        orig = os.path.join(self.bundle.bundle_dir,'bundle.yaml')
+        save = os.path.join(self.bundle.bundle_dir,'bundle.yaml.save')
+        shutil.copyfile(orig,save)
 
-        vnames = {}
-        name = None
-        
-        for i in [1,2,3]:
-            idnt.revision = i
+        datasets = {}
 
-            bundle = Bundle()  
-            bundle.config.rewrite(identity=idnt.to_dict())
-            get_runconfig.clear()
-           
-            print 'Building version {}'.format(i)
+        try:
+            for i in [1,2,3]:
+                idnt._on.revision = i
+                idnt.name.version_major = i
+                idnt.name.version_minor = i*10
 
-            bundle = Bundle() 
-             
-            bundle.clean()
-            bundle.prepare()
-            bundle.build()
-            bundle.update_configuration()
+                bundle = Bundle()
+                bundle.config.rewrite(identity=idnt.ident_dict,
+                                      names=idnt.names_dict)
+                get_runconfig.clear() #clear runconfig cache
 
-            print "Installing ", bundle.identity.vname
-            l = self.get_library()
-            r = l.put(bundle)
-        
-            name = bundle.identity.name # Same every time. 
-            vnames[i] = bundle.identity.vname
-        
-        
-        r = l.get(name)
-        
-        for i,vname in vnames.items():
-            r = l.get(vname)
-            print i, vname, r, r.identity.vname
+                print 'Building version {}'.format(i)
 
-        
-        idnt.revision = 1
-        self.bundle.config.rewrite(identity=idnt.to_dict())
+                bundle = Bundle()
+
+                bundle.clean()
+                bundle.pre_prepare()
+                bundle.prepare()
+                bundle.post_prepare()
+                bundle.pre_build()
+                bundle.build_small()
+                #bundle.build()
+                bundle.post_build()
+
+                bundle = Bundle()
+
+                print "Installing ", bundle.identity.vname
+                db.install_bundle(bundle)
+
+        finally:
+            pass
+            os.rename(save, orig)
+
+        #
+        # Save the list of datasets for version analysis in other
+        # tests
+        #
+
+        for d in db.list():
+            datasets[d.vid] = d.dict
+            datasets[d.vid]['partitions'] = {}
+
+            for p_vid, p in d.partitions.items():
+                datasets[d.vid]['partitions'][p_vid] = p.dict
+
+
+        with open(self.bundle.filesystem.path('meta','version_datasets.json'),'w') as f:
+            import json
+            f.write(json.dumps(datasets))
+
+
+        r = Resolver(db.session)
+
+        ref = idnt.id_
+
+        ref = "source-dataset-subset-variation-=2.20"
+
+        ip, results = r.resolve_ref_all(ref)
+
+        for row in results:
+            print row
+
+
+        #os.remove(f)
+
+
+    def test_version_resolver(self):
+        from databundles.library.query import Resolver
+
+        l = self.bundle.library
+        db = l.database
+
+        l.clean()
+
+        db.install_bundle(self.bundle)
+
+        #for _, ident in db.list().items():
+        #    print '--', ident.fqname
+        #    for _, p_ident in ident.partitions.items():
+        #        print '  ', p_ident.fqname
+
+
+        r = Resolver(db.session)
+
+        vname = 'source-dataset-subset-variation-0.0.1'
+        name = 'source-dataset-subset-variation'
+
+        ip, results = r.resolve_ref_one(vname)
+        self.assertEquals(vname, results.vname)
+
+        ip, results = r.resolve_ref_one(name)
+        self.assertEquals(vname, results.vname)
+
+
+        with open(self.bundle.filesystem.path('meta','version_datasets.json')) as f:
+            import json
+            datasets = json.loads(f.read())
+
+        # This mock object only works on datasets; it will return all of the
+        # partitions for each dataset, and each of the datasets. It is only for testing
+        # version filtering.
+        class TestResolver(Resolver):
+            def resolve_ref_all(self, ref):
+                from databundles.identity import Identity
+                ip = Identity.classify(ref)
+                return ip, { k:Identity.from_dict(ds) for k,ds in datasets.items() }
+
+        r = TestResolver(db.session)
+
+
+        ip, result = r.resolve_ref_one('source-dataset-subset-variation-==1.10.1')
+        self.assertEquals('source-dataset-subset-variation-1.10.1~diEGPXmDC8001',str(result))
+
+        ip, result = r.resolve_ref_one('source-dataset-subset-variation->=1.10.1,<3.0.0')
+        self.assertEquals('source-dataset-subset-variation-2.20.2~diEGPXmDC8002',str(result))
+
+        ip, result = r.resolve_ref_one('source-dataset-subset-variation->=1.10.1,<2.0.0')
+        self.assertEquals('source-dataset-subset-variation-1.10.1~diEGPXmDC8001',str(result))
+
+        ip, result = r.resolve_ref_one('source-dataset-subset-variation->2.0.0')
+        self.assertEquals('source-dataset-subset-variation-3.30.3~diEGPXmDC8003',str(result))
+
+        ip, result = r.resolve_ref_one('source-dataset-subset-variation-<=3.0.0')
+        self.assertEquals('source-dataset-subset-variation-2.20.2~diEGPXmDC8002',str(result))
 
 
     def test_cache(self):

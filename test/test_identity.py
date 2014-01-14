@@ -8,7 +8,6 @@ from databundles.identity import *
 
 class Test(unittest.TestCase):
 
-
     def setUp(self):
         pass
 
@@ -39,7 +38,6 @@ class Test(unittest.TestCase):
 
         self.assertEquals('t000004c9201004', str(tnnr.rev(4)))
 
-
         # Other assignment classes
         
         dnn = 62*62+11
@@ -56,9 +54,14 @@ class Test(unittest.TestCase):
         dn = DatasetNumber(62**3-1,None,'self')
         self.assertEquals('d000000ZZZ', str(dn))
         
-        tn = TableNumber(dn, 1)
-        print str(tn)
+        tn = TableNumber(dn, 2)
+        self.assertEquals('t000000ZZZ02', str(tn))
 
+        cn = ColumnNumber(tn, 3)
+        self.assertEquals('c000000ZZZ02003', str(cn))
+
+        pn = dn.as_partition(5)
+        self.assertEquals('p000000ZZZ005', str(pn))
 
     def test_name(self):
 
@@ -94,20 +97,20 @@ class Test(unittest.TestCase):
                                   table='table',
                                   grain='grain',
                                   format='format',
-                                  segment='segment',
+                                  segment=101,
                                   **name.dict
                                   )
 
-        self.assertEquals('source.com-dataset-subset-type-part-variation-table-time-space-grain-format-segment', 
+        self.assertEquals('source.com-dataset-subset-type-part-variation-table-time-space-grain-format-101',
                           str(part_name))
-        self.assertEquals('source.com-dataset-subset-type-part-variation-table-time-space-grain-format-segment-0.0.1', 
+        self.assertEquals('source.com-dataset-subset-type-part-variation-table-time-space-grain-format-101-0.0.1',
                           part_name.vname)
 
         part_name = part_name.clone()
         
-        self.assertEquals('source.com-dataset-subset-type-part-variation-table-time-space-grain-format-segment', 
+        self.assertEquals('source.com-dataset-subset-type-part-variation-table-time-space-grain-format-101',
                           str(part_name))
-        self.assertEquals('source.com-dataset-subset-type-part-variation-table-time-space-grain-format-segment-0.0.1', 
+        self.assertEquals('source.com-dataset-subset-type-part-variation-table-time-space-grain-format-101-0.0.1',
                           part_name.vname)        
 
         # Name Query
@@ -201,8 +204,14 @@ class Test(unittest.TestCase):
         
         self.assertEquals('source.com-dataset-variation-table-time-space-format-0.0.1',part_name.vname) 
 
-        
-        
+        # Cloning
+
+        part_name = name.as_partition(time = 'time',
+                                  space='space',
+                                  table='table',
+                                  format='format')
+
+        self.assertEquals('source.com-dataset-variation-table-time-space-format-0.0.1',part_name.vname)
 
     def test_identity(self):
 
@@ -222,10 +231,31 @@ class Test(unittest.TestCase):
 
         self.assertEquals('source.com-foobar-orig-0.0.1', ident.name.dict['vname'])
         
-        self.assertEquals(set(['id','vid','revision','name', 'vname', 'creator',
+        self.assertEquals(set(['id','vid','revision','name', 'vname',
                                'variation', 'dataset', 'source', 'version']), 
                           set(ident.dict.keys()))
-        
+
+        self.assertIn('fqname', ident.names_dict)
+        self.assertIn('vname', ident.names_dict)
+        self.assertNotIn('dataset', ident.names_dict)
+
+        self.assertIn('dataset', ident.ident_dict)
+        self.assertNotIn('fqname', ident.ident_dict)
+
+        # Clone to get a PartitionIdentity
+
+        pi = ident.as_partition(7)
+        self.assertEquals('source.com-foobar-orig-0.0.1~p002Bi007001',pi.fqname)
+
+        pi = ident.as_partition(8,time = 'time',
+                                  space='space',
+                                  format='format')
+
+        self.assertEquals('source.com-foobar-orig-time-space-format-0.0.1~p002Bi008001',pi.fqname)
+
+
+        # PartitionIdentity
+
         part_name = PartitionName(time = 'time',
                                   space='space',
                                   format='format',
@@ -234,9 +264,10 @@ class Test(unittest.TestCase):
         
         pn = PartitionNumber(dn, 500)
         
-        ident = Identity(part_name, pn)
-        
-        self.assertEquals(set(['id','vid','revision', 'creator',
+        ident = PartitionIdentity(part_name, pn)
+
+
+        self.assertEquals(set(['id','vid','revision',
                                'name', 'vname', 'space', 'format', 
                                'variation', 'dataset', 'source', 
                                'version', 'time']), 
@@ -259,12 +290,88 @@ class Test(unittest.TestCase):
                           )
         #import pprint
         #pprint.pprint(pnq.dict)
-        
-        
-    def test_partial_name(self):
-        pass
-        
-    def test_resolve(self):
+
+        #
+        # Locations
+        #
+
+        print str(ident.locations)
+        self.assertEquals('    ', str(ident.locations))
+        ident.locations.set(LocationRef.LOCATION.LIBRARY, 1)
+        ident.locations.set(LocationRef.LOCATION.REMOTE, 2)
+        ident.locations.set(LocationRef.LOCATION.SOURCE)
+        self.assertEquals(' SLR', str(ident.locations))
+
+
+
+    def test_split(self):
+        from semantic_version import Spec
+        name = Name(source='source.com', dataset='foobar',  version='1.2.3')
+        dn = DatasetNumber(10000, 1, assignment_class='registered')
+
+        # NOTE, version is entered as 1.2.3, but will be changed to 1.2.1 b/c
+        # last digit is overridden by revision
+
+        ident = Identity(name, dn)
+
+        ip = Identity.classify(name)
+        self.assertEquals(Name, ip.isa)
+        self.assertIsNone(ip.version)
+
+        ip = Identity.classify(ident.name)
+
+        self.assertEquals(Name, ip.isa)
+        self.assertIsNone(ip.on)
+        self.assertEquals(ident.sname, ip.name)
+        self.assertIsNone(ip.version)
+
+        ip = Identity.classify(ident.vname)
+        self.assertEquals(Name, ip.isa)
+        self.assertIsNone(ip.on)
+        self.assertEquals(ident.vname, ip.name)
+        self.assertEquals(ident._name.version, str(ip.version))
+
+        ip = Identity.classify(ident.fqname)
+        self.assertEquals(DatasetNumber, ip.isa)
+        self.assertEquals(ident.vname, ip.name)
+        self.assertEquals(str(ip.on), str(ip.on))
+
+        ip = Identity.classify(ident.vid)
+        self.assertEquals(DatasetNumber, ip.isa)
+
+        ip = Identity.classify(ident.id_)
+        self.assertEquals(DatasetNumber, ip.isa)
+
+        ip = Identity.classify(dn)
+        self.assertEquals(DatasetNumber, ip.isa)
+
+        ip = Identity.classify(dn.as_partition(10))
+        self.assertEquals(PartitionNumber, ip.isa)
+
+        ip = Identity.classify("source.com-foobar-orig")
+        self.assertIsNone(ip.version)
+        self.assertEquals('source.com-foobar-orig',ip.sname)
+        self.assertIsNone(ip.vname)
+
+        ip = Identity.classify("source.com-foobar-orig-1.2.3")
+        self.assertIsInstance(ip.version, Version)
+        self.assertEquals('source.com-foobar-orig',ip.sname)
+        self.assertEquals('source.com-foobar-orig-1.2.3',ip.vname)
+
+        ip = Identity.classify("source.com-foobar-orig->=1.2.3")
+        self.assertIsInstance(ip.version, Spec)
+        self.assertEquals('source.com-foobar-orig',ip.sname)
+        self.assertIsNone(ip.vname)
+
+        ip = Identity.classify("source.com-foobar-orig-==1.2.3")
+        self.assertIsInstance(ip.version, Spec)
+        self.assertEquals('source.com-foobar-orig',ip.sname)
+        self.assertIsNone(ip.vname)
+
+
+
+
+    def test_bundle_build(self):
         from  testbundle.bundle import Bundle
         from sqlalchemy.exc import IntegrityError
         
@@ -356,23 +463,23 @@ class Test(unittest.TestCase):
         bp = bundle.partitions
      
         p = bp.new_db_partition(time = 't1', space='s1')
-        self.assertEquals('source-dataset-subset-variation-t1-s1-0.0.1~p1DxuZ001001', p.identity.fqname)
+        self.assertEquals('source-dataset-subset-variation-t1-s1-0.0.1~piEGPXmDC8001001', p.identity.fqname)
         
         p = bp.find_or_new(time = 't1', space='s2')
-        self.assertEquals('source-dataset-subset-variation-t1-s2-0.0.1~p1DxuZ002001', p.identity.fqname)
+        self.assertEquals('source-dataset-subset-variation-t1-s2-0.0.1~piEGPXmDC8002001', p.identity.fqname)
 
         # Duplicate
         p = bp.find_or_new(time = 't1', space='s2')
-        self.assertEquals('source-dataset-subset-variation-t1-s2-0.0.1~p1DxuZ002001', p.identity.fqname)
+        self.assertEquals('source-dataset-subset-variation-t1-s2-0.0.1~piEGPXmDC8002001', p.identity.fqname)
         
         p = bp.find_or_new_hdf(time = 't2', space='s1')
-        self.assertEquals('source-dataset-subset-variation-t2-s1-hdf-0.0.1~p1DxuZ003001', p.identity.fqname)
+        self.assertEquals('source-dataset-subset-variation-t2-s1-hdf-0.0.1~piEGPXmDC8003001', p.identity.fqname)
         
         p = bp.find_or_new_csv(time = 't2', space='s1')
-        self.assertEquals('source-dataset-subset-variation-t2-s1-csv-0.0.1~p1DxuZ004001', p.identity.fqname)
+        self.assertEquals('source-dataset-subset-variation-t2-s1-csv-0.0.1~piEGPXmDC8004001', p.identity.fqname)
         
         p = bp.find_or_new_geo(time = 't2', space='s1')
-        self.assertEquals('source-dataset-subset-variation-t2-s1-geo-0.0.1~p1DxuZ005001', p.identity.fqname)
+        self.assertEquals('source-dataset-subset-variation-t2-s1-geo-0.0.1~piEGPXmDC8005001', p.identity.fqname)
         
  
         # Ok! Build!
@@ -388,10 +495,10 @@ class Test(unittest.TestCase):
         bundle.build_db_inserter_codes()
         bundle.post_build()
                 
-        self.assertEquals('d1DxuZ001',bundle.identity.vid) 
+        self.assertEquals('diEGPXmDC8001',bundle.identity.vid) 
         self.assertEquals('source-dataset-subset-variation',bundle.identity.sname) 
         self.assertEquals('source-dataset-subset-variation-0.0.1',bundle.identity.vname) 
-        self.assertEquals('source-dataset-subset-variation-0.0.1~d1DxuZ001',bundle.identity.fqname)
+        self.assertEquals('source-dataset-subset-variation-0.0.1~diEGPXmDC8001',bundle.identity.fqname)
 
     def test_number_service(self):
         
@@ -408,6 +515,7 @@ class Test(unittest.TestCase):
     
         ng = rc.group('numbers')
 
+        # You'll need to run a local service at this address
         host = "numbers"
         port = 7977
         unregistered_key = 'fe78d179-8e61-4cc5-ba7b-263d8d3602b9'
@@ -438,6 +546,64 @@ class Test(unittest.TestCase):
 
         ns = NumberServer(**get_runconfig().group('numbers'))
         print ns.next()
+
+    def test_rewrite(self):
+        from  testbundle.bundle import Bundle
+        from sqlalchemy.exc import IntegrityError
+        import json
+        from databundles.run import get_runconfig
+
+        # Prepare to rewrite the bundle.yaml file.
+        bundle = Bundle()
+        orig = os.path.join(bundle.bundle_dir,'bundle.yaml')
+        save = os.path.join(bundle.bundle_dir,'bundle.yaml.save')
+
+        try:
+            os.rename(orig,save)
+
+            print 'Write to ', orig
+            with open(orig,'w') as f:
+                f.write(json.dumps(
+                    {
+                        "identity":{
+                            "dataset": "dataset1",
+                            "id": "dfoo",
+                            "revision": 100,
+                            "source": "source1",
+                            "subset": "subset1",
+                            "variation": "variation1",
+                            "version": "1.0.1",
+                            "vid": "dfob001",
+                        },
+                        "about": {
+                            "author": "bob@bob.com"
+                        }
+                    }
+                ))
+
+            get_runconfig.clear() # clear config cache.
+            bundle = Bundle()
+            bundle.clean()
+            bundle.pre_prepare()
+            bundle.prepare()
+            bundle.post_prepare() # Does the rewrite, adding the 'names'
+
+            # Need to clear and reload one more time for the 'names' to appear
+            get_runconfig.clear() # clear config cache.
+            bundle = Bundle()
+            bundle.exit_on_fatal = False
+
+            self.assertEquals('dataset1', bundle.config.identity.dataset)
+            self.assertEquals('dfoo', bundle.config.identity.id)
+            self.assertEquals(100, bundle.config.identity.revision)
+
+            self.assertEquals("source1-dataset1-subset1-variation1-1.0.100~dfoo01C", bundle.config.names.fqname)
+
+            self.assertEquals("bob@bob.com", bundle.config.about.author)
+
+        finally:
+            os.rename(save, orig)
+
 
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']

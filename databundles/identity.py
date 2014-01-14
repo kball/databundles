@@ -9,11 +9,19 @@ import os.path
 from semantic_version import Version 
 from util.typecheck import returns, accepts
 
+class _const:
+    class ConstError(TypeError): pass
+    def __setattr__(self,name,value):
+        if self.__dict__.has_key(name):
+            raise self.ConstError, "Can't rebind const(%s)"%name
+        self.__dict__[name]=value
+
 class Name(object):
     '''The Name part of an identity ''' 
 
 
     PATH_EXTENSION = '.db'
+    NAME_PART_SEP = '-'
 
     # Name, Default Value, Is Optional
     _name_parts = [('source',None,False),
@@ -27,6 +35,13 @@ class Name(object):
                   # but 'revision' is in the databases schema. 
                   ('version',None,True)
                   ]
+
+
+    # Names that are generated from the name parts.
+    _generated_names = [
+                ('name',None,True),
+                ('vname',None,True),
+                ('fqname',None,True)]
 
     source = None
     dataset = None
@@ -60,14 +75,20 @@ class Name(object):
     def clean(self):
         import re
         for k,default, optional in self.name_parts:
+
+            # Skip the names in name query.
+
             v = getattr(self,k)
 
-            if not v:
+            if not v or not isinstance(v, basestring):
+                # Can only clean strings.
                 continue
 
             # The < and > chars are only there to  for <any> and <none> and version specs.
-            # . is needes for source, and + is needed for version specs
+            # . is needs for source, and + is needed for version specs
+
             nv = re.sub(r'[^a-zA-Z0-9\.\<\>=]','_',v).lower()
+
             if v != nv:
                 setattr(self,k, nv)
 
@@ -139,9 +160,11 @@ class Name(object):
         excluding the format, if the format is 'db' '''
         
         d = self._dict(with_name=False)
-    
-        return '-'.join([ d[k] for (k,_,_) in self.name_parts 
-                         if k and d.get(k,False) 
+
+
+
+        return self.NAME_PART_SEP.join([ str(d[k]) for (k,_,_) in self.name_parts
+                         if k and d.get(k,False)
                          and k != 'version'
                          and not (k == 'format' and d[k] == 'db') ])
     
@@ -155,7 +178,7 @@ class Name(object):
         if isinstance(self.version,semantic_version.Spec):
             return self.name+str(self.version)
         else:
-            return self.name+'-'+str(self.version)
+            return self.name+self.NAME_PART_SEP+str(self.version)
     
 
     def _path_join(self,names=None, excludes=None, sep=os.sep):
@@ -191,7 +214,7 @@ class Name(object):
 
         return os.path.join(
                 self.source,
-                self._path_join(names=names, excludes='source',sep='-')
+                self._path_join(names=names, excludes='source',sep=self.NAME_PART_SEP)
              )
                 
     
@@ -206,7 +229,7 @@ class Name(object):
         return os.path.join(
                 self.source,
                 self._path_join(names=names,
-                                excludes=['source','version'],sep='-')
+                                excludes=['source','version'],sep=self.NAME_PART_SEP)
              )
                 
 
@@ -273,7 +296,11 @@ class Name(object):
         v = Version(self.version)
         v.build = value
         self.version = str(v)
- 
+
+    def as_partition(self, **kwargs):
+        '''Return a PartitionName based on this name'''
+        return PartitionName(**dict(self.dict.items() + kwargs.items()))
+
     
     def __str__(self):
         return self.name
@@ -329,13 +356,13 @@ class PartitionName(PartialPartitionName, Name):
         if self.time: l.append(self.time)
         if self.space: l.append(self.space)
         
-        if l: parts.append('-'.join(l))
+        if l: parts.append(self.NAME_PART_SEP.join(l))
             
         l = []
         if self.grain: l.append(self.grain)
         if self.segment: l.append(self.segment)
         
-        if l: parts.append('-'.join(l))
+        if l: parts.append(self.NAME_PART_SEP.join([ str(x) for x in l ]))
         
         # the format value is part of the file extension
         
@@ -347,7 +374,7 @@ class PartitionName(PartialPartitionName, Name):
 
         d = self._dict(with_name=False)
 
-        return '-'.join([ d[k] for (k,_,_) in self.name_parts 
+        return self.NAME_PART_SEP.join([ str(d[k]) for (k,_,_) in self.name_parts
                          if k and d.get(k,False) 
                          and k != 'version'
                          and (k != 'format' or str(d[k]) != 'db') ])
@@ -381,6 +408,11 @@ class PartitionName(PartialPartitionName, Name):
 
 class PartialMixin(object):
 
+
+    NONE = '<none>'
+    ANY = '<any>'
+
+
     use_clear_dict = True
 
     def clear_dict(self, d):
@@ -388,9 +420,6 @@ class PartialMixin(object):
             return { k:v if v is not None else self.NONE for k,v in d.items() }
         else:
             return d
-
-    NONE = '<none>'
-    ANY = '<any>'
 
 
     def _dict(self, with_name=True):
@@ -450,11 +479,19 @@ class NameQuery(PartialMixin, Name):
     NONE = PartialMixin.NONE
     ANY = PartialMixin.ANY
 
-    # These are valid values for a name query
+    # These are valid values for a name query, so we need to remove the
+    # properties
     name = None
     vname = None
     fqname = None
 
+    def clean(self):
+        '''
+        Null operation, since NameQueries should not be cleaned.
+        :return:
+        '''
+
+        pass
 
     @property 
     def name_parts(self):
@@ -464,10 +501,9 @@ class NameQuery(PartialMixin, Name):
 
         np =  ([ (k,default, True) 
                 for k,_, _ in super(NameQuery, self).name_parts ]
-               + 
-               [('name',default,True),
-                ('vname',default,True),
-                ('fqname',default,True)]
+               +
+                [ (k,default, True)
+                for k,_, _ in Name._generated_names ]
                )
   
         return np
@@ -483,6 +519,14 @@ class PartitionNameQuery(PartialMixin,PartitionName):
     vname = None
     fqname = None
 
+    def clean(self):
+        '''
+        Null operation, since NameQueries should not be cleaned.
+        :return:
+        '''
+
+        pass
+
     @property 
     def name_parts(self):
         '''Works with PartialNameMixin.clear_dict to set NONE and ANY values'''
@@ -492,9 +536,8 @@ class PartitionNameQuery(PartialMixin,PartitionName):
         return ([ (k,default, True) 
                 for k,_, _ in PartitionName._name_parts ]
                 + 
-               [('name',default,True),
-                ('vname',default,True),
-                ('fqname',default,True)]
+                [ (k,default, True)
+                for k,_, _ in Name._generated_names ]
                )
 
 
@@ -511,12 +554,7 @@ class ObjectNumber(object):
     orig = None
     assignment_class = 'self'
     
-    class _const:
-        class ConstError(TypeError): pass
-        def __setattr__(self,name,value):
-            if self.__dict__.has_key(name):
-                raise self.ConstError, "Can't rebind const(%s)"%name
-            self.__dict__[name]=value
+
 
     TYPE=_const()
     TYPE.DATASET = 'd'
@@ -596,8 +634,15 @@ class ObjectNumber(object):
             type_  = cls.TYPE.DATASET
             on_str = cls.TYPE.DATASET + on_str[1:]
 
+        if not type_ in  cls.NDS_LENGTH.keys():
+            raise ValueError("Unknown type character '{}' for '{}'".format(type_, on_str))
 
-        ds_lengths = cls.DATASET_LENGTHS[len(on_str)-cls.NDS_LENGTH[type_]]
+        ds_length = len(on_str)-cls.NDS_LENGTH[type_]
+
+        if not ds_length in cls.DATASET_LENGTHS:
+            raise ValueError("Dataset string '{}' has an unfamiliar length: {}".format(on_str, ds_length))
+
+        ds_lengths = cls.DATASET_LENGTHS[ds_length]
         
         assignment_class = ds_lengths[2]
         
@@ -734,6 +779,11 @@ class DatasetNumber(ObjectNumber):
         
         return (ObjectNumber.base62_encode(self.dataset).rjust(ds_len,'0') )
 
+    def as_partition(self, partition_number = 0):
+        '''Return a new PartitionNumber based on this DatasetNumber'''
+        return PartitionNumber(self, partition_number)
+
+
     def __str__(self):        
         return (ObjectNumber.TYPE.DATASET+
                 self._ds_str()+
@@ -833,27 +883,87 @@ class PartitionNumber(ObjectNumber):
                 ObjectNumber._rev_str(self.revision))
 
 
+class LocationRef(object):
+
+    LOCATION=_const()
+    LOCATION.UNKNOWN = ' '
+    LOCATION.SOURCE = 'S'
+    LOCATION.LIBRARY = 'L'
+    LOCATION.REMOTE ='R'
+    LOCATION.SREPO = 'G' # Source repository, 'github'
+
+    def __init__(self,location, revision=None, version=None):
+        self.location = location
+        self.revision = revision
+        self.version = version
+
+    location = None
+    revision = None
+    version = None
+
+    @property
+    def exists(self):
+        return bool(self.revision)
+
+    def __str__(self):
+        return self.location if self.revision else self.LOCATION.UNKNOWN
+
+    def __repr__(self):
+        return '{}:{}'.format(self.location,self.revision if self.revision else '')
+
+class Locations(object):
+
+    order = [
+        LocationRef.LOCATION.SREPO,
+        LocationRef.LOCATION.SOURCE,
+        LocationRef.LOCATION.LIBRARY,
+        LocationRef.LOCATION.REMOTE
+    ]
+
+    def __init__(self, ident=None):
+        self.ident = ident
+        self._locations = { code:LocationRef(code) for name, code in vars(LocationRef.LOCATION).items() }
+
+    def __str__(self):
+        return ''.join([str(self._locations[code]) for code in self.order])
+
+    def set(self, code, revision=None, version=None):
+
+        if not revision:
+            revision = self.ident.on.revision
+            version = self.ident.name.version
+
+        self._locations[code].revision = revision
+        self._locations[code].version = version
+
+
 class Identity(object):
     '''Identities represent the defining set of information about a 
     bundle or a partition. Only the vid is actually required to 
     uniquely identify a bundle or partition, but the identity is also
     used for generating unique names and for finding bundles and partitions. '''
-    
-    
+
     is_bundle = True
     is_partition = False
+
+    OBJECT_NUMBER_SEP = '~'
 
     _name_class = Name
 
     _on = None
     _name = None
-    creator = None
 
-    def __init__(self, name, object_number, creator=None):
+    # Extra data for the library and remotes
+    locations = None
+    partitions = None
+
+    def __init__(self, name, object_number):
 
         self._on = object_number
         self._name = name
-        self.creator = creator
+
+        assert type(self._name) == self._name_class, "Wrong type: {}. Expected {}"\
+            .format(type(self._name), self._name_class)
 
         if not self._name.type_is_compatible(self._on):
             raise TypeError("The name and the object number must be "+
@@ -866,8 +976,11 @@ class Identity(object):
 
         self._name.version = str(nv)
 
+        self.locations = Locations(self)
+
     @classmethod
     def from_dict(cls, d):
+
         name = cls._name_class(**d)
 
         if 'id' in d and 'revision' in d:
@@ -877,8 +990,97 @@ class Identity(object):
             on = ObjectNumber.parse(d['vid'])
         else:
             raise ValueError("Must have id and revision, or vid")
-          
-        return cls(name, on, d.get('creator'))
+
+        try:
+            return cls(name, on)
+        except TypeError as e:
+            raise TypeError("Failed to make identity from \n{}\n: {}".format(d, e.message))
+    @classmethod
+    def classify(cls, o):
+        """Break an Identity name into parts, or describe the type of other forms.
+
+        Break a name or object number into parts and classify them. Returns a named tuple
+        that indicates which parts of input string are name components, object number and
+        version number. Does not completely parse the name components.
+
+        Also can handle Name, Identity and ObjectNumbers
+
+        :param o: Input object to split
+        """
+        from collections import namedtuple
+
+        s = str(o)
+
+        class IdentityParts(object):
+            on = None
+            name = None
+            isa = None
+            name = None
+            vname = None
+            sname = None
+            name_parts = None
+            version = None
+
+
+        ip = IdentityParts() # namedtuple('IdentityParts', ['isa', 'name', 'name_parts','on','version', 'vspec'])
+
+        if isinstance(o, (DatasetNumber, PartitionNumber)):
+            ip.on = o
+            ip.name = None
+            ip.isa = type(ip.on)
+            ip.name_parts = None
+
+        elif isinstance(o,Name):
+            ip.on = None
+            ip.isa = type(o)
+            ip.name = str(o)
+            ip.name_parts = ip.name.split(Name.NAME_PART_SEP)
+
+        elif cls.OBJECT_NUMBER_SEP in s:
+            # Must be a fqname
+            ip.name, on_s = s.split(cls.OBJECT_NUMBER_SEP)
+            ip.on = ObjectNumber.parse(on_s)
+            ip.name_parts = ip.name.split(Name.NAME_PART_SEP)
+            ip.isa =type(ip.on)
+
+        elif Name.NAME_PART_SEP in s:
+            # Must be an sname or vname
+            ip.name = s
+            ip.on = None
+            ip.name_parts = ip.name.split(Name.NAME_PART_SEP)
+            ip.isa = Name
+
+        else:
+            # Probably an Object Number in string form
+            ip.name = None
+            ip.name_parts = None
+            ip.on = ObjectNumber.parse(s)
+            ip.isa = type(ip.on)
+
+        if ip.name_parts:
+
+            import semantic_version
+            last = ip.name_parts[-1]
+
+            try:
+                ip.version  = semantic_version.Version(last)
+                ip.vname = ip.name
+            except ValueError:
+                try:
+                    ip.version  = semantic_version.Spec(last)
+                    ip.vname = None # Specs aren't vnames you can query
+                except ValueError:
+                    pass
+
+            if ip.version:
+                ip.name_parts.pop()
+                ip.sname = Name.NAME_PART_SEP.join(ip.name_parts)
+            else:
+                ip.sname = ip.name
+
+
+
+        return ip
 
     def to_meta(self, md5=None, file=None):
         '''Return a dictionary of metadata, for use in the Remote api'''
@@ -905,6 +1107,8 @@ class Identity(object):
 
     def is_valid(self):
         self._name.is_valid()
+
+
 
     @property
     def on(self):
@@ -964,18 +1168,68 @@ class Identity(object):
     @property
     def dict(self):
         d = self._name.dict
-        
+
         d['vid'] = str(self._on)
         d['id'] = str(self._on.rev(None))
         d['revision'] = int(self._on.revision)
-        d['creator'] = self.creator
-        
+
         return d
- 
+
+    @property
+    def names_dict(self):
+        '''A dictionary with only the generated names, name, vname and fqname'''
+
+        d =  { k:v for k,v in self.dict.items() if k in ['name','vname','vid']}
+
+        d['fqname'] = self.fqname
+
+        return d
+
+    @property
+    def ident_dict(self):
+        '''A dictionary with only the items required to specify the identy, excluding the
+        generated names, name, vname and fqname'''
+
+        return { k:v for k,v in self.dict.items() if k not in ['name','vname','fqname','vid']}
+
     @staticmethod
     def _compose_fqname(vname, vid):
-        return vname+'~'+vid
- 
+        return vname+Identity.OBJECT_NUMBER_SEP+vid
+
+    def as_partition(self, partition=0, **kwargs):
+        '''Return a new PartitionIdentity ased on this Identity'''
+
+        assert type(self._name) == Name, "Wrong type: {}".format(type(self._name))
+        assert type(self._on) == DatasetNumber, "Wrong type: {}".format(type(self._on))
+
+        name = self._name.as_partition(**kwargs)
+        on = self._on.as_partition(partition)
+
+        return PartitionIdentity(name, on)
+
+    def add_partition(self, p):
+        '''Add a partition identity as a child of a dataset identity'''
+
+        if not self.partitions:
+            self.partitions = {}
+
+        self.partitions[p.vid] = p
+
+    @property
+    def partition(self):
+        '''Convenience function for accessing the first partition in the partitions list,
+        when there is only one'''
+
+        if not self.partitions:
+            return None
+
+        if len(self.partitions) > 1:
+            raise ValueError("Can't use this method when there is more than one partition")
+
+
+
+        return self.partitions.values()[0]
+
     def __str__(self):
         return self._compose_fqname(self._name.vname,self.vid)
 
@@ -998,6 +1252,9 @@ class PartitionIdentity(Identity):
         d['id'] = str(on.dataset)
         
         return  Identity(**d)
+
+    def as_partition(self, partition=0, **kwargs):
+        raise NotImplementedError("Can't generated a PartitionIdentity from a PartitionIdentity")
 
 
 class NumberServer(object):

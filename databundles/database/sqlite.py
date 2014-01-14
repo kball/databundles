@@ -204,7 +204,7 @@ class SqliteDatabase(RelationalDatabase):
             self._engine = create_engine(self.dsn,
                                          connect_args={'detect_types': sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES},
                                          native_datetime=True,
-                                         echo=False) 
+                                         echo=False)
             
             
             logger.debug("_get_engine: {}".format(self.dsn))
@@ -227,7 +227,8 @@ class SqliteDatabase(RelationalDatabase):
         if not self._connection:
             
             if not os.path.exists(self.path) and check_exists:
-                raise Exception("Trying to make a connection to a sqlite database "+
+                from ..dbexceptions import DatabaseMissingError
+                raise DatabaseMissingError("Trying to make a connection to a sqlite database "+
                                 "that does not exist. check_exists={} path={}"
                                 .format(check_exists, self.path))
 

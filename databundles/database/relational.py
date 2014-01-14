@@ -184,7 +184,7 @@ class RelationalDatabase(DatabaseInterface):
             self.dsn = self.dsn_template.format(user=self.username, password=self.password, 
                             server=self.server, name=self.dbname, colon_port=self.colon_port)
 
-            self._engine = create_engine(self.dsn, echo=False) 
+            self._engine = create_engine(self.dsn, echo=False)
 
         return self._engine
 
@@ -393,7 +393,8 @@ class RelationalBundleDatabaseMixin(object):
         ds.name = ident.sname
         ds.vname = ident.vname
         ds.fqname = ident.fqname
-        ds.creator = ident.creator
+
+        ds.creator = self.bundle.config.about.author
 
         session.add(ds)
         session.commit()
@@ -401,12 +402,14 @@ class RelationalBundleDatabaseMixin(object):
     def rewrite_dataset(self):
         from ..orm import Dataset
         # Now patch up the Dataset object
-        
+
+
         ds = Dataset(**self.bundle.identity.dict)
         ds.name = self.bundle.identity.sname
         ds.vname = self.bundle.identity.vname
         ds.fqname = self.bundle.identity.fqname
-        ds.creator = self.bundle.identity.creator
+
+        ds.creator = self.bundle.config.about.author
 
         self.session.merge(ds)
 

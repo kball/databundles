@@ -49,3 +49,9 @@ class ConflictError(BundleError):
     
 class FatalError(BundleError):
     """A Fatal Bundle Error, generated in testing instead of a system exit. """
+
+class DatabaseError(BundleError):
+    """A general database error """
+
+class DatabaseMissingError(DatabaseError):
+    """A general database error """
