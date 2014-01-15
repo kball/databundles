@@ -255,7 +255,7 @@ class Partitions(object):
         import sqlalchemy.orm.exc
         from databundles.orm import Partition as OrmPartition
                
-        assert isinstance(pnq,PartitionNameQuery), "Expected NameQuery, got {}".format(type(pnq))
+        assert isinstance(pnq,PartitionNameQuery), "Expected PartitionNameQuery, got {}".format(type(pnq))
     
         pnq = pnq.with_none()
 
@@ -454,7 +454,7 @@ class Partitions(object):
 
     def new_db_partition(self, clean=False, tables=None, data=None,  **kwargs):
 
-        p, found =  self._find_or_new(kwargs, clean = False,  tables=None, data=None, format='db')
+        p, found =  self._find_or_new(kwargs, clean = False,  tables=None, data=data, format='db')
         
         if found:
             raise ConflictError("Partition {} alread exists".format(p.name))

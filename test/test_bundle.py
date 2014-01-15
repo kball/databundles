@@ -24,104 +24,6 @@ class Test(TestBase):
         
     def restore_bundle(self):
         pass 
-      
-    def test_objectnumber(self):
-          
-        values = ['d17PY5','t17PY50a','c17PY50a0a','p17PY500a']
-        
-        for v in values:
-            x = ObjectNumber.parse(v)   
-            self.assertEquals(v, str(x))
-        
-        dn = DatasetNumber()
-        
-        base = str(dn)[1:]
-      
-        tn = TableNumber(dn, 10)
-        self.assertEquals('c'+base+'0a',str(tn))
-        
-        cn = ColumnNumber(tn, 20)
-        self.assertEquals('d'+base+'0a00k',str(cn))
-        
-        pn = PartitionNumber(dn, 30)
-        self.assertEquals('b'+base+'00u',str(pn))
-        
-        return True
-      
-        self.assertEquals('a1',str(ObjectNumber(1)))
-        self.assertEquals('b101',str(ObjectNumber(1,1)))
-        self.assertEquals('c10101',str(ObjectNumber(1,1,1)))
-
-        with self.assertRaises(ValueError):
-            self.assertEquals('aFooBar',str(ObjectNumber('FooBar')))
-      
-        
-        self.assertEquals('aFooBar',str(ObjectNumber('aFooBar')))
-        self.assertEquals('aFooBar',str(ObjectNumber(ObjectNumber('aFooBar'))))
- 
-        on = ObjectNumber('aFooBar')
-
-        self.assertEquals('bFooBar00',str(ObjectNumber(on,0)))
-        self.assertEquals('cFooBar0000',str(ObjectNumber(on,0,0)))
-        self.assertEquals('bFooBarZZ',str(ObjectNumber(on,3843)))
-        self.assertEquals('cFooBarZZZZ',str(ObjectNumber(on,3843,3843)))
-        
-        with self.assertRaises(ValueError):
-            on = ObjectNumber(on,3844)
-            print str(on)
-     
-        with self.assertRaises(ValueError):
-            on = ObjectNumber(on,3844,3844)
-            print str(on)
-     
-        o = ObjectNumber('aFooBar')
-        self.assertIsNone(o.table);
-        self.assertIsNone(o.column);
-        
-        o = ObjectNumber('bFooBar03')
-        self.assertEquals(3,o.table);
-        self.assertIsNone(o.column);
-        
-        o = ObjectNumber('cFooBar0302')
-        self.assertEquals(3,o.table);
-        self.assertEquals(2,o.column);
-        
-        o = ObjectNumber('cFooBar0302',20)
-        o.type = ObjectNumber.TYPE.TABLE
-        self.assertEquals(20,o.table);
-        self.assertEquals('bFooBar0k',str(o))
-        
-      
-    def test_identity(self):
-
-        self.assertEqual('source', self.bundle.identity.source)
-        self.assertEqual('dataset', self.bundle.identity.dataset)
-        self.assertEqual('subset', self.bundle.identity.subset)
-        self.assertEqual('variation', self.bundle.identity.variation)
-        self.assertEqual('creator', self.bundle.identity.creator)
-        self.assertEqual(1, int(self.bundle.identity.revision))
-        self.assertEqual('source-dataset-subset-variation-ca0d', 
-                         self.bundle.identity.name)
-
-
-        pid = self.bundle.identity
-        d = pid.to_dict()
-        
-        self.assertEquals('source-dataset-subset-variation-ca0d', str(new_identity(pid.to_dict())))
-        
-        d['id'] = 'foobar'
-        ident = Identity.from_dict(d)
-        #self.assertRaises(ValueError, new_identity, (d))
-        
-        del d['id']
-        
-        self.assertEquals('source-dataset-subset-variation-ca0d',str(new_identity(d)))
-        self.assertEquals('source-dataset-subset-variation-ca0d.grain',str(new_identity( {'grain':'grain'}, bundle=self.bundle)))
-        
-        d['grain'] = 'grain'
-        self.assertEquals('source-dataset-subset-variation-ca0d.grain',str( new_identity(d)))
-        
-   
 
     def test_db_bundle(self):
         
@@ -140,9 +42,8 @@ class Test(TestBase):
         
         dbb = DbBundle(db_path)
         
-        self.assertEqual("source-dataset-subset-variation", dbb.identity.name)
+        self.assertEqual("source-dataset-subset-variation", dbb.identity.sname)
         self.assertEqual("source-dataset-subset-variation-0.0.1", dbb.identity.vname)
-        self.assertEqual("source-dataset-subset-variation", dbb.config.identity.name)
 
     def test_paths(self):
         ''' Test that abuild bundle and a db bundle both produce the same paths. '''
@@ -195,9 +96,9 @@ class Test(TestBase):
     
         t = self.bundle.schema.table('table_3')
     
-        self.assertIn('d1DxuZ03001', [c.id_ for c in t.columns])
-        self.assertIn('d1DxuZ03002', [c.id_ for c in t.columns])
-        self.assertIn('d1DxuZ03003', [c.id_ for c in t.columns])
+        self.assertIn('ciEGPXmDC803001', [c.id_ for c in t.columns])
+        self.assertIn('ciEGPXmDC803002', [c.id_ for c in t.columns])
+        self.assertIn('ciEGPXmDC803003', [c.id_ for c in t.columns])
         
         # Try with a nested session, b/c we need to test it somewhere ... 
         with self.bundle.session:
@@ -357,91 +258,90 @@ class Test(TestBase):
             self.assertEquals(int(m.hexdigest()[:14], 16), table.row_hash(row))
         
     def test_partition(self):
-        
-        from  databundles.identity import  PartitionIdentity
+        from databundles.dbexceptions import ConflictError
+        from  databundles.identity import PartitionIdentity, PartitionNameQuery
 
-        ## TODO THis does does not test the 'table' parameter of the ParitionId
-          
-        pid1 = PartitionIdentity(self.bundle.identity, time=10, space=10)
-        pid2 = PartitionIdentity(self.bundle.identity, time=20, space=20)
-        pid3 = PartitionIdentity(self.bundle.identity, space=30,)
-        
-        
-        self.bundle.partitions.new_db_partition(pid1, data={'pid':'pid1'})
-        self.bundle.partitions.new_db_partition(pid2, data={'pid':'pid2'})
-        self.bundle.partitions.new_db_partition(pid3, data={'pid':'pid3'})
-        self.bundle.partitions.new_db_partition(pid1, data={'pid':'pid1'})
-        self.bundle.partitions.new_db_partition(pid2, data={'pid':'pid21'})
-        self.bundle.partitions.new_db_partition(pid3, data={'pid':'pid31'})
+        self.bundle.clean()
+        self.bundle.prepare()
 
-        
-        # 4 partitions from the build ( defined in meta/geoschema.csv),
-        # three we just created. 
+        self.bundle.partitions.new_db_partition(time=10, space=10, data={'pid':'pid1'})
+        self.bundle.partitions.new_db_partition(time=20, space=20, data={'pid':'pid2'})
+        self.bundle.partitions.new_db_partition(space=30, data={'pid':'pid3'})
+
+        with self.assertRaises(ConflictError):
+            self.bundle.partitions.new_db_partition(time=10, space=10, data={'pid':'pid1'})
+
+        with self.assertRaises(ConflictError):
+            self.bundle.partitions.new_db_partition(time=20, space=20, data={'pid':'pid21'})
+
+        with self.assertRaises(ConflictError):
+            self.bundle.partitions.new_db_partition(space=30, data={'pid':'pid31'})
 
 
-        self.assertEqual(28, len(self.bundle.partitions.all))
-        
-        p = self.bundle.partitions.new_db_partition(pid1)
-        p.database.create() # Find will go to the library if the database doesn't exist. 
+        self.assertEqual(3, len(self.bundle.partitions.all))
+
+        p = self.bundle.partitions.find_or_new(time=10, space=10)
+        p.database.create() # Find will go to the library if the database doesn't exist.
+        self.assertEqual(3, len(self.bundle.partitions.all))
         self.assertEquals('pid1',p.data['pid'] )
       
-        p = self.bundle.partitions.new_db_partition(pid2) 
+        p = self.bundle.partitions.find_or_new(time=20, space=20)
         p.database.create()  
         self.assertEquals('pid2',p.data['pid'] ) 
 
-        p = self.bundle.partitions.new_db_partition(pid3)
+        p = self.bundle.partitions.find_or_new(space=30)
         p.database.create()   
         self.assertEquals('pid3',p.data['pid'] ) 
 
-        p = self.bundle.partitions.find(pid1)   
+        p = self.bundle.partitions.find(PartitionNameQuery(time=10, space=10))
         self.assertEquals('pid1',p.data['pid'] )
       
-        p = self.bundle.partitions.find(pid2)   
+        p = self.bundle.partitions.find(PartitionNameQuery(time=20, space=20))
         self.assertEquals('pid2',p.data['pid'] ) 
 
-        p = self.bundle.partitions.find(pid3)   
+        pnq3 = PartitionNameQuery(space=30)
+
+        p = self.bundle.partitions.find(pnq3)
         self.assertEquals('pid3',p.data['pid'] ) 
          
-        with self.bundle.session:
-            p = self.bundle.partitions._find_orm(pid3).first() 
-            s = self.bundle.database.session
+        with self.bundle.session as s:
+            p = self.bundle.partitions._find_orm(pnq3).first()
             p.data['foo'] = 'bar'
-    
-            
-        p = self.bundle.partitions.find(pid3)  
+            s.add(p)
+
+
+        bundle = Bundle()
+        p = bundle.partitions.find(pnq3)
         print p.data 
         self.assertEquals('bar',p.data['foo'] ) 
-       
-        s.commit()
+
         p.database.create()
         
-        p = self.bundle.partitions.find('source-dataset-subset-variation-ca0d.30')
+        p = self.bundle.partitions.find(PartitionNameQuery(name='source-dataset-subset-variation-30'))
         self.assertTrue(p is not None)
-        self.assertEquals(pid3.name, p.identity.name)
+        self.assertEquals('source-dataset-subset-variation-30', p.identity.sname)
  
         #
         # Create all possible combinations of partition names
         # 
-        s = set()
+
         table = self.bundle.schema.tables[0]
         
-        p = (('time','time1'),('space','space2'),('table',table.name),('grain','grain4'))
+        p = (('time','time2'),('space','space3'),('table',table.name),('grain','grain4'))
         p += p
-        pids = []
+        pids = {}
         for i in range(4):
             for j in range(4):
-                s.add(p[i:i+j+1])
-            
-        for v in s:
-            pid = PartitionIdentity(self.bundle.identity,**dict(v))
-            pids.append(pid)
+                pid = self.bundle.identity.as_partition(**dict(p[i:i+j+1]))
+                pids[pid.fqname] = pid
+
         
         with self.bundle.session as s:
         
             # These two deletely bits clear out all of the old
             # partitions, to avoid a conflict with the next section. We also have
             # to delete the files, since create() adds a partition record to the database, 
-            # and if one arealy exists, it will throw and Integrity Error. 
+            # and if one already exists, it will throw an Integrity Error.
             for p in self.bundle.partitions:
                 if os.path.exists(p.database.path):
                     os.remove(p.database.path)
@@ -449,13 +349,20 @@ class Test(TestBase):
             for p in self.bundle.dataset.partitions:
                 s.delete(p)
 
-        for pid in pids:
+        import pprint
 
-            part = self.bundle.partitions.new_db_partition(pid)
+        pprint.pprint(sorted([ pid.fqname for pid in pids.values()]))
+
+        bundle = Bundle()
+        bundle.clean()
+        bundle.prepare()
+
+        for pid in pids.values():
+            part = bundle.partitions.new_db_partition(**pid.dict)
             part.create()
-            
-            parts = self.bundle.partitions._find_orm(pid).all()
-            self.assertIn(pid.name, [p.name for p in parts])
+
+            parts = bundle.partitions._find_orm(PartitionNameQuery(vid=pid.vid)).all()
+            self.assertIn(pid.sname, [p.name for p in parts])
 
         
     def test_runconfig(self):

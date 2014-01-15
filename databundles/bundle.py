@@ -95,17 +95,6 @@ class Bundle(object):
             
         return self._repository
     
-    @property
-    def identity(self):
-        '''Return an identity object. '''
-        from .identity import Identity, Name, ObjectNumber
-
-        if not self._identity: 
-
-            self._identity =  Identity.from_dict(dict(self.config.identity.items()+
-                                                      self.config.names.items()))
-            
-        return self._identity            
 
     def get_dataset(self, session):
         '''Return the dataset
@@ -256,6 +245,16 @@ class DbBundle(Bundle):
  
         return petl.fromsqlite3(self.database.path, query) #@UndefinedVariable
 
+    @property
+    def identity(self):
+        '''Return an identity object. '''
+        from .identity import Identity
+
+        if not self._identity:
+           self._identity = self.get_dataset(self.database.session).identity
+
+
+        return self._identity
 
 class LibraryDbBundle(Bundle):
     '''A database bundle that is built in place from the data in a library '''
@@ -378,6 +377,23 @@ class BuildBundle(Bundle):
     @property
     def db_config(self):
         return BundleDbConfig(self, self.database)
+
+    @property
+    def identity(self):
+        '''Return an identity object. '''
+        from .identity import Identity, Name, ObjectNumber
+
+        if not self._identity:
+            try:
+                names = self.config.names.items()
+                idents = self.config.identity.items()
+            except AttributeError:
+                raise AttributeError("Failed to get required sections of config. "+
+                                    "\nconfig_source = {}\n".format(self.config.source_ref))
+            self._identity =  Identity.from_dict(dict(names+idents))
+
+
+        return self._identity
 
     def update_configuration(self):
         from dbexceptions import DatabaseError
@@ -960,7 +976,7 @@ class BundleFileConfig(BundleConfig):
         
         self.root_dir = root_dir
         self.local_file = os.path.join(self.root_dir,'bundle.yaml')
-        
+        self.source_ref = self.local_file
         self._run_config = get_runconfig(self.local_file)
 
         # If there is no id field, create it immediately and
@@ -1090,7 +1106,7 @@ class BundleDbConfig(BundleConfig):
         
         self.bundle = bundle
         self.database = database
-
+        self.source_ref = self.database.dsn
         self.dataset = bundle.dataset # (self.database.session.query(Dataset).one())
        
     @property
