@@ -223,9 +223,9 @@ class Partitions(object):
             elif len(partitions) > 1 :
                 from databundles.dbexceptions import ResultCountError
                 
-                rl = "; ".join([p.identity.vname for p in partitions])
+                rl = ";\n".join([p.identity.vname for p in partitions])
                 
-                raise ResultCountError("Got too many results: {}".format(rl)) 
+                raise ResultCountError("Got too many results:  for {}\n{}".format(vars(pnq), rl))
             else:
                 return None
             
@@ -472,7 +472,7 @@ class Partitions(object):
             kwargs. time,space,gran, etc; parameters to name the partition
         '''
     
-        p, _ =  self._find_or_new(kwargs, clean = False,  tables=None, data=None, format='db')
+        p, _ =  self._find_or_new(kwargs, clean = False,  tables=tables, data=data, format='db')
         
         return p
  
@@ -494,7 +494,7 @@ class Partitions(object):
             tables String or array of tables to copy form the main partition
         '''
 
-        p, _ =  self._find_or_new(kwargs, clean = False,  tables=None, data=None, create=False, format='hdf')
+        p, _ =  self._find_or_new(kwargs, clean = False,  tables=tables, data=data, create=False, format='hdf')
         
         return p
     
@@ -509,7 +509,7 @@ class Partitions(object):
         return p
 
 
-    def find_or_new_csv(self, pid=None, **kwargs):
+    def find_or_new_csv(self, clean = False,  tables=None, data=None, **kwargs):
         '''Find a partition identified by pid, and if it does not exist, create it. 
         
         Args:
@@ -517,7 +517,7 @@ class Partitions(object):
             tables String or array of tables to copy form the main partition
         '''
 
-        p, _ =  self._find_or_new(kwargs, clean = False,  tables=None, data=None, format='csv')
+        p, _ =  self._find_or_new(kwargs, clean = False,  tables=tables, data=data, format='csv')
         
         return p
     

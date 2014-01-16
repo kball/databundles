@@ -100,8 +100,14 @@ class Bundle(BuildBundle):
 
     def build_csvsegments(self):
         
-        p = self.partitions.find_or_new_db(table="tone")
-        
+        p = self.partitions.find_or_new_db(table="tone", grain=None)
+
+        pi = p.identity
+        print pi.dict
+        print pi.name
+        print pi.fqname
+        print pi.path
+
         with p.database.csvinserter(segment_rows=100) as ins:
             for i in range(1000):
                 ins.insert((None,"str"+str(i),i,i))
@@ -116,9 +122,6 @@ class Bundle(BuildBundle):
                              'text':"str"+str(i),
                              'integer':i,
                              'float':i})
-      
-    
-
 
     def build_db_inserter_codes(self):  
         from collections import defaultdict
@@ -199,11 +202,11 @@ class Bundle(BuildBundle):
         # Now write random data to each of the pable partitions. 
         
         for table_name in  ('tone',):
-            p = self.partitions.find_or_new_db(table=table_name)
+            p = self.partitions.find_or_new_db(table=table_name, grain=None)
             petl.dummytable(30000,self.fields2).tosqlite3(p.database.path, table_name, create=False) #@UndefinedVariable
 
         for table_name in  ('ttwo',):
-            p = self.partitions.find_or_new_db(table=table_name)
+            p = self.partitions.find_or_new_db(table=table_name, grain=None)
             petl.dummytable(30000,self.fields).tosqlite3(p.database.path, table_name, create=False) #@UndefinedVariable
 
         for seg in range(1,5):

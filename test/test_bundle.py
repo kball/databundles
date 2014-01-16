@@ -46,7 +46,7 @@ class Test(TestBase):
         self.assertEqual("source-dataset-subset-variation-0.0.1", dbb.identity.vname)
 
     def test_paths(self):
-        ''' Test that abuild bundle and a db bundle both produce the same paths. '''
+        ''' Test that a build bundle and a db bundle both produce the same paths. '''
         
         from databundles.bundle import BuildBundle, DbBundle
         
@@ -62,8 +62,9 @@ class Test(TestBase):
         self.assertEqual( b.identity.path, db.identity.path)
 
         for p in zip(b.partitions, db.partitions):
+            self.assertTrue(bool(p[0].path))
             self.assertEqual(p[0].path, p[1].path)
-            self.assertTrue(p[0].path)
+            self.assertTrue(bool(p[0].path))
      
     def test_schema_direct(self):
         '''Test adding tables directly to the schema'''
@@ -414,7 +415,7 @@ class Test(TestBase):
             bundle.build_db_inserter_codes()
             bundle.post_build()
     
-            # The second run will use the changes to the schem made in the
+            # The second run will use the changes to the schema made in the
             # first run, due to the types errors in the  'coding' table. 
     
             bundle.clean()
@@ -431,8 +432,6 @@ class Test(TestBase):
             # Need to clean up to ensure that we're back to a good state.
             # This runs the normal build, which will be used by the other
             # tests. 
-
-            return 
 
             shutil.copyfile(
                     bundle.filesystem.path('meta','schema-edit-me.csv'),

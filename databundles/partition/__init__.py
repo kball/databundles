@@ -147,7 +147,7 @@ class PartitionBase(PartitionInterface):
         '''Return a pathname for the partition, relative to the containing 
         directory of the bundle. '''
 
-        return self.bundle.sub_path(self.identity.path)+"."+self.FORMAT
+        return self.bundle.sub_path(self.identity.path)  #+self._db_class.EXTENSION
 
 
     def sub_dir(self, *args):

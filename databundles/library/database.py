@@ -642,9 +642,8 @@ class LibraryDb(object):
             vid = ObjectNumber.parse(vid)
 
         if isinstance(vid, DatasetNumber):
-            d,p = self.session.query(Dataset).filter(Dataset.vid == str(vid)).one()
+            d = self.session.query(Dataset).filter(Dataset.vid == str(vid)).one()
             did = d.identity
-            did.add_partition(p.identity)
 
         elif isinstance(vid, PartitionNumber):
             d,p = self.session.query(Dataset, Partition).join(Partition).filter(Partition.vid == str(vid)).one()

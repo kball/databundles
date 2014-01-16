@@ -1,7 +1,8 @@
 
 from __future__ import absolute_import
 from ..dbexceptions import ConfigurationError
-from ..library import LibraryDb, Library
+from ..library import Library
+from ..library.database import LibraryDb
 from ..cache import new_cache, CacheInterface
 from ..database import new_database
 

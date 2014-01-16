@@ -150,7 +150,7 @@ class SqliteDatabase(RelationalDatabase):
             base_path, ext = os.path.splitext(dbname)
             
             if ext and ext != self.EXTENSION:
-                raise Exception("Bad extension to file: {}: {}".format(base_path, ext))
+                raise Exception("Bad extension to file {}: {}: {}".format(dbname, base_path, ext))
             
             self.base_path = base_path
 

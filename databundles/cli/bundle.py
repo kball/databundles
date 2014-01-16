@@ -35,12 +35,31 @@ def bundle_command(args, rc, src):
     dir_ = os.path.dirname(rp)
     b = mod.Bundle(dir_)
 
-    print b.identity.fqname
+    def getf(f):
+        return globals()['bundle_'+f]
 
+    ph = {
+          'meta': ['clean'],
+          'prepare': ['clean'],
+          'build' : ['clean', 'prepare'],
+          'update' : ['clean', 'prepare'],
+          'install' : ['clean', 'prepare', 'build'],
+          'submit' : ['clean', 'prepare', 'build'],
+          'extract' : ['clean', 'prepare', 'build']
+          }
 
-    return
+    phases = []
 
-    globals()['bundle_'+args.subcommand](args, rc,src)
+    if hasattr(args,'clean') and args.clean:
+        # If the clean arg is set, then we need to run  clean, and all of the
+        # earlier build phases.
+
+        phases += ph[args.subcommand]
+
+    phases.append(args.subcommand)
+
+    for phase in phases:
+        getf(phase)(args, b, rc)
 
 def bundle_parser(cmd):
     import argparse, multiprocessing
@@ -62,7 +81,7 @@ def bundle_parser(cmd):
     sub_cmd = parser.add_subparsers(title='commands', help='command help')
 
     command_p = sub_cmd.add_parser('config', help='Operations on the bundle configuration file')
-    command_p.set_defaults(command='config')
+    command_p.set_defaults(subcommand='config')
        
     asp = command_p.add_subparsers(title='Config subcommands', help='Subcommand for operations on a bundl file')
 
@@ -79,7 +98,7 @@ def bundle_parser(cmd):
     #
 
     sp = asp.add_parser('dump', help='dump the configuration')     
-    sp.set_defaults(subcommand='dump') 
+    sp.set_defaults(subcommand='dump')
 
     #
     # Schema Command
@@ -92,7 +111,7 @@ def bundle_parser(cmd):
     # info command
     #
     command_p = sub_cmd.add_parser('info', help='Print information about the bundle')
-    command_p.set_defaults(command='info')
+    command_p.set_defaults(subcommand='info')
     command_p.set_defaults(subcommand='info')
     command_p.add_argument('-s','--schema',  default=False,action="store_true",
                            help='Dump the schema as a CSV. The bundle must have been prepared')
@@ -102,13 +121,13 @@ def bundle_parser(cmd):
     # Clean Command
     #
     command_p = sub_cmd.add_parser('clean', help='Return bundle to state before build, prepare and extracts')
-    command_p.set_defaults(command='clean')   
+    command_p.set_defaults(subcommand='clean')
     
     #
     # Meta Command
     #
     command_p = sub_cmd.add_parser('meta', help='Build or install metadata')
-    command_p.set_defaults(command='meta')   
+    command_p.set_defaults(subcommand='meta')
     
     command_p.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')     
                      
@@ -116,7 +135,7 @@ def bundle_parser(cmd):
     # Prepare Command
     #
     command_p = sub_cmd.add_parser('prepare', help='Prepare by creating the database and schemas')
-    command_p.set_defaults(command='prepare')   
+    command_p.set_defaults(subcommand='prepare')
     
     command_p.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')
     command_p.add_argument('-r','--rebuild', default=False,action="store_true", help='Rebuild the schema, but dont delete built files')
@@ -125,7 +144,7 @@ def bundle_parser(cmd):
     # Build Command
     #
     command_p = sub_cmd.add_parser('build', help='Build the data bundle and partitions')
-    command_p.set_defaults(command='build')   
+    command_p.set_defaults(subcommand='build')
     command_p.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')
     
     command_p.add_argument('-o','--opt', action='append', help='Set options for the build phase')
@@ -136,7 +155,7 @@ def bundle_parser(cmd):
     # Update Command
     #
     command_p = sub_cmd.add_parser('update', help='Build the data bundle and partitions from an earlier version')
-    command_p.set_defaults(command='update')   
+    command_p.set_defaults(subcommand='update')
     command_p.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')
     
     
@@ -144,7 +163,7 @@ def bundle_parser(cmd):
     # Extract Command
     #
     command_p = sub_cmd.add_parser('extract', help='Extract data into CSV and TIFF files. ')
-    command_p.set_defaults(command='extract')   
+    command_p.set_defaults(subcommand='extract')
     command_p.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')
     command_p.add_argument('-n','--name', default=None,action="store", help='Run only the named extract, and its dependencies')
     command_p.add_argument('-f','--force', default=False,action="store_true", help='Ignore done_if clauses; force all extracts')
@@ -154,7 +173,7 @@ def bundle_parser(cmd):
     # Submit Command
     #
     command_p = sub_cmd.add_parser('submit', help='Submit extracts to the repository ')
-    command_p.set_defaults(command='submit')    
+    command_p.set_defaults(subcommand='submit')
     command_p.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')   
     command_p.add_argument('-r','--repo',  default=None, help='Name of the repository, defined in the config file')
     command_p.add_argument('-n','--name', default=None,action="store", help='Run only the named extract, and its dependencies')
@@ -164,7 +183,7 @@ def bundle_parser(cmd):
     # Install Command
     #
     command_p = sub_cmd.add_parser('install', help='Install bundles and partitions to the library')
-    command_p.set_defaults(command='install')  
+    command_p.set_defaults(subcommand='install')
     command_p.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')
     command_p.add_argument('-l','--library',  help='Name of the library, defined in the config file')
     command_p.add_argument('-f','--force', default=False,action="store_true", help='Force storing the file')
@@ -174,7 +193,7 @@ def bundle_parser(cmd):
     # run Command
     #
     command_p = sub_cmd.add_parser('run', help='Run a method on the bundle')
-    command_p.set_defaults(command='run')               
+    command_p.set_defaults(subcommand='run')
     command_p.add_argument('method', metavar='Method', type=str, 
                    help='Name of the method to run')    
     command_p.add_argument('args',  nargs='*', type=str,help='additional arguments')
@@ -185,7 +204,7 @@ def bundle_parser(cmd):
     # repopulate
     #
     command_p = sub_cmd.add_parser('repopulate', help='Load data previously submitted to the library back into the build dir')
-    command_p.set_defaults(command='repopulate')               
+    command_p.set_defaults(subcommand='repopulate')
     
     
     #
@@ -193,24 +212,24 @@ def bundle_parser(cmd):
     #
     
     command_p = sub_cmd.add_parser('commit', help='Commit the source')
-    command_p.set_defaults(command='commit', command_group='source')  
+    command_p.set_defaults(subcommand='commit', command_group='source')
     command_p.add_argument('-m','--message', default=None, help='Git commit message')
     
     command_p = sub_cmd.add_parser('push', help='Commit and push to the git origin')
-    command_p.set_defaults(command='push', command_group='source')  
+    command_p.set_defaults(subcommand='push', command_group='source')
     command_p.add_argument('-m','--message', default=None, help='Git commit message')
     
     command_p = sub_cmd.add_parser('pull', help='Pull from the git origin')
-    command_p.set_defaults(command='pull', command_group='source')  
+    command_p.set_defaults(subcommand='pull', command_group='source')
 
 
-def bundle_info(args, rc, src):
+def bundle_info(args, b, rc):
     if args.schema:
         print b.schema.as_csv()
     else:
         b.log("----Info ---")
         b.log("VID  : "+b.identity.vid)
-        b.log("Name : "+b.identity.name)
+        b.log("Name : "+b.identity.sname)
         b.log("VName: "+b.identity.vname)
         b.log("Parts: {}".format(b.partitions.count))
 
@@ -224,220 +243,155 @@ def bundle_info(args, rc, src):
             for partition in b.partitions:
                 b.log("    "+partition.name)
 
+
+
+def bundle_clean(args, b, rc):
+    b.log("---- Cleaning ---")
+    # Only clean the meta phases when it is explicityly specified.
+    #b.clean(clean_meta=('meta' in phases))
+    b.clean()
+
+def bundle_meta(args, b, rc):
+
+    # The meta phase does not require a database, and should write files
+    # that only need to be done once.
+    if b.pre_meta():
+        b.log("---- Meta ----")
+        if b.meta():
+            b.post_meta()
+            b.log("---- Done Meta ----")
+        else:
+            b.log("---- Meta exited with failure ----")
+            return False
+    else:
+        b.log("---- Skipping Meta ---- ")
+
+def bundle_prepare(args, b, rc):
+    if b.pre_prepare():
+        b.log("---- Preparing ----")
+        if b.prepare():
+            b.post_prepare()
+            b.log("---- Done Preparing ----")
+        else:
+            b.log("---- Prepare exited with failure ----")
+            return False
+    else:
+        b.log("---- Skipping prepare ---- ")
+
+    return True
+
+def bundle_build(args, b, rc):
+
+    if b.pre_build():
+        b.log("---- Build ---")
+        if b.build():
+            b.post_build()
+            b.log("---- Done Building ---")
+        else:
+            b.log("---- Build exited with failure ---")
+            return False
+    else:
+        b.log("---- Skipping Build ---- ")
+
+    return True
+
+def bundle_install(args, b, rc):
+
+    force = args.force
+
+    if b.pre_install():
+        b.log("---- Install ---")
+        if b.install(force=force):
+            b.post_install()
+            b.log("---- Done Installing ---")
+        else:
+            b.log("---- Install exited with failure ---")
+            return False
+    else:
+        b.log("---- Skipping Install ---- ")
+
+    return True
+
+def bundle_run(args, b, rc):
+
+    #
+    # Run a method on the bundle. Can be used for testing and development.
+    try:
+        f = getattr(b,str(args.method))
+    except AttributeError as e:
+        b.error("Could not find method named '{}': {} ".format(args.method, e))
+        b.error("Available methods : {} ".format(dir(b)))
+
+        return
+
+    if not callable(f):
+        raise TypeError("Got object for name '{}', but it isn't a function".format(args.method))
+
+    return f(*args.args)
+
+def bundle_submit(args, b, rc):
+
+    if b.pre_submit():
+        b.log("---- Submit ---")
+        if b.submit():
+            b.post_submit()
+            b.log("---- Done Submitting ---")
+        else:
+            b.log("---- Submit exited with failure ---")
+    else:
+        b.log("---- Skipping Submit ---- ")
+
+def bundle_extract(args, b, rc):
+    if b.pre_extract():
+        b.log("---- Extract ---")
+        if b.extract():
+            b.post_extract()
+            b.log("---- Done Extracting ---")
+        else:
+            b.log("---- Extract exited with failure ---")
+    else:
+        b.log("---- Skipping Extract ---- ")
+
+def bundle_update(args, b, rc):
+
+    if b.pre_update():
+        b.log("---- Update ---")
+        if b.update():
+            b.post_update()
+            b.log("---- Done Updating ---")
+        else:
+            b.log("---- Update exited with failure ---")
+            return False
+    else:
+        b.log("---- Skipping Update ---- ")
+
+def bundle_config(args, b, rc):
+
+    if args.command == 'config':
+        if args.subcommand == 'rewrite':
+            b.log("Rewriting the config file")
+            with self.session:
+                b.update_configuration()
+        elif args.subcommand == 'dump':
+            print b.config._run_config.dump()
+        elif args.subcommand == 'schema':
+            print b.schema.as_markdown()
+
     return
 
-    def run_prepare(self):
-        b = self
-        if b.pre_prepare():
-            b.log("---- Preparing ----")
-            if b.prepare():
-                b.post_prepare()
-                b.log("---- Done Preparing ----")
-            else:
-                b.log("---- Prepare exited with failure ----")
-                return False
-        else:
-            b.log("---- Skipping prepare ---- ")
+def bundle_source(args, b, rc):
 
-        return True
+    if 'command_group' in args and args.command_group == 'source':
 
-    def run_install(self, force=False):
-        b = self
-        if b.pre_install():
-            b.log("---- Install ---")
-            if b.install(force=force):
-                b.post_install()
-                b.log("---- Done Installing ---")
-            else:
-                b.log("---- Install exited with failure ---")
-                return False
-        else:
-            b.log("---- Skipping Install ---- ")
-                
-        return True
-                
-    def run(self, argv):
+        repo = new_repository(b.config._run_config.sourcerepo('default'))
+        repo.bundle = b
 
-        b = self
-        args =  b.parse_args(argv)
-    
-        if args.command == 'config':
-            if args.subcommand == 'rewrite':
-                b.log("Rewriting the config file")
-                with self.session:
-                    b.update_configuration()
-            elif args.subcommand == 'dump':
-                print b.config._run_config.dump()
-            elif args.subcommand == 'schema':
-                print b.schema.as_markdown()
-            return
-    
-        if 'command_group' in args and args.command_group == 'source':
-            
-            from source.repository import new_repository
-    
-            repo = new_repository(b.config._run_config.sourcerepo('default'))   
-            repo.bundle = b
+        if args.command == 'commit':
+            repo.commit(args.message)
+        elif args.command == 'push':
+            repo.commit(args.message)
+            repo.push()
+        elif args.command == 'pull':
+            repo.pull()
 
-            if args.command == 'commit':
-                repo.commit(args.message)
-            elif args.command == 'push':
-                repo.commit(args.message)
-                repo.push()
-            elif args.command == 'pull':
-                repo.pull()
-            
-            return 
-    
-        if args.command == 'repopulate':
-            b.repopulate()
-            return 
-    
-        if hasattr(args,'clean') and args.clean:
-            # If the clean arg is set, then we need to run  clean, and all of the
-            # earlerier build phases. 
-            ph = {
-                  'meta': ['clean'],
-                  'prepare': ['clean'],
-                  'build' : ['clean', 'prepare'],
-                  'update' : ['clean', 'prepare'],
-                  'install' : ['clean', 'prepare', 'build'],
-                  'submit' : ['clean', 'prepare', 'build'],
-                  'extract' : ['clean', 'prepare', 'build']
-                  }
-    
-        else:
-            ph = {
-                  'build' : [ 'prepare'],
-                  }
-    
-        phases = ph.get(args.command,[]) + [args.command]
-    
-        if args.test:
-            print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-            print "!!!!!! In Test Mode !!!!!!!!!!"
-            print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-            import time
-            time.sleep(1)
-    
-
-        
-        if 'run' in phases:
-            #
-            # Run a method on the bundle. Can be used for testing and development. 
-            try:
-                f = getattr(b,str(args.method))
-            except AttributeError as e:
-                b.error("Could multinot find method named '{}': {} ".format(args.method, e))
-                b.error("Available methods : {} ".format(dir(b)))
-          
-                return
-            
-            if not callable(f):
-                raise TypeError("Got object for name '{}', but it isn't a function".format(args.method))
-          
-            return f(*args.args)
-           
-        
-    
-        if 'clean' in phases:
-            b.log("---- Cleaning ---")
-            # Only clean the meta phases when it is explicityly specified. 
-            b.clean(clean_meta=('meta' in phases))
-            
-        # The Meta phase prepares neta information, such as list of cites
-        # that is doenloaded from a website, or a specificatoin for a schema. 
-        # The meta phase does not require a database, and should write files
-        # that only need to be done once. 
-        if 'meta' in phases:
-            if b.pre_meta():
-                b.log("---- Meta ----")
-                if b.meta():
-                    b.post_meta()
-                    b.log("---- Done Meta ----")
-                else:
-                    b.log("---- Meta exited with failure ----")
-                    return False
-            else:
-                b.log("---- Skipping Meta ---- ")
-
-                   
-            
-        if 'prepare' in phases:
-            if not b.run_prepare():
-                return False
-
-        if 'build' in phases:
-            
-            if b.run_args.test:
-                print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-                print "!!!!!! In Test Mode !!!!!!!!!!"
-                print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-    
-                time.sleep(1)
-                
-            if not b.run_build():
-                return False
-                
-
-        if 'update' in phases:
-                
-            if b.pre_update():
-                b.log("---- Update ---")
-                if b.update():
-                    b.post_update()
-                    b.log("---- Done Updating ---")
-                else:
-                    b.log("---- Update exited with failure ---")
-                    return False
-            else:
-                b.log("---- Skipping Update ---- ")
-
-        if 'install' in phases:
-            self.run_install()
-
-
-        if 'extract' in phases:
-            if b.pre_extract():
-                b.log("---- Extract ---")
-                if b.extract():
-                    b.post_extract()
-                    b.log("---- Done Extracting ---")
-                else:
-                    b.log("---- Extract exited with failure ---")
-            else:
-                b.log("---- Skipping Extract ---- ")
-
-        # Submit puts information about the the bundles into a catalog
-        # and may store extracts of the data in the catalog. 
-        if 'submit' in phases:
-            if b.pre_submit():
-                b.log("---- Submit ---")
-                if b.submit():
-                    b.post_submit()
-                    b.log("---- Done Submitting ---")
-                else:
-                    b.log("---- Submit exited with failure ---")
-            else:
-                b.log("---- Skipping Submit ---- ")
-       
-        if 'test' in phases:
-            ''' Run the unit tests'''
-            import nose, unittest, sys  # @UnresolvedImport
-    
-            dir_ = b.filesystem.path('test') #@ReservedAssignment
-                             
-                       
-            loader = nose.loader.TestLoader()
-            tests =loader.loadTestsFromDir(dir_)
-            
-            result = unittest.TextTestResult(sys.stdout, True, 1) #@UnusedVariable
-            
-            print "Loading tests from ",dir_
-            for test in tests:
-                print "Running ", test
-                test.context.bundle = b
-                unittest.TextTestRunner().run(test)
-
-             
-            
+        return

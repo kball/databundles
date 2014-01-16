@@ -923,22 +923,6 @@ class BuildBundle(Bundle):
         return self.run_args
     
 
-    def run_build(self):
-        b = self
-        if b.pre_build():
-            b.log("---- Build ---")
-            if b.build():
-                b.post_build()
-                b.log("---- Done Building ---")
-            else:
-                b.log("---- Build exited with failure ---")
-                return False
-        else:
-            b.log("---- Skipping Build ---- ")
-            
-        return True 
-
-
     def run_mp(self, method, arg_sets):
         from run import mp_run
         from multiprocessing import Pool, cpu_count

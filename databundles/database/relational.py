@@ -314,9 +314,9 @@ class RelationalDatabase(DatabaseInterface):
             ident.segment = seg
             
             if self.bundle.has_session:
-                p = self.db.bundle.partitions.find_or_new_csv(ident)  
+                p = self.db.bundle.partitions.find_or_new_csv(**ident.dict)
             else:
-                p = self.db.bundle.partitions.find_or_new_csv(ident)  
+                p = self.db.bundle.partitions.find_or_new_csv(**ident.dict)
             return p.inserter(self.table)
 
     def csvinserter(self, table_or_name=None,segment_rows=200000,  **kwargs):

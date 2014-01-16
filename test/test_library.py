@@ -614,7 +614,7 @@ class Test(TestBase):
         
 
     def test_partitions(self):
-        from databundles.partition import PartitionIdentity
+        from databundles.identity import PartitionNameQuery
         from sqlalchemy.exc import IntegrityError
         
         l = self.get_library()
@@ -626,38 +626,47 @@ class Test(TestBase):
         # 
         s = set()
         table = self.bundle.schema.tables[0]
-        
-        p = (('time',1),('space',2),('table',table.name),('grain',4))
+
+        p = (('time','time2'),('space','space3'),('table',table.name),('grain','grain4'))
         p += p
-        pids = []
+        pids = {}
         for i in range(4):
             for j in range(4):
-                s.add(p[i:i+j+1])
-            
-        for v in s:
-            pid = PartitionIdentity(self.bundle.identity,**dict(v))
-            pids.append(pid)
+                pid = self.bundle.identity.as_partition(**dict(p[i:i+j+1]))
+                pids[pid.fqname] = pid
+
         
-        for pid in pids:
+        for pid in pids.values():
             try:
-                # One will fail with an integrity eorror, but it doesn't matter for this test. 
-                part = self.bundle.partitions.new_db_partition(pid)
+                # One will fail with an integrity eorror, but it doesn't matter for this test.
+
+                part = self.bundle.partitions.new_db_partition(**pid.dict)
                 part.create()
                 
-                parts = self.bundle.partitions._find_orm(pid).all()
-                self.assertIn(pid.name, [p.name for p in parts])
+                parts = self.bundle.partitions._find_orm(PartitionNameQuery(vid=pid.vid)).all()
+                self.assertIn(pid.sname, [p.name for p in parts])
             except IntegrityError: 
                 pass
     
     
         l.put(self.bundle) # Install the partition references in the library. 
-    
+
+        b = l.get(self.bundle.identity)
+
+        print b.database.path
+        for p in b.partitions:
+            print p.database.path
+
+
         for partition in self.bundle.partitions:
             
             print "Install {}".format(partition.identity.name)
             l.put(partition)
             l.put(partition)
-            
+
+            print '---'
+            print partition.database.path
+
             r = l.get(partition.identity)
             self.assertIsNotNone(r)
             self.assertEquals( partition.identity.id_, r.partition.identity.id_)

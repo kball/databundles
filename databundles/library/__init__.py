@@ -414,10 +414,11 @@ class Library(object):
                                    .format(p.identity.name,r.identity.name,p.database.path, rp))
 
             else:
-                raise NotFoundError(("Didn't find partition {} in bundle {}. Partition "+
+                raise NotFoundError(("Didn't find partition {}. Partition "+
                                     "found in bundle, but path {} ({}?) not in local "+
-                                    "library and remote not set. force={}, is_empty={}").format(
-                            p.identity.name, r.identity.name,p.database.path, rp, force, p.database.is_empty()))
+                                    "library and remote not set. force={}, is_empty={}")
+                                    .format( p.identity.name, r.identity.name,p.database.path, rp,
+                                             force, p.database.is_empty()))
 
 
             # Ensure the file is in the local library.
@@ -567,7 +568,6 @@ class Library(object):
 
         if self.remote and self.sync:
             self.remote.put(identity, file_path)
-
 
 
         if identity.is_bundle:

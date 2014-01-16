@@ -16,7 +16,8 @@ class SqlitePartition(PartitionBase):
     time, space, or by table. '''
     
     FORMAT = 'db'
-    
+    _db_class = PartitionDb
+
     def __init__(self, bundle, record, memory=False, **kwargs):
         
         super(SqlitePartition, self).__init__(bundle, record)
@@ -196,7 +197,7 @@ class SqlitePartition(PartitionBase):
                 ident = self.identity
                 ident.segment = seg
 
-                p = self.bundle.partitions.find_or_new_csv(ident)
+                p = self.bundle.partitions.find_or_new_csv(**ident.dict)
                 ins = p.inserter( write_header=write_header)
                 if logger:
                     logger.always("New CSV Segment: {}".format(p.identity.name), now=True)

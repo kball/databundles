@@ -361,11 +361,11 @@ class PartitionName(PartialPartitionName, Name):
         l = []
         if self.grain: l.append(self.grain)
         if self.segment: l.append(self.segment)
-        
+
         if l: parts.append(self.NAME_PART_SEP.join([ str(x) for x in l ]))
         
         # the format value is part of the file extension
-        
+
         return parts
  
  
@@ -384,10 +384,11 @@ class PartitionName(PartialPartitionName, Name):
     def path(self):
         '''The path of the bundle source. Includes the revision. '''
 
-        return os.path.join(*(
-                              [super(PartitionName, self).path]+
-                              self._local_parts())
-                            )
+        try:
+            return os.path.join(*(self._local_parts()))
+        except TypeError as e:
+            raise TypeError("Path failed for partition {}: {}".format(self.name, e.message))
+
 
     @property
     def source_path(self):
@@ -1236,7 +1237,10 @@ class Identity(object):
 
 class PartitionIdentity(Identity):
     '''Subclass of Identity for partitions'''
-    
+
+    is_bundle = False
+    is_partition = True
+
     _name_class = PartitionName
 
     @property
