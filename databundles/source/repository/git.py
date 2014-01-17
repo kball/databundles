@@ -385,7 +385,7 @@ class GitRepository(RepositoryInterface):
     
     @property
     def name(self):
-        return self.bundle.identity.name+self.SUFFIX
+        return self.bundle.identity.sname+self.SUFFIX
     
     
     def create_upstream(self): raise NotImplemented()

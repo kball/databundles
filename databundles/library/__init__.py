@@ -97,11 +97,6 @@ class Library(object):
     '''
     import collections
 
-    # Return value for get()
-    Return = collections.namedtuple('Return',['bundle','partition'])
-
-    # Return value for earches
-    ReturnDs = collections.namedtuple('ReturnDs',['dataset','partition'])
 
     def __init__(self, cache,database, name =None, remote=None, sync=False, require_upload = False, host=None,port = None):
         '''
@@ -144,32 +139,6 @@ class Library(object):
         return self.__class__(self.cache, self.database.clone(), self._remote, self.sync, self.require_upload, self.host, self.port)
 
 
-    def list(self, with_meta = True, add_remote=True):
-        '''Lists all of the datasets in the partition, optionally with
-        metadata. Does not include partitions. This returns a dictionary
-        in  a form that is similar to the remote and source lists. '''
-        import socket
-
-        datasets = {}
-
-        if add_remote and self.remote:
-            try:
-                for k,v in self.remote.list(with_metadata=with_meta).items():
-
-                    if v and v['identity']['id'] != 'a0':
-                        v['identity']['location'] = ['R',' ']
-                        v['identity']['remote_version'] = int(v['identity']['revision']) # b/c 'revision' can be overwriten by library entry
-                        v['identity']['library_version'] = 0
-                        datasets[k] =  v['identity']
-            except socket.error:
-                pass
-
-
-        self.database.list(datasets=datasets)
-
-        return sorted(datasets.values(), key=lambda x: x['vname'])
-
-
     @property
     def remote(self):
         if self._remote:
@@ -204,7 +173,6 @@ class Library(object):
 
         return self.cache.path(rel_path)
 
-
     def config(self, bp_id):
 
         from ..cache import RemoteMarker
@@ -215,7 +183,6 @@ class Library(object):
             api = self.remote.get_upstream(RemoteMarker)
         except AttributeError: # No api
             api = self.remote
-
 
         if self.cache.has(d.cache_key):
             b = self.get(d.vid)
@@ -234,15 +201,109 @@ class Library(object):
         else:
             return None
 
+    ##
+    ## Storing
+    ##
+
+    def put_file(self, identity, file_path, state='new', force=False):
+        '''Store a dataset or partition file, without having to open the file
+        to determine what it is, by using  seperate identity'''
+        from ..identity import Identity
+        if isinstance(identity , dict):
+            identity = Identity.from_dict(identity)
+
+        if not self.cache.has(identity.cache_key) or force:
+            dst = self.cache.put(file_path,identity.cache_key)
+        else:
+            dst = self.cache.path(identity.cache_key)
+
+        if not os.path.exists(dst):
+            raise Exception("cache {}.put() didn't return an existent path. got: {}".format(type(self.cache), dst))
+
+        if self.remote and self.sync:
+            self.remote.put(identity, file_path)
+
+
+        if identity.is_bundle:
+            self.database.install_bundle_file(identity, file_path)
+            self.database.add_file(dst, self.cache.repo_id, identity.vid,  state, type_ ='bundle')
+        else:
+            self.database.add_file(dst, self.cache.repo_id, identity.vid,  state, type_ = 'partition')
+
+        return dst, identity.cache_key, self.cache.last_upstream().path(identity.cache_key)
+
+    def put(self, bundle, force=False):
+        '''Install a bundle or partition file into the library.
+
+        :param bundle: the file object to install
+        :rtype: a `Partition`  or `Bundle` object
+
+        '''
+        from ..bundle import Bundle
+        from ..partition import PartitionInterface
+
+        if not isinstance(bundle, (PartitionInterface, Bundle)):
+            raise ValueError("Can only install a Partition or Bundle object")
+
+
+        bundle.identity.name # throw exception if not right type.
+
+        dst, cache_key, url = self.put_file(bundle.identity, bundle.database.path, force=force)
+
+        return dst, cache_key, url
+
+    def remove(self, bundle):
+        '''Remove a bundle from the library, and delete the configuration for
+        it from the library database'''
+
+        self.database.remove_bundle(bundle)
+
+        self.cache.remove(bundle.identity.cache_key, propagate = True)
+
+    def clean(self, add_config_root=True):
+        self.database.clean(add_config_root=add_config_root)
+
+    def purge(self):
+        """Remove all records from the library database, then delete all
+        files from the cache"""
+        self.clean()
+        self.cache.clean()
+
+    ##
+    ## Retreiving
+    ##
+
+
+    def list(self, datasets=None, with_meta = True, key='vid'):
+        '''Lists all of the datasets in the partition, optionally with
+        metadata. Does not include partitions. This returns a dictionary
+        in  a form that is similar to the remote and source lists. '''
+        import socket
+        from databundles.orm import Dataset, Config
+        from ..identity import LocationRef, Identity
+
+
+        if datasets is None:
+            datasets = {}
+
+
+        self.database.list(datasets=datasets)
+
+        return sorted(datasets.values(), key=lambda x: x.vname)
+
+
+
+    def path(self, rel_path):
+        """Return the cache path for a cache key"""
+
+        return self.cache.path(rel_path)
+
     def _get_remote_dataset(self, dataset, cb=None):
-        from ..identity import new_identity
+
+        from ..identity import Identity
         from ..util import copy_file_or_flo
 
-
-        try:# ORM Objects
-            identity = new_identity(dataset.to_dict())
-        except:# Tuples
-            identity = new_identity(dataset._asdict())
+        identity = Identity.from_dict(dataset.dict)
 
         source = self.remote.get_stream(identity.cache_key)
 
@@ -273,7 +334,7 @@ class Library(object):
 
     def _get_remote_partition(self, bundle, partition, cb = None):
 
-        from identity import  new_identity
+        from identity import  Identity
         from util import copy_file_or_flo
 
         identity = new_identity(partition.to_dict(), bundle=bundle)
@@ -440,40 +501,40 @@ class Library(object):
 
         return r
 
+    ##
+    ## Finding
+    ##
 
     def find(self, query_command):
 
         return self.database.find(query_command)
 
 
-    def remote_find(self, query_command):
-        from ..cache import RemoteMarker
-        import socket
+    ##
+    ## Dependencies
+    ##
 
-        try:
-            api = self.remote.get_upstream(RemoteMarker).api
-        except AttributeError: # No api
-            try:
-                api = self.remote.api
-            except AttributeError: # No api
-                return False
+    @property
 
-        try:
-            r = api.find(query_command)
-        except socket.error:
-            self.logger.error("Connection to remote failed")
-            return False
+    def dep(self,name):
+        """"Bundle version of get(), which uses a key in the
+        bundles configuration group 'dependencies' to resolve to a name"""
 
-        if not r:
-            return False
+        bundle_name = self.dependencies.get(name, False)
 
-        return r
+        if not bundle_name:
+            raise ConfigurationError("No dependency named '{}'".format(name))
 
-    def path(self, rel_path):
-        """Return the cache path for a cache key"""
+        b = self.get(bundle_name)
 
-        return self.cache.path(rel_path)
+        if not b:
+            raise NotFoundError("Failed to get dependency, key={}, id={}".format(name, bundle_name))
 
+
+        if self.dep_cb:
+            self.dep_cb( self, name, bundle_name, b)
+
+        return b
 
     @property
     def dependencies(self):
@@ -528,110 +589,6 @@ class Library(object):
                     errors[k] = v
 
 
-    def dep(self,name):
-        """"Bundle version of get(), which uses a key in the
-        bundles configuration group 'dependencies' to resolve to a name"""
-
-        bundle_name = self.dependencies.get(name, False)
-
-        if not bundle_name:
-            raise ConfigurationError("No dependency named '{}'".format(name))
-
-        b = self.get(bundle_name)
-
-        if not b:
-            raise NotFoundError("Failed to get dependency, key={}, id={}".format(name, bundle_name))
-
-
-        if self.dep_cb:
-            self.dep_cb( self, name, bundle_name, b)
-
-        return b
-
-    def put_remote_ref(self,identity):
-        '''Store a reference to a partition that has been uploaded directly to the remote'''
-        pass
-
-    def put_file(self, identity, file_path, state='new', force=False):
-        '''Store a dataset or partition file, without having to open the file
-        to determine what it is, by using  seperate identity'''
-        from ..identity import Identity
-        if isinstance(identity , dict):
-            identity = Identity.from_dict(identity)
-
-        if not self.cache.has(identity.cache_key) or force:
-            dst = self.cache.put(file_path,identity.cache_key)
-        else:
-            dst = self.cache.path(identity.cache_key)
-
-        if not os.path.exists(dst):
-            raise Exception("cache {}.put() didn't return an existent path. got: {}".format(type(self.cache), dst))
-
-        if self.remote and self.sync:
-            self.remote.put(identity, file_path)
-
-
-        if identity.is_bundle:
-            self.database.install_bundle_file(identity, file_path)
-            self.database.add_file(dst, self.cache.repo_id, identity.vid,  state, type_ ='bundle')
-        else:
-            self.database.add_file(dst, self.cache.repo_id, identity.vid,  state, type_ = 'partition')
-
-        return dst, identity.cache_key, self.cache.last_upstream().path(identity.cache_key)
-
-    def put(self, bundle, force=False):
-        '''Install a bundle or partition file into the library.
-
-        :param bundle: the file object to install
-        :rtype: a `Partition`  or `Bundle` object
-
-        '''
-        from ..bundle import Bundle
-        from ..partition import PartitionInterface
-
-        if not isinstance(bundle, (PartitionInterface, Bundle)):
-            raise ValueError("Can only install a Partition or Bundle object")
-
-
-        bundle.identity.name # throw exception if not right type.
-
-        dst, cache_key, url = self.put_file(bundle.identity, bundle.database.path, force=force)
-
-        return dst, cache_key, url
-
-    def remove(self, bundle):
-        '''Remove a bundle from the library, and delete the configuration for
-        it from the library database'''
-
-        self.database.remove_bundle(bundle)
-
-        self.cache.remove(bundle.identity.cache_key, propagate = True)
-
-    def clean(self, add_config_root=True):
-        self.database.clean(add_config_root=add_config_root)
-
-    def purge(self):
-        """Remove all records from the library database, then delete all
-        files from the cache"""
-        self.clean()
-        self.cache.clean()
-
-
-
-    @property
-    def datasets(self):
-        '''Return an array of all of the dataset records in the library database'''
-        from databundles.orm import Dataset, Config
-
-        return [d for d in self.database.session.query(Dataset).all() if d.vid != Config.ROOT_CONFIG_NAME_V]
-
-    @property
-    def partitions(self):
-        '''Return an array of all of the dataset records in the library database'''
-        from databundles.orm import Partition, Dataset, Config
-
-        return [r for r in self.database.session.query(Dataset, Partition).join(Partition).all()
-               if r.Dataset.vid != Config.ROOT_CONFIG_NAME_V]
 
     @property
     def new_files(self):

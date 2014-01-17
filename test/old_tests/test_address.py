@@ -148,8 +148,8 @@ class TestBase(unittest.TestCase):
         failure = 0
         total = 0
         filename = "crime_addresses"
-        f_input =  os.path.join(os.path.dirname(__file__),'support',filename + '.txt')
-        f_output =  os.path.join(os.path.dirname(__file__),'support',filename + '.out.csv')
+        f_input =  os.path.join(os.path.dirname(__file__), '../support',filename + '.txt')
+        f_output =  os.path.join(os.path.dirname(__file__), '../support',filename + '.out.csv')
         with open(f_output, 'w') as out:
             writer = csv.DictWriter(out, self.header)
             writer.writeheader()
@@ -203,7 +203,7 @@ class TestBase(unittest.TestCase):
 
         p = b.partitions.find(table='businesses', grain='errors')
 
-        f_output =  os.path.join(os.path.dirname(__file__),'support','business_addresses.out.csv')
+        f_output =  os.path.join(os.path.dirname(__file__), '../support','business_addresses.out.csv')
         with open(f_output, 'w') as out:
             writer = csv.DictWriter(out, self.header)
             writer.writeheader()

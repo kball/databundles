@@ -159,17 +159,7 @@ def _source_list(dir_):
     return lst
              
     
-def _library_list(l):
-    
-    lst = {}
-    for r in l.list():
-        r['in_library'] = 'L' in r['location']
-        r['in_remote'] = 'R' in r['location']
-        lst[r['name']] = r
-        
-    return lst
-        
-         
+
 def _print_bundle_list(*args,**kwargs):
     '''Create a nice display of a list of source packages'''
     from collections import defaultdict

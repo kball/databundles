@@ -133,12 +133,8 @@ class RestApi(object):
         from databundles.util import bundle_file_type
         from urllib import quote_plus
 
-        try: did = did.id_ # check if it is actualy an Identity object
+        try: did = did.id_ # check if it is actually an Identity object
         except: pass
-
-        did = did.replace('/','|')
-        pid = pid.replace('/','|') if pid else None
-
 
         if pid:
             response  = self.remote.datasets(did).partitions(pid).get()
@@ -199,24 +195,24 @@ class RestApi(object):
     def put(self, metadata):
         ''''''
         import json
-        from databundles.identity import new_identity
+        from databundles.identity import Identity
 
         metadata['identity'] = json.loads(metadata['identity'])
         
-        identity = new_identity(metadata['identity'])
+        identity = Identity.from_dict(metadata['identity'])
 
         if identity.is_bundle:
-            r =  self.remote.datasets(identity.vid_enc).post(metadata)
+            r =  self.remote.datasets(identity.vid).post(metadata)
             raise_for_status(r)
         else:
-            r =  self.remote.datasets(identity.as_dataset.vid_enc).partitions(identity.vid_enc).post(metadata)
+            r =  self.remote.datasets(identity.as_dataset.vid).partitions(identity.vid).post(metadata)
             raise_for_status(r)
 
         return r
 
     def find(self, query):
         '''Find datasets, given a QueryCommand object'''
-        from databundles.library import QueryCommand
+        from databundles.library.query import QueryCommand
         from databundles.identity import Identity, new_identity
 
         if isinstance(query, basestring):

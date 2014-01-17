@@ -199,7 +199,7 @@ def get_datasets(library):
 @get('/datasets/find/<term>')
 def get_datasets_find(term, library):
     '''Find a partition or data bundle with a, id or name term '''
-    from databundles.library import QueryCommand
+    from databundles.library.query import QueryCommand
     
     term = term.replace('|','/')
     
@@ -251,11 +251,11 @@ def post_dataset(did,library):
 
     did = did.replace('|','/')
 
-    from databundles.identity import new_identity, Identity
+    from databundles.identity import  Identity
     from databundles.util import md5_for_file
     
     payload = request.json
-    identity = new_identity(payload['identity'])
+    identity = Identity.from_dict(payload['identity'])
 
     if not did in set([identity.id_, identity.vid]):
         raise exc.Conflict("Dataset address '{}' doesn't match payload id '{}'".format(did, identity.vid))
@@ -301,7 +301,7 @@ def post_dataset(did,library):
 
     #library.run_dumper_thread()
 
-    return b.identity.to_dict()
+    return b.identity.dict
   
 
 @get('/datasets/<did>') 
@@ -309,8 +309,6 @@ def post_dataset(did,library):
 def get_dataset(did, library, pid=None):
     '''Return the complete record for a dataset, including
     the schema and all partitions. '''
-
-    did = did.replace('|','/')
 
     gr =  library.get(did)
  
@@ -996,13 +994,15 @@ def test_run(config):
 
     port = config['port'] if config['port'] else 7979
     host = config['host'] if config['host'] else 'localhost'
-    
-    logger.info("starting test server on http://{}:{}".format(host, port))
-    
-    lf = lambda: new_library(config, True)  
-    
+
+    lf = lambda: new_library(config, True)
+
     l = lf()
     l.database.create()
+
+    logger.info("Starting test server on http://{}:{}".format(host, port))
+    logger.info("Library at: {}".format(l.database.dsn))
+
     
     install(LibraryPlugin(lf))
     

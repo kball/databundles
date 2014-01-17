@@ -11,8 +11,8 @@ def new_cache(config):
             from filesystem import FsLimitedCache
             fsclass = FsLimitedCache
         elif 'host' in config:
-            from remote import RestRemote
-            fsclass = RestRemote
+            from remote import RestCache
+            fsclass = RestCache
         elif 'account' in config:
             
             if config['account']['service'] == 's3':

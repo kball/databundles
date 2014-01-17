@@ -9,7 +9,7 @@ from ..util import  get_logger
 logger = get_logger(__name__)
 #logger.setLevel(logging.DEBUG) 
 
-class RestRemote(RemoteInterface):
+class RestCache(RemoteInterface):
 
     def __init__(self,  host,  port = None, upstream=None, **kwargs):           
         from ..client.rest import RestApi
@@ -90,7 +90,7 @@ class RestRemote(RemoteInterface):
         if not metadata:
             raise ConfigurationError("Must have metadata")
 
-        if set(['id','identity','name','md5']) != set(metadata.keys()):
+        if set(['id','identity','name','md5','fqname']) != set(metadata.keys()):
             raise ConfigurationError("Metadata is missing keys: {}".format(metadata.keys()))
 
         # Store the bundle into the S3 cache. 

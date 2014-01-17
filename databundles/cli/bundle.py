@@ -6,7 +6,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 
 from ..cli import prt, err, warn
-from ..cli import _library_list, _source_list, load_bundle, _print_bundle_list
+from ..cli import  _source_list, load_bundle, _print_bundle_list
 
 import os
 import yaml

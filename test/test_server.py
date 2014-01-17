@@ -11,8 +11,8 @@ import databundles.util
 from  testbundle.bundle import Bundle
 from databundles.run import  RunConfig
 from test_base import  TestBase
-from  databundles.client.rest import RestApi #@UnresolvedImport
-from databundles.library import QueryCommand, new_library
+from databundles.library.query import QueryCommand
+from databundles.library  import new_library
 from databundles.util import rm_rf
 
 logger = databundles.util.get_logger(__name__)
@@ -57,9 +57,96 @@ class Test(TestBase):
     
         return True
 
+
+    def test_find_upstream(self):
+
+        from databundles.run import  get_runconfig
+        from databundles.filesystem import Filesystem
+        from databundles.cache import RemoteMarker, new_cache
+
+
+        def get_cache(fsname):
+            rc = get_runconfig((os.path.join(self.bundle_dir,'test-run-config.yaml'),RunConfig.USER_CONFIG))
+            config = rc.filesystem(fsname)
+            cache = new_cache(config)
+            return cache
+
+        cache = get_cache("cached-compressed-s3")
+
+        print cache
+
+        print cache.get_upstream(RemoteMarker)
+
+
+    def test_caches(self):
+        '''Basic test of put(), get() and has() for all cache types'''
+        from functools import partial
+        from databundles.run import  get_runconfig, RunConfig
+        from databundles.filesystem import Filesystem
+        from databundles.cache import new_cache
+        from databundles.util import md5_for_file
+        from databundles.bundle import DbBundle
+
+        self.start_server() # For the rest-cache
+
+        #fn = '/tmp/1mbfile'
+        #with open(fn, 'wb') as f:
+        #    f.write('.'*(1024))
+
+        fn = self.bundle.database.path
+
+        # Opening the file might run the database updates in
+        # database.sqlite._on_connect_update_schema, which can affect the md5.
+        b = DbBundle(fn)
+
+        md5 = md5_for_file(fn)
+
+
+        print "MD5 {}  = {}".format(fn, md5)
+
+        rc = get_runconfig((os.path.join(self.bundle_dir,'test-run-config.yaml'),RunConfig.USER_CONFIG))
+
+        for i, fsname in enumerate(['fscache', 'limitedcache', 'compressioncache','cached-s3', 'cached-compressed-s3', 'rest-cache']): #'compressioncache',
+
+            config = rc.filesystem(fsname)
+            cache = new_cache(config)
+            print '---', fsname, cache
+            identity = self.bundle.identity
+
+            relpath = identity.cache_key
+
+            r = cache.put(fn, relpath,identity.to_meta(md5=md5))
+            r = cache.get(relpath)
+
+            if not r.startswith('http'):
+                self.assertTrue(os.path.exists(r), 'Not a url: {}: {}'.format(r,str(cache)))
+
+            self.assertTrue(cache.has(relpath, md5=md5))
+
+            cache.remove(relpath, propagate=True)
+
+            self.assertFalse(os.path.exists(r), str(cache))
+            self.assertFalse(cache.has(relpath))
+
+
+        cache = new_cache(rc.filesystem('s3cache-noupstream'))
+        r = cache.put(fn, 'a')
+
+
+    def test_by_url(self):
+
+        import pprint
+
+        config = self.start_server()
+
+        url = 'http://{}:{}'
+
+        pprint.pprint(dict(config))
+
+
     def test_simple_install(self):
 
-        from databundles.cache.remote import RestRemote
+        from databundles.cache.remote import RestCache
         
         config = self.start_server()
         
@@ -69,7 +156,7 @@ class Test(TestBase):
 
         print "Starting server with config: {}".format(config.to_dict())
 
-        api = RestRemote(upstream=s3, **config)
+        api = RestCache(upstream=s3, **config)
 
         r =  api.put_bundle(self.bundle)
         print r
@@ -279,88 +366,14 @@ class Test(TestBase):
         return self._test_put_bundle('default-remote', self.rc.accounts)
 
 
-    def test_find_upstream(self):
 
-        from databundles.run import  get_runconfig
-        from databundles.filesystem import Filesystem
-        from databundles.cache import RemoteMarker, new_cache
-
-   
-        def get_cache(fsname):
-            rc = get_runconfig((os.path.join(self.bundle_dir,'test-run-config.yaml'),RunConfig.USER_CONFIG))
-            config = rc.filesystem(fsname)
-            cache = new_cache(config)
-            return cache
-        
-        cache = get_cache("cached-compressed-s3")
-        
-        print cache
-        
-        print cache.get_upstream(RemoteMarker)
-        
-            
-    def test_caches(self):
-        '''Basic test of put(), get() and has() for all cache types'''
-        from functools import partial
-        from databundles.run import  get_runconfig, RunConfig
-        from databundles.filesystem import Filesystem
-        from databundles.cache import new_cache
-        from databundles.util import md5_for_file
-        from databundles.bundle import DbBundle
-        
-        self.start_server() # For the rest-cache
-        
-        #fn = '/tmp/1mbfile'
-        #with open(fn, 'wb') as f:
-        #    f.write('.'*(1024))
-      
-        fn = self.bundle.database.path
-      
-        # Opening the file might run the database updates in 
-        # database.sqlite._on_connect_update_schema, which can affect the md5.
-        b = DbBundle(fn)
-      
-        md5 = md5_for_file(fn)
-    
-        
-        print "MD5 {}  = {}".format(fn, md5)
-
-        rc = get_runconfig((os.path.join(self.bundle_dir,'test-run-config.yaml'),RunConfig.USER_CONFIG))
-        
-        for i, fsname in enumerate(['fscache', 'limitedcache', 'compressioncache','cached-s3', 'cached-compressed-s3', 'rest-cache']): #'compressioncache',
-
-            config = rc.filesystem(fsname)
-            cache = new_cache(config)
-            print '---', fsname, cache
-            identity = self.bundle.identity
-
-            relpath = identity.cache_key
-
-            r = cache.put(fn, relpath,identity.to_meta(md5=md5))
-            r = cache.get(relpath)
-
-            if not r.startswith('http'):
-                self.assertTrue(os.path.exists(r), str(cache))
-                
-            self.assertTrue(cache.has(relpath, md5=md5))
-            
-            cache.remove(relpath, propagate=True)
-            
-            self.assertFalse(os.path.exists(r), str(cache))
-            self.assertFalse(cache.has(relpath))
-            
-
-        cache = new_cache(rc.filesystem('s3cache-noupstream'))         
-        r = cache.put(fn, 'a')
- 
-            
             
     def x_test_remote_cache(self):
         self.start_server(name='default-remote')
     
     def x_test_put_redirect(self):
         from databundles.bundle import DbBundle
-        from databundles.library import QueryCommand
+        from databundles.library.query import QueryCommand
         from databundles.util import md5_for_file, rm_rf, bundle_file_type
 
         #

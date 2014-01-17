@@ -1011,8 +1011,6 @@ class Identity(object):
     @classmethod
     def from_dict(cls, d):
 
-        name = cls._name_class(**d)
-
         if 'id' in d and 'revision' in d:
             # The vid should be constructed from the id and the revision
             on = (ObjectNumber.parse(d['id']).rev(d['revision']))
@@ -1021,11 +1019,20 @@ class Identity(object):
         else:
             raise ValueError("Must have id and revision, or vid")
 
-        try:
 
-            return cls(name, on)
-        except TypeError as e:
-            raise TypeError("Failed to make identity from \n{}\n: {}".format(d, e.message))
+        if isinstance(on, DatasetNumber):
+
+            try:
+                name = cls._name_class(**d)
+                return cls(name, on)
+            except TypeError as e:
+                raise TypeError("Failed to make identity from \n{}\n: {}".format(d, e.message))
+
+        elif isinstance(on, PartitionNumber):
+            return PartitionIdentity.from_dict(d)
+        else:
+            raise TypeError("Can't make identity from {}; object number is wrong type: {}".format(d, type(on)))
+
 
     @classmethod
     def classify(cls, o):
@@ -1128,8 +1135,9 @@ class Identity(object):
         
         return {
                 'id':self.id_, 
-                'identity': json.dumps(self.to_dict()),
-                'name':self.name, 
+                'identity': json.dumps(self.dict),
+                'name':self.sname,
+                'fqname':self.fqname,
                 'md5':md5}
 
 
@@ -1233,7 +1241,10 @@ class Identity(object):
         return vname+Identity.OBJECT_NUMBER_SEP+vid
 
     def as_partition(self, partition=0, **kwargs):
-        '''Return a new PartitionIdentity based on this Identity'''
+        '''Return a new PartitionIdentity based on this Identity
+        :param partition: Integer partition number for PartitionObjectNumber
+        :param kwargs:
+        '''
 
         from partition import identity_class_from_format_name
 

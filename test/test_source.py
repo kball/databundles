@@ -12,7 +12,7 @@ from sqlalchemy import * #@UnusedWildImport
 from databundles.run import  get_runconfig
 from databundles.run import  RunConfig
 
-from source.repository import new_repository
+from databundles.source.repository import new_repository
 
 import logging
 import databundles.util

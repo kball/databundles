@@ -165,11 +165,11 @@ class Test(TestBase):
      
         r = l.put(self.bundle) #@UnusedVariable
 
-        r = l.get(self.bundle.identity.name)
+        r = l.get(self.bundle.identity.sname)
         self.assertTrue(r is not False)
-        self.assertEquals(self.bundle.identity.name, r.identity.name)
+        self.assertEquals(self.bundle.identity.sname, r.identity.sname)
 
-        r = l.get('gibberish')
+        r = l.get('dibberish')
         self.assertFalse(r)
 
         for partition in self.bundle.partitions:
@@ -177,17 +177,17 @@ class Test(TestBase):
             r = l.put(partition)
 
             # Get the partition with a name
-            r = l.get(partition.identity.name)
+            r = l.get(partition.identity.sname)
             self.assertTrue(r is not False)
-            self.assertEquals(partition.identity.name, r.partition.identity.name)
-            self.assertEquals(self.bundle.identity.name, r.identity.name)
+            self.assertEquals(partition.identity.sname, r.partition.identity.sname)
+            self.assertEquals(self.bundle.identity.sname, r.identity.sname)
             
             # Get the partition with an id
             r = l.get(partition.identity.id_)
 
             self.assertTrue(bool(r))
-            self.assertEquals(partition.identity.name, r.partition.identity.name)
-            self.assertEquals(self.bundle.identity.name, r.identity.name)            
+            self.assertEquals(partition.identity.sname, r.partition.identity.sname)
+            self.assertEquals(self.bundle.identity.sname, r.identity.sname)
 
         self.assertTrue(l.database.needs_dump())
 
@@ -199,15 +199,15 @@ class Test(TestBase):
         os.remove(l.database.dbname)
         l.database.create()
 
-        r = l.get(self.bundle.identity.name)
+        r = l.get(self.bundle.identity.sname)
     
         self.assertTrue(not r)
         
         l.database.restore(backup_file)
         
-        r = l.get(self.bundle.identity.name)
+        r = l.get(self.bundle.identity.sname)
         self.assertTrue(r is not False)
-        self.assertEquals(self.bundle.identity.name, r.identity.name)
+        self.assertEquals(self.bundle.identity.sname, r.identity.sname)
 
         os.remove(backup_file)
 
@@ -310,7 +310,7 @@ class Test(TestBase):
         r = l.find(QueryCommand().table(name='tone').partition(any=True))
         self.assertEquals(2, len(r))
        
-        ds_names = [ds.identity.sname for ds in l.datasets]
+        ds_names = [ds.sname for ds in l.list()]
         self.assertIn('source-dataset-subset-variation', ds_names)
 
     def test_versions(self):

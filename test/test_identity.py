@@ -304,6 +304,40 @@ class Test(unittest.TestCase):
         ident.locations.set(LocationRef.LOCATION.SOURCE)
         self.assertEquals(' SLR', str(ident.locations))
 
+    def test_identity_from_dict(self):
+        from databundles.partition.sqlite import SqlitePartitionIdentity
+        from databundles.partition.hdf import HdfPartitionIdentity
+        from databundles.partition.csv import CsvPartitionIdentity
+        from databundles.partition.geo import GeoPartitionIdentity
+
+        name = Name(source='source.com', dataset='foobar',  version='0.0.1')
+        dn = DatasetNumber(10000, 1, assignment_class='registered')
+
+        oident = Identity(name, dn)
+        opident = oident.as_partition(7)
+
+        idict  = oident.dict
+        pidict = opident.dict
+
+        ident = Identity.from_dict(idict)
+
+        self.assertIsInstance(ident, Identity)
+        self.assertEquals(ident.fqname, oident.fqname)
+
+        ident = Identity.from_dict(pidict)
+        self.assertIsInstance(ident, SqlitePartitionIdentity)
+
+        pidict['format'] = 'hdf'
+        ident = Identity.from_dict(pidict)
+        self.assertIsInstance(ident, HdfPartitionIdentity)
+
+        pidict['format'] = 'csv'
+        ident = Identity.from_dict(pidict)
+        self.assertIsInstance(ident, CsvPartitionIdentity)
+
+        pidict['format'] = 'geo'
+        ident = Identity.from_dict(pidict)
+        self.assertIsInstance(ident, GeoPartitionIdentity)
 
 
     def test_split(self):

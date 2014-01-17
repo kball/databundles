@@ -69,3 +69,5 @@ class RepositoryInterface(object):
     def ignore(self, path):  
         '''Ignore a file'''
         raise NotImplemented()
+
+

@@ -9,7 +9,8 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 
 from ..cli import prt, err, warn
-from ..cli import _library_list, _source_list, load_bundle, _print_bundle_list
+from ..cli import  _source_list, load_bundle, _print_bundle_list
+from ..source import SourceTree
 
 import os
 import yaml
@@ -17,7 +18,9 @@ import shutil
 
 def source_command(args, rc, src):
 
-    globals()['source_'+args.subcommand](args, rc,src)
+    st = SourceTree(rc.sourcerepo.dir)
+
+    globals()['source_'+args.subcommand](args, st, rc)
 
 def source_parser(cmd):
     import argparse
@@ -106,7 +109,7 @@ def source_parser(cmd):
     group.add_argument('-i', '--init',  default=False, dest='init',   action='store_true', help='Find bundles that need to be initialized')
                
 
-def source_info(args,rc, src):
+def source_info(args, st, rc):
     
     if not args.term:
         prt("Source dir: {}", rc.sourcerepo.dir)
@@ -152,21 +155,29 @@ def source_info(args,rc, src):
                 
    
          
-def source_list(args,rc, src, names=None):
+def source_list(args, st, rc, names=None):
     '''List all of the source packages'''
     from collections import defaultdict
     import databundles.library as library
-    
-    dir_ = rc.sourcerepo.dir
+
     l = library.new_library(rc.library(args.library))
 
-    l_lst = defaultdict(dict, _library_list(l))
-    s_lst = defaultdict(dict, _source_list(dir_))
+    d = {}
 
-    _print_bundle_list(s_lst, l_lst, subset_names=names)
+    l_list = l.list(datasets=d)
+
+    s_lst =  st.list(datasets=d)
+
+    return
+
+
+    for s in s_lst:
+        print s.locations, s.fqname
+
+    #_print_bundle_list(s_lst, l_lst, subset_names=names)
 
             
-def source_clone(args,rc, src):   
+def source_clone(args, st, rc):
     '''Clone one or more registered source packages ( via sync ) into the source directory '''
     import databundles.library as library
     from ..dbexceptions import ConflictError
@@ -186,7 +197,7 @@ def source_clone(args,rc, src):
             except ConflictError as e :
                 warn("Clone failed for {}: {}".format(f.path, e.message))
                 
-def source_new(args,rc, src):   
+def source_new(args, st, rc):
     '''Clone one or more registered source packages ( via sync ) into the source directory '''
     from ..source.repository import new_repository
     from ..identity import DatasetNumber
@@ -252,7 +263,7 @@ def source_new(args,rc, src):
 
 
     
-def source_build(args,rc, src):
+def source_build(args, st, rc):
     '''Build a single bundle, or a set of bundles in a directory. The build process
     will build all dependencies for each bundle before buildng the bundle. '''
     
@@ -365,14 +376,14 @@ def source_build(args,rc, src):
         # add all of their dependencies
         for root, _, files in os.walk(dir_):
             if 'bundle.yaml' in files:
-                
+
                 bundle_class = load_bundle(root)
-                bundle = bundle_class(root)    
+                bundle = bundle_class(root)
 
                 for dep in repo.bundle_deps(bundle.identity.name):
                     if dep not in deps:
                         deps.append(dep)
-                        
+
                 deps.append(bundle.identity.name)
     
 
@@ -387,7 +398,7 @@ def source_build(args,rc, src):
         build(dir_)
 
             
-def source_run(args,rc, src):
+def source_run(args, st, rc):
     from databundles.run import import_file
     from databundles.source.repository.git import GitRepository
 
@@ -461,7 +472,7 @@ def source_run(args,rc, src):
                 prt('')
                 os.chdir(saved_path)         
        
-def source_find(args,rc, src):
+def source_find(args, st, rc):
     from ..source.repository.git import GitRepository
     
     dir_ = args.dir
@@ -488,7 +499,7 @@ def source_find(args,rc, src):
                 
    
          
-def source_init(args,rc, src):
+def source_init(args, st, rc):
     from ..source.repository import new_repository
 
     dir_ = args.dir
@@ -507,7 +518,7 @@ def source_init(args,rc, src):
     
     repo.push()
     
-def source_sync(args,rc, src):
+def source_sync(args, st, rc):
     '''Synchronize all of the repositories with the local library'''
     import databundles.library as library
 
@@ -527,7 +538,7 @@ def source_sync(args,rc, src):
             prt("Added {:15s} {}",ident.id_,e['clone_url'] )
 
 
-def source_deps(args,rc, src):
+def source_deps(args, st, rc):
     """Produce a list of dependencies for all of the source bundles"""
 
     from ..util import toposort
