@@ -394,7 +394,20 @@ class Test(TestBase):
         for i in range(10):
             w.writerow([i,i,i])
 
-  
+
+    def test_build_bundle_hdf(self):
+
+        bundle = Bundle()
+        bundle.clean()
+        bundle = Bundle()
+        bundle.exit_on_fatal = False
+        bundle.pre_prepare()
+        bundle.prepare()
+        bundle.post_prepare()
+        bundle.pre_build()
+        bundle.build_hdf()
+        bundle.post_build()
+
     def test_build_bundle(self):  
         import shutil
               

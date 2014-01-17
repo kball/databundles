@@ -234,7 +234,9 @@ class DbBundle(Bundle):
         '''For constructing paths to partitions'''
 
         return os.path.join(self.path, *args) 
-        
+
+
+
     def table_data(self, query):
         '''Return a petl container for a data table'''
         import petl 
@@ -281,6 +283,16 @@ class LibraryDbBundle(Bundle):
         '''For constructing paths to partitions'''
         raise NotImplemented() 
         
+    @property
+    def identity(self):
+        '''Return an identity object. '''
+        from .identity import Identity
+
+        if not self._identity:
+           self._identity = self.get_dataset(self.database.session).identity
+
+
+        return self._identity
 
 
 
@@ -355,7 +367,8 @@ class BuildBundle(Bundle):
 
     def sub_path(self, *args):
         '''For constructing paths to partitions'''
-        return os.path.join(self.build_dir, self.identity.path, *args) 
+
+        return os.path.join(self.build_dir, self.identity.path, *args)
 
     @property
     def database(self):

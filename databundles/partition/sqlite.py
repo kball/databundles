@@ -3,26 +3,29 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 from . import PartitionBase
-from ..identity import PartitionIdentity
+from ..identity import PartitionIdentity, PartitionName
 from ..database.partition import  PartitionDb
-   
-class SqlitePartitionIdentity(PartitionIdentity):
+
+
+class SqlitePartitionName(PartitionName):
     PATH_EXTENSION = '.db'
-    pass
-  
- 
-class SqlitePartition(PartitionBase):
-    '''Represents a bundle partition, part of the bundle data broken out in 
-    time, space, or by table. '''
-    
     FORMAT = 'db'
+
+class SqlitePartitionIdentity(PartitionIdentity):
+    _name_class = SqlitePartitionName
+
+
+class SqlitePartition(PartitionBase):
+    '''Represents a bundle partition, part of the bundle data broken out in
+    time, space, or by table. '''
+
+    _id_class = SqlitePartitionIdentity
     _db_class = PartitionDb
 
     def __init__(self, bundle, record, memory=False, **kwargs):
         
         super(SqlitePartition, self).__init__(bundle, record)
         self.memory  = memory
-        self.format = self.FORMAT
 
 
     @property

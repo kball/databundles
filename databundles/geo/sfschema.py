@@ -303,7 +303,7 @@ class TableShapefile(object):
             drv = ogr.GetDriverByName( "KML" )
         elif fmt == 'geojson':
             drv = ogr.GetDriverByName( "GeoJSON" )
-        elif fmt == 'sqlite' or fmt == 'db':
+        elif fmt == 'sqlite' or fmt == 'geodb' or fmt == 'db':
             drv = ogr.GetDriverByName( "SQLite" )
             options = ['SPATIALITE=YES', 'INIT_WITH_EPSG=YES','OGR_SQLITE_SYNCHRONOUS=OFF', 
                        'OGR_SQLITE_CACHE=1024', '-gt 50000', 'COMPRESS_GEOM=yes']

@@ -247,7 +247,9 @@ class Test(TestBase):
         for partition in self.bundle.partitions:
             l.put(partition)
             l.put(partition)
-            
+
+            print type(partition.identity), partition.identity
+
             r = l.get(partition.identity)
             self.assertIsNotNone(r)
             self.assertEquals( partition.identity.id_, r.partition.identity.id_)
@@ -274,17 +276,17 @@ class Test(TestBase):
     
         r = l.find(QueryCommand().table(name='tone'))
 
-        self.assertEquals('source-dataset-subset-variation-ca0d',r[0]['identity']['name'])  
+        self.assertEquals('source-dataset-subset-variation',r[0]['identity']['name'])
     
         r = l.find(QueryCommand().table(name='tone').partition(format='db', grain=None))
 
-        self.assertEquals('source-dataset-subset-variation-ca0d.tone',r[0]['partition']['name'])
+        self.assertEquals('source-dataset-subset-variation-tone',r[0]['partition']['name'])
         
         r = l.find(QueryCommand().table(name='tthree').partition(format='db', segment=None))
-        self.assertEquals('source-dataset-subset-variation-ca0d.tthree',r[0]['partition']['name'])
+        self.assertEquals('source-dataset-subset-variation-tthree',r[0]['partition']['name'])
 
         r = l.find(QueryCommand().table(name='tthree').partition(format='db', segment="1"))
-        self.assertEquals('source-dataset-subset-variation-ca0d.tthree.1',r[0]['partition']['name'])
+        self.assertEquals('source-dataset-subset-variation-tthree-1',r[0]['partition']['name'])
         
         #
         #  Try getting the files 
@@ -306,12 +308,10 @@ class Test(TestBase):
         l.put(self.bundle)
     
         r = l.find(QueryCommand().table(name='tone').partition(any=True))
-        self.assertEquals(12, len(r))
+        self.assertEquals(2, len(r))
        
-        ds_names = [ds.identity.name for ds in l.datasets]
-        self.assertIn('source-dataset-subset-variation-ca0d', ds_names)
-
-
+        ds_names = [ds.identity.sname for ds in l.datasets]
+        self.assertIn('source-dataset-subset-variation', ds_names)
 
     def test_versions(self):
         import testbundle.bundle
@@ -368,7 +368,7 @@ class Test(TestBase):
         # tests
         #
 
-        for d in db.list():
+        for d in db.list().values():
             datasets[d.vid] = d.dict
             datasets[d.vid]['partitions'] = {}
 
@@ -627,7 +627,7 @@ class Test(TestBase):
         s = set()
         table = self.bundle.schema.tables[0]
 
-        p = (('time','time2'),('space','space3'),('table',table.name),('grain','grain4'))
+        p = (('time','time2'),('space','space3'),('grain','grain4'))
         p += p
         pids = {}
         for i in range(4):
@@ -635,8 +635,8 @@ class Test(TestBase):
                 pid = self.bundle.identity.as_partition(**dict(p[i:i+j+1]))
                 pids[pid.fqname] = pid
 
-        
         for pid in pids.values():
+            print pid.sname
             try:
                 # One will fail with an integrity eorror, but it doesn't matter for this test.
 
@@ -653,19 +653,14 @@ class Test(TestBase):
 
         b = l.get(self.bundle.identity)
 
-        print b.database.path
-        for p in b.partitions:
-            print p.database.path
 
 
         for partition in self.bundle.partitions:
-            
-            print "Install {}".format(partition.identity.name)
+
             l.put(partition)
             l.put(partition)
 
-            print '---'
-            print partition.database.path
+            print partition.identity.sname
 
             r = l.get(partition.identity)
             self.assertIsNotNone(r)
@@ -676,7 +671,7 @@ class Test(TestBase):
             self.assertEquals(partition.identity.id_, r.partition.identity.id_)
         
         
-        hdf = l.get('source-dataset-subset-variation-ca0d.hdf5')
+        hdf = l.get('source-dataset-subset-variation-hdf5-hdf')
         
         print hdf.database.path
         print hdf.partition.database.path
@@ -733,7 +728,7 @@ class Test(TestBase):
         self.assertFalse(os.path.exists(os.path.join(repo_dir, 'many7'))) 
  
     def test_query(self):
-        from databundles.library import QueryCommand
+        from databundles.library.query import QueryCommand
         
         tests = [
             "column.name = 'column.name', identity.id='identity',",

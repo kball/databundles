@@ -2,22 +2,26 @@
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from . import  PartitionBase
-from ..identity import PartitionIdentity
+
+from ..identity import PartitionIdentity, PartitionName
 from sqlite import SqlitePartition
-from ..database.geo import GeoDb
+
+
+
+class GeoPartitionName(PartitionName):
+    PATH_EXTENSION = '.geodb'
+    FORMAT = 'geo'
 
 class GeoPartitionIdentity(PartitionIdentity):
-    PATH_EXTENSION = '.db'
-    pass
-  
+    _name_class = GeoPartitionName
 
+
+from ..database.geo import GeoDb
 
 class GeoPartition(SqlitePartition):
     '''A Partition that hosts a Spatialite for geographic data'''
-    
-    FORMAT = 'geo'
-    
+
+    _id_class = GeoPartitionIdentity
     _db_class = GeoDb
     
     def __init__(self, bundle, record, **kwargs):

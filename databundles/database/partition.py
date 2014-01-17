@@ -21,6 +21,11 @@ class PartitionDb(SqliteDatabase, RelationalPartitionDatabaseMixin, SqliteAttach
 
         self._session = None
 
+        assert partition.identity.extension() == self.EXTENSION, (
+            "Identity extension '{}' not same as db extension '{}' for database {}".format(
+            partition.identity.extension(), self.EXTENSION, type(self)
+        ))
+
     def query(self,*args, **kwargs):
         """Convenience function for self.connection.execute()"""
         from sqlalchemy.exc import OperationalError

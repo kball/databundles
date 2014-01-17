@@ -597,11 +597,11 @@ class LibraryDb(object):
         if partition:
             self.remove_partition(partition)
         else:
-            b = LibraryDbBundle(self, dataset.vid)
+            b = LibraryDbBundle(self, dataset.identity.vid)
             for p in b.partitions:
                 self.remove_partition(p)
 
-        dataset = self.session.query(Dataset).filter(Dataset.vid==dataset.vid).one()
+        dataset = self.session.query(Dataset).filter(Dataset.vid==dataset.identity.vid).one()
 
         # Can't use delete() on the query -- bulk delete queries do not
         # trigger in-python cascades!
@@ -615,7 +615,7 @@ class LibraryDb(object):
         from ..orm import Partition
 
         try:
-            dataset, partition = self.get(partition.identity.vid) #@UnusedVariable
+            dataset = self.get(partition.identity.vid) #@UnusedVariable
         except AttributeError:
             # It is actually an identity, we hope
             dataset = partition.as_dataset
@@ -624,7 +624,7 @@ class LibraryDb(object):
 
         s = self.session
 
-        s.query(Partition).filter(Partition.t_vid  == partition.vid).delete()
+        s.query(Partition).filter(Partition.t_vid  == dataset.partition.vid).delete()
 
         self.commit()
 
@@ -806,17 +806,17 @@ class LibraryDb(object):
                 o = {}
 
                 try:
-                    o['identity'] = r.Dataset.identity.to_dict()
-                    o['partition'] = r.Partition.identity.to_dict()
+                    o['identity'] = r.Dataset.identity.dict
+                    o['partition'] = r.Partition.identity.dict
 
                 except:
-                    o['identity'] =  r.Dataset.identity.to_dict()
+                    o['identity'] =  r.Dataset.identity.dict
 
 
-                try: o['table'] = r.Table.to_dict()
+                try: o['table'] = r.Table.dict
                 except: pass
 
-                try:o['column'] = r.Column.to_dict()
+                try:o['column'] = r.Column.dict
                 except: pass
 
                 out.append(o)

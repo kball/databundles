@@ -2,32 +2,66 @@
 
 import os
 from ..identity import Identity, Name, NameQuery
-from ..identity import ObjectNumber, PartitionNumber
+from ..identity import ObjectNumber, PartitionNumber, PartitionIdentity
 
 
+def name_class_from_format_name(name):
+
+    from geo import GeoPartitionName
+    from hdf import HdfPartitionName
+    from csv import CsvPartitionName
+    from sqlite import SqlitePartitionName
+
+    if not name:
+        name = 'db'
+
+    for pc in (GeoPartitionName, HdfPartitionName, CsvPartitionName, SqlitePartitionName ):
+        if name == pc.format_name():
+            return pc
+
+    raise KeyError("Unknown format name: {}".format(name))
+
+
+
+def partition_class_from_format_name(name):
+
+    from geo import GeoPartition
+    from hdf import HdfPartition
+    from csv import CsvPartition
+    from sqlite import SqlitePartition
+
+    if not name:
+        name = 'db'
+
+    for pc in (GeoPartition, HdfPartition, CsvPartition, SqlitePartition ):
+        if name == pc.format_name():
+            return pc
+
+    raise KeyError("Unknown format name: {}".format(name))
+
+
+def identity_class_from_format_name(name):
+
+    from geo import GeoPartitionIdentity
+    from hdf import HdfPartitionIdentity
+    from csv import CsvPartitionIdentity
+    from sqlite import SqlitePartitionIdentity
+
+    if not name:
+        name = 'db'
+
+    for ic in (GeoPartitionIdentity, HdfPartitionIdentity,
+               CsvPartitionIdentity, SqlitePartitionIdentity ):
+        if name == ic.format_name():
+            return ic
+
+    raise KeyError("Unknown format name: {}".format(name))
 
 def new_partition(bundle, orm_partition, **kwargs):
-    
-    db_type = orm_partition.format
 
-    if db_type == 'geo':
-        from geo import GeoPartition
-        return GeoPartition(bundle, orm_partition, **kwargs)
-    
-    elif db_type == 'hdf':
-        from hdf import HdfPartition
-        return HdfPartition(bundle, orm_partition, **kwargs)
-    
-    elif db_type == 'csv':
-        from csv import CsvPartition
-        return CsvPartition(bundle, orm_partition, **kwargs)
-    
-    elif db_type == 'db':
-        from sqlite import SqlitePartition 
-        return SqlitePartition(bundle, orm_partition, **kwargs)
-    
-    else:
-        raise ValueError("Unknown format: '{}' ".format(db_type))
+    cls = partition_class_from_format_name(orm_partition.format)
+
+    return cls(bundle, orm_partition, **kwargs)
 
 def new_identity(d, bundle=None):
 
@@ -36,31 +70,12 @@ def new_identity(d, bundle=None):
 
     if not 'format' in d:
         d['format'] = 'db'
-      
-      
-    if d['format'] == 'geo':
-        from geo import GeoPartitionIdentity
-        return GeoPartitionIdentity.from_dict(d)
-    
-    elif d['format'] == 'hdf':
-        from hdf import HdfPartitionIdentity
-        return HdfPartitionIdentity.from_dict(d)
-    
-    elif d['format'] == 'csv':
-        from csv import CsvPartitionIdentity
-        return CsvPartitionIdentity.from_dict(d)
-    
-    elif d['format'] == 'db':
-        from sqlite import SqlitePartitionIdentity
-        return SqlitePartitionIdentity.from_dict(d)
-    
-    elif d['format'] == NameQuery.ANY:
-        from ..identity import PartitionIdentity
-        return PartitionIdentity.from_dict(d)
-    
-    else:
-        raise ValueError("Unknown format in : '{}' ".format(d))
 
+    format_name = d['format']
+
+    ic = partition_class_from_format_name(format_name)
+
+    return ic.from_dict(d)
 
 class PartitionInterface(object):
 
@@ -147,8 +162,7 @@ class PartitionBase(PartitionInterface):
         '''Return a pathname for the partition, relative to the containing 
         directory of the bundle. '''
 
-        return self.bundle.sub_path(self.identity.path)  #+self._db_class.EXTENSION
-
+        return self.bundle.sub_dir(self.identity.sub_path)  #+self._db_class.EXTENSION
 
     def sub_dir(self, *args):
         """Return a subdirectory relative to the partition path"""
@@ -212,7 +226,15 @@ class PartitionBase(PartitionInterface):
         
         return Dbm(self.bundle, base_path=self.path, suffix=suffix)
         
-        
+
+    @classmethod
+    def format_name(self):
+        return self._id_class._name_class.FORMAT
+
+    @classmethod
+    def extension(self):
+        return self._id_class._name_class.PATH_EXTENSION
+
     @property
     def help(self):
         """Returns a human readable string of useful information"""

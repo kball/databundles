@@ -4,17 +4,21 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
   
 from . import PartitionBase
-from ..identity import PartitionIdentity
+from ..identity import PartitionIdentity, PartitionName
 from ..database.hdf import HdfDb
-   
-class HdfPartitionIdentity(PartitionIdentity):
+
+
+class HdfPartitionName(PartitionName):
     PATH_EXTENSION = '.hdf'
-    
+    FORMAT = 'hdf'
+
+class HdfPartitionIdentity(PartitionIdentity):
+    _name_class = HdfPartitionName
 
 class HdfPartition(PartitionBase):
     '''A Partition that hosts a Spatialite for geographic data'''
-    
-    FORMAT = 'hdf'
+
+    _id_class = HdfPartitionIdentity
     _db_class = HdfDb
     
     def __init__(self, bundle, record, **kwargs):

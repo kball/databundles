@@ -6,6 +6,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 from inserter import InserterInterface, UpdaterInterface
 from .partition import PartitionDb
 from ..geo.sfschema import TableShapefile
+from ..partition.geo import GeoPartitionName
 
 class FeatureInserter(InserterInterface):
     
@@ -60,7 +61,9 @@ class FeatureInserter(InserterInterface):
    
     
 class GeoDb(PartitionDb):
-    
+
+    EXTENSION = GeoPartitionName.PATH_EXTENSION
+
     MIN_NUMBER_OF_TABLES = 5 # Used in is_empty
     
     def __init__(self, bundle, partition, base_path, **kwargs):

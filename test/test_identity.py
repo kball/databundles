@@ -209,11 +209,13 @@ class Test(unittest.TestCase):
         part_name = name.as_partition(time = 'time',
                                   space='space',
                                   table='table',
-                                  format='format')
+                                  format='geo')
 
-        self.assertEquals('source.com-dataset-variation-table-time-space-format-0.0.1',part_name.vname)
+        self.assertEquals('source.com-dataset-variation-table-time-space-geo-0.0.1',part_name.vname)
 
     def test_identity(self):
+
+        from databundles.partition import new_identity
 
         name = Name(source='source.com', dataset='foobar',  version='0.0.1')
         dn = DatasetNumber(10000, 1, assignment_class='registered')
@@ -249,44 +251,44 @@ class Test(unittest.TestCase):
 
         pi = ident.as_partition(8,time = 'time',
                                   space='space',
-                                  format='format')
+                                  format='hdf')
 
-        self.assertEquals('source.com-foobar-orig-time-space-format-0.0.1~p002Bi008001',pi.fqname)
+        self.assertEquals('source.com-foobar-orig-time-space-hdf-0.0.1~p002Bi008001',pi.fqname)
 
 
         # PartitionIdentity
 
         part_name = PartitionName(time = 'time',
                                   space='space',
-                                  format='format',
+                                  format='hdf',
                                   **name.dict
                                   )
         
         pn = PartitionNumber(dn, 500)
         
-        ident = PartitionIdentity(part_name, pn)
+        ident = PartitionIdentity.new_subclass(part_name, pn)
 
 
         self.assertEquals(set(['id','vid','revision',
-                               'name', 'vname', 'space', 'format', 
+                               'name', 'vname', 'space', 'format',
                                'variation', 'dataset', 'source', 
                                'version', 'time']), 
                           set(ident.dict.keys()))
         
         self.assertEquals('p002Bi084',ident.id_)   
         self.assertEquals('p002Bi084001',ident.vid)   
-        self.assertEquals('source.com-foobar-orig-time-space-format',str(ident.name))   
-        self.assertEquals('source.com-foobar-orig-time-space-format-0.0.1',ident.vname)   
-        self.assertEquals('source.com-foobar-orig-time-space-format-0.0.1~p002Bi084001',ident.fqname)   
+        self.assertEquals('source.com-foobar-orig-time-space-hdf',str(ident.name))
+        self.assertEquals('source.com-foobar-orig-time-space-hdf-0.0.1',ident.vname)
+        self.assertEquals('source.com-foobar-orig-time-space-hdf-0.0.1~p002Bi084001',ident.fqname)
         self.assertEquals('source.com/foobar-orig-0.0.1/time-space',ident.path) 
         self.assertEquals('source.com/foobar-orig/time-space',ident.source_path) 
-        self.assertEquals('source.com/foobar-orig-0.0.1/time-space.db',ident.cache_key)
+        self.assertEquals('source.com/foobar-orig-0.0.1/time-space.hdf',ident.cache_key)
         
         # Updating partition names that were partially specified
         
         pnq = PartitionNameQuery(time = 'time',
                           space='space',
-                          format='format'
+                          format='hdf'
                           )
         #import pprint
         #pprint.pprint(pnq.dict)
@@ -374,14 +376,14 @@ class Test(unittest.TestCase):
     def test_bundle_build(self):
         from  testbundle.bundle import Bundle
         from sqlalchemy.exc import IntegrityError
-        
-        bundle = Bundle()  
+
+        bundle = Bundle()
         bundle.exit_on_fatal = False
         bundle.clean()
         bundle.database.create()
-        
+
         bp = bundle.partitions
- 
+
         with bundle.session:
             bp._new_orm_partition(PartialPartitionName(time = 't1', space='s1'))
             bp._new_orm_partition(PartialPartitionName(time = 't1', space='s2'))
@@ -389,22 +391,22 @@ class Test(unittest.TestCase):
             bp._new_orm_partition(PartialPartitionName(time = 't2', space='s1'))
             bp._new_orm_partition(PartialPartitionName(time = 't2', space='s2'))
             bp._new_orm_partition(PartialPartitionName(time = 't2', space=None))
-     
-            
+
+
         with self.assertRaises(IntegrityError):
-            with bundle.session: 
-                bp._new_orm_partition(PartialPartitionName(time = 't1', space='s1'))    
-            
+            with bundle.session:
+                bp._new_orm_partition(PartialPartitionName(time = 't1', space='s1'))
+
         pnq = PartitionNameQuery(time=NameQuery.ANY, space='s1')
-            
+
         names = [p.vname
                  for p in bp._find_orm(pnq).all()]
 
 
-        self.assertEqual(set([u'source-dataset-subset-variation-t2-s1-0.0.1', 
+        self.assertEqual(set([u'source-dataset-subset-variation-t2-s1-0.0.1',
                               u'source-dataset-subset-variation-t1-s1-0.0.1']),
                          set(names))
-        
+
         names = [p.vname
                  for p in bp._find_orm(PartitionNameQuery(space=NameQuery.ANY)).all()]
 
@@ -413,11 +415,11 @@ class Test(unittest.TestCase):
         names = [p.vname
                  for p in bp._find_orm(PartitionNameQuery(time='t1',space=NameQuery.ANY)).all()]
 
-        self.assertEqual(set(['source-dataset-subset-variation-t1-s2-0.0.1', 
-                              'source-dataset-subset-variation-t1-0.0.1', 
+        self.assertEqual(set(['source-dataset-subset-variation-t1-s2-0.0.1',
+                              'source-dataset-subset-variation-t1-0.0.1',
                               'source-dataset-subset-variation-t1-s1-0.0.1']),
                          set(names))
-        
+
 
         names = [p.vname
                  for p in bp._find_orm(PartitionNameQuery(time='t1',space=NameQuery.NONE)).all()]
@@ -426,8 +428,8 @@ class Test(unittest.TestCase):
                          set(names))
 
         # Start over, use a higher level function to create the partitions
-        
-        bundle = Bundle()  
+
+        bundle = Bundle()
         bundle.exit_on_fatal = False
         bundle.clean()
         bundle.database.create()
@@ -435,58 +437,58 @@ class Test(unittest.TestCase):
 
         bp._new_partition(PartialPartitionName(time = 't1', space='s1'))
         self.assertEquals(1, len(bp.all))
-        
+
         bp._new_partition(PartialPartitionName(time = 't1', space='s2'))
         self.assertEquals(2, len(bp.all))
-        
+
         bp._new_partition(PartialPartitionName(time = 't1', space=None))
         bp._new_partition(PartialPartitionName(time = 't2', space='s1'))
         bp._new_partition(PartialPartitionName(time = 't2', space='s2'))
         bp._new_partition(PartialPartitionName(time = 't2', space=None))
         self.assertEquals(6, len(bp.all))
-        
+
         names = [p.vname
                  for p in bp._find_orm(PartitionNameQuery(time='t1',space=NameQuery.ANY)).all()]
 
-        self.assertEqual(set(['source-dataset-subset-variation-t1-s2-0.0.1', 
-                              'source-dataset-subset-variation-t1-0.0.1', 
+        self.assertEqual(set(['source-dataset-subset-variation-t1-s2-0.0.1',
+                              'source-dataset-subset-variation-t1-0.0.1',
                               'source-dataset-subset-variation-t1-s1-0.0.1']),
                          set(names))
-       
-       
+
+
         # Start over, use a higher level function to create the partitions
-        
-        bundle = Bundle()  
+
+        bundle = Bundle()
         bundle.exit_on_fatal = False
         bundle.clean()
         bundle.database.create()
         bp = bundle.partitions
-     
+
         p = bp.new_db_partition(time = 't1', space='s1')
         self.assertEquals('source-dataset-subset-variation-t1-s1-0.0.1~piEGPXmDC8001001', p.identity.fqname)
-        
+
         p = bp.find_or_new(time = 't1', space='s2')
         self.assertEquals('source-dataset-subset-variation-t1-s2-0.0.1~piEGPXmDC8002001', p.identity.fqname)
 
         # Duplicate
         p = bp.find_or_new(time = 't1', space='s2')
         self.assertEquals('source-dataset-subset-variation-t1-s2-0.0.1~piEGPXmDC8002001', p.identity.fqname)
-        
+
         p = bp.find_or_new_hdf(time = 't2', space='s1')
         self.assertEquals('source-dataset-subset-variation-t2-s1-hdf-0.0.1~piEGPXmDC8003001', p.identity.fqname)
-        
+
         p = bp.find_or_new_csv(time = 't2', space='s1')
         self.assertEquals('source-dataset-subset-variation-t2-s1-csv-0.0.1~piEGPXmDC8004001', p.identity.fqname)
-        
+
         p = bp.find_or_new_geo(time = 't2', space='s1')
         self.assertEquals('source-dataset-subset-variation-t2-s1-geo-0.0.1~piEGPXmDC8005001', p.identity.fqname)
-        
- 
+
+
         # Ok! Build!
- 
-        bundle = Bundle()  
+
+        bundle = Bundle()
         bundle.exit_on_fatal = False
-        
+
         bundle.clean()
         bundle.pre_prepare()
         bundle.prepare()
@@ -494,10 +496,10 @@ class Test(unittest.TestCase):
         bundle.pre_build()
         bundle.build_db_inserter_codes()
         bundle.post_build()
-                
-        self.assertEquals('diEGPXmDC8001',bundle.identity.vid) 
-        self.assertEquals('source-dataset-subset-variation',bundle.identity.sname) 
-        self.assertEquals('source-dataset-subset-variation-0.0.1',bundle.identity.vname) 
+
+        self.assertEquals('diEGPXmDC8001',bundle.identity.vid)
+        self.assertEquals('source-dataset-subset-variation',bundle.identity.sname)
+        self.assertEquals('source-dataset-subset-variation-0.0.1',bundle.identity.vname)
         self.assertEquals('source-dataset-subset-variation-0.0.1~diEGPXmDC8001',bundle.identity.fqname)
 
     def test_number_service(self):
@@ -603,6 +605,16 @@ class Test(unittest.TestCase):
 
         finally:
             os.rename(save, orig)
+
+    def test_format(self):
+
+        name = Name(source='source.com', dataset='foobar',  version='0.0.1')
+        dn = DatasetNumber(10000, 1, assignment_class='registered')
+
+        for format in ('geo','hdf','csv','db'):
+            pi = Identity(name, dn).as_partition(space='space', format=format)
+            print type(pi), pi.path
+
 
 
 if __name__ == "__main__":

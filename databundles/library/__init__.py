@@ -414,18 +414,19 @@ class Library(object):
                                    .format(p.identity.name,r.identity.name,p.database.path, rp))
 
             else:
-                raise NotFoundError(("Didn't find partition {}. Partition "+
+                raise NotFoundError(("Didn't find partition {}. Partition {} "+
                                     "found in bundle, but path {} ({}?) not in local "+
                                     "library and remote not set. force={}, is_empty={}")
-                                    .format( p.identity.name, r.identity.name,p.database.path, rp,
+                                    .format( p.identity.name,r.identity.name,
+                                             p.database.path, rp,
                                              force, p.database.is_empty()))
 
 
             # Ensure the file is in the local library.
 
-        ds, pt= self.database.get_id(p.identity.vid)
+        ds = self.database.get(p.identity.vid)
 
-        if not pt:
+        if not ds.partition:# It is a dataset, not a partition
             self.database.add_file(p.database.path, self.cache.repo_id, p.identity.vid, 'pulled')
             self.database.install_partition(p.bundle, p.identity)
 
@@ -620,17 +621,17 @@ class Library(object):
     @property
     def datasets(self):
         '''Return an array of all of the dataset records in the library database'''
-        from databundles.orm import Dataset
+        from databundles.orm import Dataset, Config
 
-        return [d for d in self.database.session.query(Dataset).all() if d.vid != ROOT_CONFIG_NAME_V]
+        return [d for d in self.database.session.query(Dataset).all() if d.vid != Config.ROOT_CONFIG_NAME_V]
 
     @property
     def partitions(self):
         '''Return an array of all of the dataset records in the library database'''
-        from databundles.orm import Partition, Dataset
+        from databundles.orm import Partition, Dataset, Config
 
         return [r for r in self.database.session.query(Dataset, Partition).join(Partition).all()
-               if r.Dataset.vid != ROOT_CONFIG_NAME_V]
+               if r.Dataset.vid != Config.ROOT_CONFIG_NAME_V]
 
     @property
     def new_files(self):

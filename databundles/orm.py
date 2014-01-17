@@ -992,9 +992,7 @@ class Partition(Base):
             
         d = dict(ds.dict.items() + self.dict.items())
 
-            
         return PartitionIdentity.from_dict(d)
-    
 
     @property
     def dict(self):

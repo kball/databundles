@@ -299,7 +299,14 @@ class Name(object):
 
     def as_partition(self, **kwargs):
         '''Return a PartitionName based on this name'''
-        return PartitionName(**dict(self.dict.items() + kwargs.items()))
+
+        from .partition import name_class_from_format_name
+
+        format = kwargs.get('format','db')
+
+        nc = name_class_from_format_name(format)
+
+        return nc(**dict(self.dict.items() + kwargs.items()))
 
     
     def __str__(self):
@@ -382,13 +389,25 @@ class PartitionName(PartialPartitionName, Name):
         
     @property
     def path(self):
-        '''The path of the bundle source. Includes the revision. '''
+        '''The path of the partition source. Includes the revision. '''
+
+        try:
+            return os.path.join(*(
+                              [super(PartitionName, self).path]+
+                              self._local_parts())
+                            )
+        except TypeError as e:
+            raise TypeError("Path failed for partition {}: {}".format(self.name, e.message))
+
+    @property
+    def sub_path(self):
+        '''The path of the partition source, excluding the bundle path parts.
+         Includes the revision. '''
 
         try:
             return os.path.join(*(self._local_parts()))
         except TypeError as e:
             raise TypeError("Path failed for partition {}: {}".format(self.name, e.message))
-
 
     @property
     def source_path(self):
@@ -405,6 +424,14 @@ class PartitionName(PartialPartitionName, Name):
             return False
         else:
             return True
+
+    @classmethod
+    def format_name(self):
+        return self.FORMAT
+
+    @classmethod
+    def extension(self):
+        return self.PATH_EXTENSION
 
 
 class PartialMixin(object):
@@ -960,11 +987,11 @@ class Identity(object):
 
     def __init__(self, name, object_number):
 
+        assert type(name) == self._name_class, "Wrong type: {}. Expected {}"\
+            .format(type(name), self._name_class)
+
         self._on = object_number
         self._name = name
-
-        assert type(self._name) == self._name_class, "Wrong type: {}. Expected {}"\
-            .format(type(self._name), self._name_class)
 
         if not self._name.type_is_compatible(self._on):
             raise TypeError("The name and the object number must be "+
@@ -978,6 +1005,8 @@ class Identity(object):
         self._name.version = str(nv)
 
         self.locations = Locations(self)
+
+        self.is_valid()
 
     @classmethod
     def from_dict(cls, d):
@@ -993,9 +1022,11 @@ class Identity(object):
             raise ValueError("Must have id and revision, or vid")
 
         try:
+
             return cls(name, on)
         except TypeError as e:
             raise TypeError("Failed to make identity from \n{}\n: {}".format(d, e.message))
+
     @classmethod
     def classify(cls, o):
         """Break an Identity name into parts, or describe the type of other forms.
@@ -1110,7 +1141,6 @@ class Identity(object):
         self._name.is_valid()
 
 
-
     @property
     def on(self):
         '''Return the object number obect'''
@@ -1152,18 +1182,23 @@ class Identity(object):
     @property
     def path(self):
         '''The path of the bundle source. Includes the revision. '''
-        
+
+        self.is_valid()
+
         return self._name.path
-    
+
+
     @property
     def source_path(self):
         '''The name in a form suitable for use in a filesystem. 
         Excludes the revision'''
+        self.is_valid()
         return self._name.source_path
 
     @property
     def cache_key(self):
         '''The name in a form suitable for use as a cache-key'''
+        self.is_valid()
         return self._name.cache_key
  
     @property
@@ -1198,7 +1233,9 @@ class Identity(object):
         return vname+Identity.OBJECT_NUMBER_SEP+vid
 
     def as_partition(self, partition=0, **kwargs):
-        '''Return a new PartitionIdentity ased on this Identity'''
+        '''Return a new PartitionIdentity based on this Identity'''
+
+        from partition import identity_class_from_format_name
 
         assert type(self._name) == Name, "Wrong type: {}".format(type(self._name))
         assert type(self._on) == DatasetNumber, "Wrong type: {}".format(type(self._on))
@@ -1206,7 +1243,9 @@ class Identity(object):
         name = self._name.as_partition(**kwargs)
         on = self._on.as_partition(partition)
 
-        return PartitionIdentity(name, on)
+        ic = identity_class_from_format_name(name.format)
+
+        return ic(name,on)
 
     def add_partition(self, p):
         '''Add a partition identity as a child of a dataset identity'''
@@ -1243,6 +1282,57 @@ class PartitionIdentity(Identity):
 
     _name_class = PartitionName
 
+
+    def is_valid(self):
+        self._name.is_valid()
+
+        if self._name.format:
+            assert self.format_name() == self._name.format_name(), "Got format '{}', expected '{}'".format(
+                self._name.format_name(),self.format_name)
+
+
+
+    @classmethod
+    def from_dict(cls, d):
+        ''' Like Identity.from_dict, but will cast the class type based on the format.
+        i.e. if the format is hdf, return an HdfPartitionIdentity
+
+        :param d:
+        :return:
+        '''
+
+        from partition import identity_class_from_format_name
+
+        ic = identity_class_from_format_name(d.get('format', 'db'))
+
+        name = ic._name_class(**d)
+
+        if 'id' in d and 'revision' in d:
+            # The vid should be constructed from the id and the revision
+            on = (ObjectNumber.parse(d['id']).rev(d['revision']))
+        elif 'vid' in d:
+            on = ObjectNumber.parse(d['vid'])
+        else:
+            raise ValueError("Must have id and revision, or vid")
+
+        try:
+            return ic(name, on)
+        except TypeError as e:
+            raise TypeError("Failed to make identity from \n{}\n: {}".format(d, e.message))
+
+    @classmethod
+    def new_subclass(cls, name, object_number):
+
+        from partition import identity_class_from_format_name, name_class_from_format_name
+
+        nc = name_class_from_format_name(name.format)
+        ic = identity_class_from_format_name(name.format)
+
+        nname = nc(**name.dict)
+
+        return ic(nname, object_number)
+
+
     @property
     def table(self):
         return self._name.table
@@ -1260,6 +1350,19 @@ class PartitionIdentity(Identity):
     def as_partition(self, partition=0, **kwargs):
         raise NotImplementedError("Can't generated a PartitionIdentity from a PartitionIdentity")
 
+    @property
+    def sub_path(self):
+        '''The portion of the path excluding the bundle path '''
+        self.is_valid()
+        return self._name.sub_path
+
+    @classmethod
+    def format_name(self):
+        return self._name_class.FORMAT
+
+    @classmethod
+    def extension(self):
+        return self._name_class.PATH_EXTENSION
 
 class NumberServer(object):
     

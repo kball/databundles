@@ -4,18 +4,21 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
   
 from . import PartitionBase
-from ..identity import PartitionIdentity
+from ..identity import PartitionIdentity, PartitionName
 from ..database.csv import CsvDb
-   
-class CsvPartitionIdentity(PartitionIdentity):
+
+class CsvPartitionName(PartitionName):
     PATH_EXTENSION = '.csv'
-    
+    FORMAT = 'csv'
+
+class CsvPartitionIdentity(PartitionIdentity):
+    _name_class = CsvPartitionName
 
         
 class CsvPartition(PartitionBase):
     ''' '''
     
-    FORMAT = 'csv' 
+    _id_class = CsvPartitionIdentity
     _db_class = CsvDb   
     
     def __init__(self, bundle, record, **kwargs):

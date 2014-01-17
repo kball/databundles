@@ -454,10 +454,10 @@ class Partitions(object):
 
     def new_db_partition(self, clean=False, tables=None, data=None,  **kwargs):
 
-        p, found =  self._find_or_new(kwargs, clean = False,  tables=None, data=data, format='db')
+        p, found =  self._find_or_new(kwargs, clean = False,  tables=tables, data=data, format='db')
         
         if found:
-            raise ConflictError("Partition {} alread exists".format(p.name))
+            raise ConflictError("Partition {} already exists".format(p.name))
 
         return p
   
