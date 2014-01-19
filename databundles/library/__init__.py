@@ -46,7 +46,7 @@ def _new_library(config):
 
     if remote and (not isinstance(remote, RemoteMarker)
                    and not isinstance(remote.last_upstream(), RemoteMarker)):
-        raise ConfigurationError("Library remote must hace a RemoteMarker interface: {}".format(config))
+        raise ConfigurationError("Library remote must have a RemoteMarker interface: {}".format(config))
 
     # Idea for integrating the remote into the cache.
     #lus = cache.last_upstream()
@@ -96,7 +96,6 @@ class Library(object):
 
     '''
     import collections
-
 
     def __init__(self, cache,database, name =None, remote=None, sync=False, require_upload = False, host=None,port = None):
         '''
@@ -151,14 +150,15 @@ class Library(object):
         '''Return databundles.database.Database object'''
         return self._database
 
-    def load(self, rel_path):
+    def load(self, rel_path, decl_md5=None):
         '''Load a record into the cache from the remote'''
         from ..util.flo import copy_file_or_flo
+        from  ..dbexceptions import ConflictError
 
         if not self.remote.has(rel_path):
-            return None
+            raise ConfigurationError('Remote {} does not have cacke key  {}'.format(self.remote, rel_path))
 
-        source = self.remote.get_stream(rel_path, return_meta=True)
+        source = self.remote.get_stream(rel_path)
 
         sink = self.cache.put_stream(rel_path, metadata=source.meta)
 
@@ -171,7 +171,33 @@ class Library(object):
         source.close()
         sink.close()
 
-        return self.cache.path(rel_path)
+        file_md5 = self.cache.md5(rel_path)
+
+        if file_md5 != decl_md5:
+            raise ConflictError('MD5 Mismatch: file={} != declared={} '.format( file_md5 , decl_md5))
+
+            # First, try deleting the cached copy and re-fetching
+            # but don't delete it unless there is an intervening cache
+            # if library.remote.path(identity.cache_key).startswith('http'):
+            #    raise exc.Conflict("MD5 Mismatch (a)")
+
+            library.remote.remove(identity.cache_key)
+            db_path = library.remote.get(identity.cache_key)
+
+            md5 = md5_for_file(db_path)
+            if md5 != identity.md5:
+                logger.debug('MD5 Mismatch, persisting after refetch: {} != {} '.format( md5 , identity.md5))
+                raise exc.Conflict("MD5 Mismatch (b)")
+
+        abs_path = self.cache.path(rel_path)
+        b = DbBundle(abs_path)
+
+        if b.identity.cache_key != rel_path:
+            raise Conflict("Identity of downloaded bundle doesn't match request payload")
+
+        self.put(b)
+
+        return b
 
     def config(self, bp_id):
 
@@ -205,7 +231,26 @@ class Library(object):
     ## Storing
     ##
 
-    def put_file(self, identity, file_path, state='new', force=False):
+
+    def put(self, bundle, force=False):
+        '''Install a bundle or partition file into the library.
+
+        :param bundle: the file object to install
+        :rtype: a `Partition`  or `Bundle` object
+
+        '''
+        from ..bundle import Bundle
+        from ..partition import PartitionInterface
+
+        if not isinstance(bundle, (PartitionInterface, Bundle)):
+            raise ValueError("Can only install a Partition or Bundle object")
+
+
+        dst, cache_key, url = self._put_file(bundle.identity, bundle.database.path, force=force)
+
+        return dst, cache_key, url
+
+    def _put_file(self, identity, file_path, state='new', force=False):
         '''Store a dataset or partition file, without having to open the file
         to determine what it is, by using  seperate identity'''
         from ..identity import Identity
@@ -232,25 +277,6 @@ class Library(object):
 
         return dst, identity.cache_key, self.cache.last_upstream().path(identity.cache_key)
 
-    def put(self, bundle, force=False):
-        '''Install a bundle or partition file into the library.
-
-        :param bundle: the file object to install
-        :rtype: a `Partition`  or `Bundle` object
-
-        '''
-        from ..bundle import Bundle
-        from ..partition import PartitionInterface
-
-        if not isinstance(bundle, (PartitionInterface, Bundle)):
-            raise ValueError("Can only install a Partition or Bundle object")
-
-
-        bundle.identity.name # throw exception if not right type.
-
-        dst, cache_key, url = self.put_file(bundle.identity, bundle.database.path, force=force)
-
-        return dst, cache_key, url
 
     def remove(self, bundle):
         '''Remove a bundle from the library, and delete the configuration for
@@ -260,14 +286,6 @@ class Library(object):
 
         self.cache.remove(bundle.identity.cache_key, propagate = True)
 
-    def clean(self, add_config_root=True):
-        self.database.clean(add_config_root=add_config_root)
-
-    def purge(self):
-        """Remove all records from the library database, then delete all
-        files from the cache"""
-        self.clean()
-        self.cache.clean()
 
     ##
     ## Retreiving
@@ -297,6 +315,23 @@ class Library(object):
         """Return the cache path for a cache key"""
 
         return self.cache.path(rel_path)
+
+
+    def get(self,bp_id, force = False, cb=None):
+        '''Get a bundle, given an id string or a name '''
+
+        # Get a reference to the dataset, partition and relative path
+        # from the local database.
+
+        ip, dataset = self.database.resolver.resolve_ref_one(bp_id)
+
+        if dataset and dataset.partition:
+            return self._get_partition(dataset, dataset.partition, force, cb=cb)
+        elif dataset:
+            return self._get_dataset(dataset, force, cb=cb)
+        else:
+            return False
+
 
     def _get_remote_dataset(self, dataset, cb=None):
 
@@ -334,8 +369,8 @@ class Library(object):
 
     def _get_remote_partition(self, bundle, partition, cb = None):
 
-        from identity import  Identity
-        from util import copy_file_or_flo
+        from ..identity import  Identity
+        from ..util import copy_file_or_flo
 
         identity = new_identity(partition.to_dict(), bundle=bundle)
 
@@ -383,23 +418,6 @@ class Library(object):
             raise Exception(m)
 
         return p_abs_path, p
-
-
-    def get(self,bp_id, force = False, cb=None):
-        '''Get a bundle, given an id string or a name '''
-
-        # Get a reference to the dataset, partition and relative path
-        # from the local database.
-
-        ip, dataset = self.database.resolver.resolve_ref_one(bp_id)
-
-        if dataset and dataset.partition:
-            return self._get_partition(dataset, dataset.partition, force, cb=cb)
-        elif dataset:
-            return self._get_dataset(dataset, force, cb=cb)
-        else:
-            return False
-
 
     def _get_dataset(self, dataset, force = False, cb=None):
 
@@ -475,7 +493,7 @@ class Library(object):
                                    .format(p.identity.name,r.identity.name,p.database.path, rp))
 
             else:
-                raise NotFoundError(("Didn't find partition {}. Partition {} "+
+                raise NotFoundError(("Didn't  partition {}. Partition {} "+
                                     "found in bundle, but path {} ({}?) not in local "+
                                     "library and remote not set. force={}, is_empty={}")
                                     .format( p.identity.name,r.identity.name,
@@ -509,6 +527,10 @@ class Library(object):
 
         return self.database.find(query_command)
 
+
+    @property
+    def resolver(self):
+        return self.database.resolver
 
     ##
     ## Dependencies
@@ -589,7 +611,6 @@ class Library(object):
                     errors[k] = v
 
 
-
     @property
     def new_files(self):
         '''Generator that returns files that should be pushed to the remote
@@ -630,6 +651,21 @@ class Library(object):
         else:
             for file_ in self.new_files:
                 self.push(file_)
+
+
+    #
+    # Maintainence
+    #
+
+    def clean(self, add_config_root=True):
+        self.database.clean(add_config_root=add_config_root)
+
+
+    def purge(self):
+        """Remove all records from the library database, then delete all
+        files from the cache"""
+        self.clean()
+        self.cache.clean()
 
     #
     # Backup and restore
@@ -802,4 +838,11 @@ Cache:    {cache}
 Remote:   {remote}
         """.format(name=self.name, database=self.database.dsn,
                    cache=self.cache, remote=self.remote if self.remote else '')
+
+    @property
+    def dict(self):
+        return dict(name=str(self.name),
+                    database=str(self.database.dsn),
+                    cache=str(self.cache),
+                    remote=str(self.remote) if self.remote else None)
 

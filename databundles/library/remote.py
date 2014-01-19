@@ -3,11 +3,16 @@
 
 class RemoteLibrary(object):
 
-    def __init__(self):
+    def __init__(self, cache):
         pass
 
     def get(self,bp_id, force = False, cb=None):
         pass
+
+
+    @property
+    def cache(self):
+        '''Return the remote cache, usually s3, where files can be uploaded'''
 
 
     def find(self, query_command):

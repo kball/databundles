@@ -400,9 +400,12 @@ class Test(TestBase):
         from databundles.library.query import Resolver
 
         l = self.bundle.library
-        db = l.database
 
-        l.clean()
+
+        db = l.database
+        db.enable_delete = True
+        db.drop()
+        db.create()
 
         db.install_bundle(self.bundle)
 
@@ -423,6 +426,19 @@ class Test(TestBase):
         ip, results = r.resolve_ref_one(name)
         self.assertEquals(vname, results.vname)
 
+        # Cache keys
+
+        ip, result = r.resolve_ref_one('source/dataset-subset-variation-0.0.1.db')
+        self.assertEquals('source-dataset-subset-variation-0.0.1~diEGPXmDC8001',str(result))
+
+        ip, result = r.resolve_ref_one('source/dataset-subset-variation-0.0.1/tthree.db')
+        self.assertEquals('source-dataset-subset-variation-tthree-0.0.1~piEGPXmDC8001001',str(result.partition))
+
+
+        ##
+        ## Test semantic version matching
+        ## WARNING! The Mock object below only works for testing semantic versions.
+        ##
 
         with open(self.bundle.filesystem.path('meta','version_datasets.json')) as f:
             import json
@@ -454,6 +470,8 @@ class Test(TestBase):
 
         ip, result = r.resolve_ref_one('source-dataset-subset-variation-<=3.0.0')
         self.assertEquals('source-dataset-subset-variation-2.20.2~diEGPXmDC8002',str(result))
+
+
 
 
     def test_cache(self):
@@ -653,8 +671,6 @@ class Test(TestBase):
 
         b = l.get(self.bundle.identity)
 
-
-
         for partition in self.bundle.partitions:
 
             l.put(partition)
@@ -669,8 +685,7 @@ class Test(TestBase):
             r = l.get(partition.identity.id_)
             self.assertIsNotNone(r)
             self.assertEquals(partition.identity.id_, r.partition.identity.id_)
-        
-        
+
         hdf = l.get('source-dataset-subset-variation-hdf5-hdf')
         
         print hdf.database.path

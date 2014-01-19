@@ -276,6 +276,11 @@ class Resolver(object):
         elif ip.vname:
             dqp = Dataset.vname == ip.vname
             pqp = Partition.vname == ip.vname
+
+        elif ip.cache_key:
+            dqp = Dataset.cache_key == ip.cache_key
+            pqp = Partition.cache_key == ip.cache_key
+
         else:
             dqp = Dataset.name == ip.sname
             pqp = Partition.name == ip.sname

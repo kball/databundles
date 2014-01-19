@@ -1,2 +1,2 @@
 
-from rest import RestApi
+from rest import RemoteLibrary

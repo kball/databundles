@@ -25,12 +25,12 @@ database:
 
 filesystem:  
     filesystem1:
-        dir: filesystem1
+        dir: /tmp/cache-test/filesystem1
         size: 5000
         upstream: filesystem2
 
     filesystem2:
-        dir: filesystem2
+        dir: /tmp/cache-test/filesystem2
         size: 5000
         upstream:  filesystem3
 
@@ -80,4 +80,14 @@ filesystem:
         bucket: devtest.sandiegodata.org
         account: devtest.sandiegodata.org
       
-      
+
+    wt-fs-1:
+      dir: /tmp/cache-test/wt-fs-1
+
+    wt-fs-2:
+      dir: /tmp/cache-test/wt-fs-2
+
+    write-through:
+      upstream: wt-fs-1
+      remote_upstream: wt-fs-2
+

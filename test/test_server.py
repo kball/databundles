@@ -39,6 +39,17 @@ class Test(TestBase):
     def tearDown(self):
         self.stop_server()
 
+    def get_library(self, name = 'default'):
+        """Return the same library that the server uses. """
+        from databundles.library import new_library
+
+        config = self.server_rc.library(name)
+
+        l =  new_library(config, reset = True)
+
+
+        return l
+
     def web_exists(self,s3, rel_path):
     
         import requests
@@ -58,12 +69,130 @@ class Test(TestBase):
         return True
 
 
+    def test_connection(self):
+        '''
+        Test some of the server's test functions
+        :return:
+        '''
+        from databundles.client.rest import RemoteLibrary
+
+        self.start_server()
+
+        a = RemoteLibrary(self.server_url)
+
+        self.assertEquals('foobar', a.get_test_echo('foobar'))
+        self.assertEquals('foobar', a.put_test_echo('foobar'))
+
+        with self.assertRaises(Exception):
+            a.get_test_exception()
+
+    def test_resolve(self):
+        import re
+        import time
+        from databundles.run import  get_runconfig, RunConfig
+        from databundles.client.rest import RemoteLibrary
+        from databundles.cache import new_cache
+        from databundles.identity import Identity
+
+        self.start_server()
+
+        rl = RemoteLibrary(self.server_url)
+
+        l = self.get_library()
+
+        #
+        # Check that the library can list datasets that are inserted externally
+        #
+
+        r = l.put(self.bundle)
+
+        ident = self.bundle.identity
+
+        self.assertEquals(ident.vid, Identity.from_dict(rl.resolve(ident.vid)).vid)
+        self.assertEquals(ident.vid, Identity.from_dict(rl.resolve(ident.vname)).vid)
+        self.assertEquals(ident.vid, Identity.from_dict(rl.resolve(ident.cache_key)).vid)
+        self.assertEquals(ident.vid, Identity.from_dict(rl.resolve(ident.sname)).vid)
+
+    def test_load(self):
+        import re
+        import time
+        from databundles.run import  get_runconfig, RunConfig
+        from databundles.client.rest import RemoteLibrary
+        from databundles.cache import new_cache
+        from databundles.util import md5_for_file
+
+        self.start_server()
+
+        rl = RemoteLibrary(self.server_url)
+
+        l = self.get_library()
+
+        #
+        # Check that the library can list datasets that are inserted externally
+        #
+
+        r = l.put(self.bundle)
+
+        s = set([i.fqname for i in rl.list()])
+
+        self.assertIn('source-dataset-subset-variation-0.0.1~diEGPXmDC8001', s)
+
+        dsident = rl.dataset('diEGPXmDC8001')
+
+        s = set([i.fqname for i in dsident.partitions.values()])
+
+        self.assertEquals(11, len(s))
+
+        self.assertIn('source-dataset-subset-variation-hdf5-hdf-0.0.1~piEGPXmDC800f001', s)
+        self.assertIn('source-dataset-subset-variation-tthree-3-0.0.1~piEGPXmDC800d001', s)
+        self.assertIn('source-dataset-subset-variation-geot1-geo-0.0.1~piEGPXmDC8002001', s)
+
+        #
+        # Upload the dataset to S3, clear the library, then load it back in
+        #
+
+        rc = get_runconfig((os.path.join(self.bundle_dir,'test-run-config.yaml'),RunConfig.USER_CONFIG))
+        cache = new_cache(rc.filesystem('cached-compressed-s3'))
+
+        fn = self.bundle.database.path
+        identity = self.bundle.identity
+        relpath = identity.cache_key
+
+        r = cache.put(fn, relpath, identity.to_meta(file=fn))
+
+        self.assertTrue(bool(cache.has(relpath)))
+
+        # clear the library.
+
+        l.purge()
+        self.assertNotIn('source-dataset-subset-variation-0.0.1~diEGPXmDC8001',
+                         set([i.fqname for i in rl.list()]))
+
+        # Load from  S3, directly
+
+        identity.add_md5(md5_for_file(fn))
+
+        l.load(identity.cache_key, identity.md5)
+
+        self.assertIn('source-dataset-subset-variation-0.0.1~diEGPXmDC8001',
+                      set([i.fqname for i in rl.list()]))
+
+        # Do it one more time, using the remote library
+
+        l.purge()
+        self.assertNotIn('source-dataset-subset-variation-0.0.1~diEGPXmDC8001',
+                         set([i.fqname for i in rl.list()]))
+
+        rl.load_dataset(identity)
+
+        self.assertIn('source-dataset-subset-variation-0.0.1~diEGPXmDC8001',
+                      set([i.fqname for i in rl.list()]))
+
     def test_find_upstream(self):
 
         from databundles.run import  get_runconfig
         from databundles.filesystem import Filesystem
         from databundles.cache import RemoteMarker, new_cache
-
 
         def get_cache(fsname):
             rc = get_runconfig((os.path.join(self.bundle_dir,'test-run-config.yaml'),RunConfig.USER_CONFIG))
@@ -76,7 +205,6 @@ class Test(TestBase):
         print cache
 
         print cache.get_upstream(RemoteMarker)
-
 
     def test_caches(self):
         '''Basic test of put(), get() and has() for all cache types'''
@@ -101,12 +229,11 @@ class Test(TestBase):
 
         md5 = md5_for_file(fn)
 
-
         print "MD5 {}  = {}".format(fn, md5)
 
         rc = get_runconfig((os.path.join(self.bundle_dir,'test-run-config.yaml'),RunConfig.USER_CONFIG))
 
-        for i, fsname in enumerate(['fscache', 'limitedcache', 'compressioncache','cached-s3', 'cached-compressed-s3', 'rest-cache']): #'compressioncache',
+        for i, fsname in enumerate(['fscache', 'limitedcache', 'compressioncache','cached-s3', 'cached-compressed-s3']): #'compressioncache',
 
             config = rc.filesystem(fsname)
             cache = new_cache(config)
@@ -136,12 +263,15 @@ class Test(TestBase):
     def test_by_url(self):
 
         import pprint
+        import requests
 
         config = self.start_server()
 
-        url = 'http://{}:{}'
+        url = 'http://{}:{}{{}}'.format(config['host'], config['port'])
 
-        pprint.pprint(dict(config))
+        r = requests.get(url.format('/test/echo/foobar'), params={})
+
+        print r.json()
 
 
     def test_simple_install(self):

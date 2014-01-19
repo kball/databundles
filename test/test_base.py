@@ -146,8 +146,10 @@ class TestBase(unittest.TestCase):
                 time.sleep(1)
             except socket.error:
                 pass # Just means that the socket is already closed
+            except IOError:
+                pass # Probably just means that the socket is already closed
             except Exception as e:
-                logger.error("Got an exception while stopping: {}".format(e))
+                logger.error("Got an exception while stopping: {} {}".format(type(e), e))
                 break   
             
         time.sleep(2) # Let the socket clear

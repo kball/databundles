@@ -5,7 +5,9 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 from databundles.client.siesta  import API 
-import databundles.client.exceptions 
+import databundles.client.exceptions
+import requests
+import json
 
 class NotFound(Exception):
     pass
@@ -20,8 +22,219 @@ def raise_for_status(response):
         
     if e:
         raise e(response.message)
-    
-class RestApi(object):
+
+class RemoteLibrary(object):
+
+    def __init__(self, url):
+        '''
+        '''
+
+        self._url = url
+
+        if not self._url[-1] == '/':
+            self._url += '/'
+
+        self.last_response = None
+
+    def url(self,u,*args, **kwargs):
+
+        if u[0] == '/':
+            u = u[1:]
+
+        return self._url+u.format(*args, **kwargs)
+
+
+
+    def get(self, url, params={}):
+
+
+        r = requests.get(url, params=params)
+
+        self.handle_status(r)
+
+        return self.handle_return(r)
+
+    def put(self, url, params={}, data=None):
+
+        if not isinstance(data,(list,dict)):
+            data = [data]
+
+        headers = {'Content-type': 'application/json', 'Accept': 'text/plain'}
+
+        r = requests.put(url, params=params, data=json.dumps(data), headers=headers)
+
+        self.handle_status(r)
+
+        return self.handle_return(r)
+
+    def post(self, url, params={}, data=None):
+
+        if not isinstance(data,(list,dict)):
+            data = [data]
+
+        headers = {'Content-type': 'application/json', 'Accept': 'text/plain'}
+
+        r = requests.post(url, params=params, data=json.dumps(data), headers=headers)
+
+        self.handle_status(r)
+
+        return self.handle_return(r)
+
+
+    def handle_status(self, r):
+
+        if r.status_code >= 300:
+
+            try:
+                o = r.json()
+            except:
+                o = None
+
+
+
+            if isinstance(o, dict) and 'exception' in o:
+                e = self.handle_exception(o)
+                raise e
+
+            r.raise_for_status()
+
+    def handle_return(self, r):
+
+        if r.headers.get('content-type', False) == 'application/json':
+            self.last_response = r
+            return r.json()
+        else:
+            return r
+
+    def handle_exception(self, object):
+        '''If self.object has an exception, re-construct the exception and
+        return it, to be raised later'''
+
+        import types, sys
+
+        field = object['exception']['class']
+
+        pre_message = ''
+        try:
+            class_ = getattr(sys.modules['databundles.client.exceptions'], field)
+        except AttributeError:
+            pre_message = "(Class: {}.) ".format(field)
+            class_ = Exception
+
+        if not isinstance(class_, (types.ClassType, types.TypeType)):
+            pre_message = "(Class: {},) ".format(field)
+            class_ = Exception
+
+
+        args = object['exception']['args']
+
+        # Add the pre-message, if the real exception type is not known.
+        if isinstance(args, list) and len(args) > 0:
+            args[0] = pre_message + str(args[0])
+
+        # Add the trace
+        try:
+            if args:
+                args[0] = args[0] + "\n---- Server Trace --- \n" + object['exception']['trace']
+            else:
+                args.append("\n---- Server Trace --- \n" + object['exception']['trace'])
+        except:
+            print "Failed to augment exception. {}, {}".format(args, object)
+        return  class_(*args)
+
+
+    # @get('/')
+
+    def get_root(self):
+        return self.get(self.url("/"))
+
+    # @get('/datasets/find/<term>')
+    # @post('/datasets/find')
+
+    # @get('/datasets')
+    def list(self):
+        '''List the identities of all of the datasets in the library '''
+        from ..identity import Identity
+
+        out = []
+
+        for cache_key, data in self.get(self.url("/datasets")).items():
+            ident = Identity.from_dict(data['identity'])
+            ident.urls = data['urls']
+            out.append(ident)
+
+        return out
+
+    # @get('/resolve/<ref>')
+    def resolve(self, ref):
+
+        return self.get(self.url("/resolve/{}", ref))
+
+
+    # @get('/datasets/<did>')
+    def dataset(self, vid):
+        '''Get infomation about a dataset, including the identity and
+        all of the partitions '''
+        from ..identity import Identity
+
+        out = []
+
+        r = self.get(self.url("/datasets/{}", vid))
+        ident = Identity.from_dict(r['identity'])
+
+        for pvid, data in r['partitions'].items():
+            pident = Identity.from_dict(data['identity'])
+            pident.urls = data['urls']
+            ident.add_partition(pident)
+
+        return ident
+
+
+    # @post('/datasets/<did>')
+    def load_dataset(self,ident):
+
+        r = self.post(self.url("/datasets/{}", ident.vid), data=ident.dict)
+
+    # @get('/datasets/<did>/csv')
+    # @post('/datasets/<did>/partitions/<pid>')
+    # @get('/datasets/<did>/db')
+    # @get('/files/<key:path>')
+    # @get('/key/<key:path>')
+    # @get('/ref/<ref:path>')
+    # @get('/datasets/<did>/<typ:re:schema\\.?.*>')
+    # @get('/datasets/<did>/partitions/<pid>')
+    # @get('/datasets/<did>/partitions/<pid>/db')
+    # @get('/datasets/<did>/partitions/<pid>/tables')
+    # @get('/datasets/<did>/partitions/<pid>/tables/<tid>/csv')
+    # @get('/datasets/<did>/partitions/<pid>/tables/<tid>/csv/parts')
+    # @get('/datasets/<did>/partitions/<pid>/csv')
+    # @get('/datasets/<did>/partitions/<pid>/csv/parts')
+
+    # @get('/test/echo/<arg>')
+    def get_test_echo(self, term):
+        return self.get(self.url("/test/echo/{}", term))[0]
+
+    # @put('/test/echo')
+    def put_test_echo(self, term):
+        r =  self.put(self.url("/test/echo"), data=term)[0]
+
+        if r:
+            return r[0]
+        else:
+            return None
+
+
+    # @get('/test/exception')
+    def get_test_exception(self):
+        return self.get(self.url("/test/exception"))
+
+
+    # @put('/test/exception')
+    # @get('/test/isdebug')
+    # @post('/test/close')
+
+
+class OldRestApi(object):
     '''Interface class for the Databundles Library REST API
     '''
 
@@ -144,7 +357,7 @@ class RestApi(object):
         return response.object # self._process_get_response(id_or_name, response, file_path, uncompress, cb=cb)
     
     
-    def get_stream_by_key(self, key, cb=None, return_meta=True):
+    def get_stream_by_key(self, key, cb=None):
         '''Get a stream to to the remote file. 
         
         Queries the REST api to get the URL to the file, then fetches the file

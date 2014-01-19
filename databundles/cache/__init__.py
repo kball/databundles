@@ -11,8 +11,8 @@ def new_cache(config):
             from filesystem import FsLimitedCache
             fsclass = FsLimitedCache
         elif 'host' in config:
-            from remote import RestCache
-            fsclass = RestCache
+            from remote import RestReadCache
+            fsclass = RestReadCache
         elif 'account' in config:
             
             if config['account']['service'] == 's3':
@@ -49,7 +49,7 @@ class CacheInterface(object):
 
     def get(self, rel_path, cb=None): raise NotImplementedError()
     
-    def get_stream(self, rel_path, cb=None, return_encoding=False):  raise NotImplementedError(type(self))
+    def get_stream(self, rel_path, cb=None):  raise NotImplementedError(type(self))
     
     def last_upstream(self):  raise NotImplementedError(type(self))
     

@@ -233,8 +233,8 @@ class Test(unittest.TestCase):
 
         self.assertEquals('source.com-foobar-orig-0.0.1', ident.name.dict['vname'])
         
-        self.assertEquals(set(['id','vid','revision','name', 'vname',
-                               'variation', 'dataset', 'source', 'version']), 
+        self.assertEquals({'id','vid','revision','name', 'vname',
+                               'variation', 'dataset', 'source', 'version'},
                           set(ident.dict.keys()))
 
         self.assertIn('fqname', ident.names_dict)

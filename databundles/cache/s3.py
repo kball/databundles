@@ -390,5 +390,5 @@ class S3Cache(Cache, RemoteMarker):
 
     
     def __repr__(self):
-        return "S3Cache: bucket={} prefix={} access={} ".format(self.bucket, self.prefix, self.access_key, self.upstream)
+        return "S3Cache: bucket={} prefix={} access=...{} ".format(self.bucket, self.prefix, self.access_key[-5:], self.upstream)
        

@@ -174,7 +174,12 @@ class CsvDb(DatabaseInterface):
     @property 
     def path(self):
         return self.partition.path+self.EXTENSION
-        
+
+    @property
+    def md5(self):
+        from databundles.util import md5_for_file
+        return md5_for_file(self.path)
+
     def exists(self):
         import os
         return os.path.exists(self.path)

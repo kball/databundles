@@ -345,7 +345,9 @@ class Partitions(object):
             data['tables'] = tables
 
         d = pname.dict
-        
+
+        d['cache_key'] = pname.cache_key
+
         if not 'format' in d:
             d['format']  = 'db'
         

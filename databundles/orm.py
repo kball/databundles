@@ -204,6 +204,7 @@ class Dataset(Base):
     name = SAColumn('d_name',String(200), unique=False, nullable=False)
     vname = SAColumn('d_vname',String(200), unique=True, nullable=False)
     fqname = SAColumn('d_fqname',String(200), unique=True, nullable=False)
+    cache_key = SAColumn('d_cache_key',String(200), unique=True, nullable=False)
     source = SAColumn('d_source',Text, nullable=False)
     dataset = SAColumn('d_dataset',Text, nullable=False)
     subset = SAColumn('d_subset',Text)
@@ -225,7 +226,8 @@ class Dataset(Base):
         self.id_ = kwargs.get("oid",kwargs.get("id",kwargs.get("id_", None)) )
         self.name = kwargs.get("name",None) 
         self.vname = kwargs.get("vname",None) 
-        self.fqname = kwargs.get("fqname",None) 
+        self.fqname = kwargs.get("fqname",None)
+        self.cache_key = kwargs.get("cache_key",None)
         self.source = kwargs.get("source",None) 
         self.dataset = kwargs.get("dataset",None) 
         self.subset = kwargs.get("subset",None) 
@@ -245,6 +247,8 @@ class Dataset(Base):
                 print repr(self)
                 raise ValueError('Could not parse id value; '+e.message)
 
+        if self.cache_key is None:
+            self.cache_key = self.identity.cache_key
 
     def __repr__(self):
         return """<datasets: id={} vid={} name={} source={} ds={} ss={} var={} creator={} rev={}>""".format(
@@ -265,7 +269,8 @@ class Dataset(Base):
                 'vid':self.vid,
                 'name':self.name,
                 'vname':self.fqname, 
-                'fqname':self.vname, 
+                'fqname':self.vname,
+                'cache_key':self.cache_key,
                 'source':self.source,
                 'dataset':self.dataset, 
                 'subset':self.subset, 
@@ -926,6 +931,7 @@ class Partition(Base):
     name = SAColumn('p_name',String(200), nullable=False)
     vname = SAColumn('p_vname',String(200), unique=True, nullable=False)
     fqname = SAColumn('p_fqname',String(200), unique=True, nullable=False)
+    cache_key = SAColumn('p_cache_key',String(200), unique=True, nullable=False)
     sequence_id = SAColumn('p_sequence_id',Integer)
     t_vid = SAColumn('p_t_vid',String(20),ForeignKey('tables.t_vid'))
     t_id = SAColumn('p_t_id',String(20))
@@ -955,7 +961,8 @@ class Partition(Base):
         self.id_ = kwargs.get("id",kwargs.get("id_",None)) 
         self.name = kwargs.get("name",kwargs.get("name",None)) 
         self.vname = kwargs.get("vname",None) 
-        self.fqname = kwargs.get("fqname",None) 
+        self.fqname = kwargs.get("fqname",None)
+        self.cache_key = kwargs.get("cache_key",None)
         self.sequence_id = kwargs.get("sequence_id",None) 
         self.d_id = kwargs.get("d_id",None) 
         self.space = kwargs.get("space",None) 
@@ -975,7 +982,9 @@ class Partition(Base):
             don = ObjectNumber.parse(self.d_vid)
             ton = ObjectNumber.parse(self.t_id)
             self.t_vid = str(ton.rev( don.revision))
-        
+
+        assert self.cache_key is not None
+
     @property
     def identity(self):
         '''Return this partition information as a PartitionId'''
@@ -1002,7 +1011,8 @@ class Partition(Base):
                  'vid':self.vid,
                  'name':self.name,
                  'vname':self.fqname, 
-                 'fqname':self.vname, 
+                 'fqname':self.vname,
+                 'cache_key':self.cache_key,
                  'd_id': self.d_id,
                  'd_vid': self. d_vid,
                  't_id': self.t_id,

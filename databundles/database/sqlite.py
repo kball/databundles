@@ -173,7 +173,12 @@ class SqliteDatabase(RelationalDatabase):
             return ':memory:'
         else:
             return self.base_path+self.EXTENSION
-     
+
+    @property
+    def md5(self):
+        from databundles.util import md5_for_file
+        return md5_for_file(self.path)
+
     @property
     def lock_path(self):
         return self.base_path
@@ -670,7 +675,7 @@ def _on_connect_update_sqlite_schema(conn):
         conn.execute('PRAGMA user_version = 13')        
     
 
-    if  True or version < 14:
+    if  version < 14:
 
         try: conn.execute('ALTER TABLE datasets ADD COLUMN d_fqname VARCHAR(200);')
         except: pass
@@ -686,13 +691,24 @@ def _on_connect_update_sqlite_schema(conn):
         conn.execute('PRAGMA user_version = 14')
 
 
+    if  version < 15:
+
+        try: conn.execute('ALTER TABLE datasets ADD COLUMN d_cache_key VARCHAR(200);')
+        except: pass
+
+        try: conn.execute('ALTER TABLE partitions ADD COLUMN p_cache_key VARCHAR(200);')
+        except: pass
+
+        conn.execute('PRAGMA user_version = 15')
+
+
 class BuildBundleDb(SqliteBundleDatabase):
     '''For Bundle databases when they are being built, and the path is computed from 
     the build base director'''
     @property 
     def path(self):
         return self.bundle.path + self.EXTENSION
-    
+
  
 def insert_or_ignore(table, columns):
     return  ("""INSERT OR IGNORE INTO {table} ({columns}) VALUES ({values})"""

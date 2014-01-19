@@ -32,7 +32,12 @@ class HdfDb(Hdf5File, DatabaseInterface):
     @property 
     def path(self):
         return self.make_path(self.container)
-   
+
+    @property
+    def md5(self):
+        from databundles.util import md5_for_file
+        return md5_for_file(self.path)
+
     def is_empty(self):
         # If the file is open, it will exist, so we need to check for stuff inside. 
         return not self.keys()

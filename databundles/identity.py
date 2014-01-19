@@ -150,7 +150,6 @@ class Name(object):
             try: d['vname'] = self.vname
             except ValueError: pass 
 
-
         return self.clear_dict(d) 
 
 
@@ -984,6 +983,8 @@ class Identity(object):
     # Extra data for the library and remotes
     locations = None
     partitions = None
+    urls = None # Url dict, from a remote library.
+    md5 = None #
 
     def __init__(self, name, object_number):
 
@@ -1024,14 +1025,19 @@ class Identity(object):
 
             try:
                 name = cls._name_class(**d)
-                return cls(name, on)
+                ident =  cls(name, on)
             except TypeError as e:
                 raise TypeError("Failed to make identity from \n{}\n: {}".format(d, e.message))
 
         elif isinstance(on, PartitionNumber):
-            return PartitionIdentity.from_dict(d)
+            ident =  PartitionIdentity.from_dict(d)
         else:
             raise TypeError("Can't make identity from {}; object number is wrong type: {}".format(d, type(on)))
+
+        if 'md5' in d:
+            ident.md5 = d['md5']
+
+        return ident
 
 
     @classmethod
@@ -1059,6 +1065,7 @@ class Identity(object):
             sname = None
             name_parts = None
             version = None
+            cache_key = None
 
 
         ip = IdentityParts() # namedtuple('IdentityParts', ['isa', 'name', 'name_parts','on','version', 'vspec'])
@@ -1074,6 +1081,11 @@ class Identity(object):
             ip.isa = type(o)
             ip.name = str(o)
             ip.name_parts = ip.name.split(Name.NAME_PART_SEP)
+
+        elif '/' in s:
+            # A cache key
+            ip.cache_key =s
+            ip.isa = str
 
         elif cls.OBJECT_NUMBER_SEP in s:
             # Must be a fqname
@@ -1139,6 +1151,22 @@ class Identity(object):
                 'name':self.sname,
                 'fqname':self.fqname,
                 'md5':md5}
+
+
+    def add_md5(self, md5=None, file=None):
+        import json
+
+        if not md5:
+            if not file:
+                raise ValueError("Must specify either file or md5")
+
+            from util import md5_for_file
+
+            md5 = md5_for_file(file)
+
+        self.md5 = md5
+
+        return self
 
 
     #
@@ -1216,6 +1244,11 @@ class Identity(object):
         d['vid'] = str(self._on)
         d['id'] = str(self._on.rev(None))
         d['revision'] = int(self._on.revision)
+        d['cache_key'] = self.cache_key
+
+        if self.md5:
+            d['md5'] = self.md5
+
 
         return d
 
@@ -1430,21 +1463,4 @@ class NumberServer(object):
 
         if self.next_time and time.time() < self.next_time:
             time.sleep(self.next_time - time.time())
-
-
-class Resolver(object):
-    
-    def resolve(self,s):
-        pass
-    
-    
-    def parse(self,s):
-        
-        name, id = s.split('--')
-    
-        # If the version
-
-
-def make_resolver(library=None, bundle=None):
-    '''Return a resolver object constructed on a library or bundle '''
 

@@ -82,7 +82,18 @@ class Test(TestBase):
         cache = new_cache(rc.filesystem('s3cache-noupstream'))         
         r = cache.put(fn, 'a')
  
-          
+
+    def make_test_file(self):
+        from databundles.util import  temp_file_name
+
+        fn =  temp_file_name()
+
+        with open(fn,'wb') as f:
+            for i in range(1000):
+                f.write("{:03d}:".format(i))
+
+        return fn
+
     def test_compression(self):
         from databundles.run import  get_runconfig
         from databundles.cache import new_cache
@@ -117,6 +128,69 @@ class Test(TestBase):
         dcf = uncomp_cache.get('decomp')
 
         self.assertEquals(md5_for_file(fn), md5_for_file(dcf))
+
+        os.remove(fn)
+
+    def test_md5(self):
+        from databundles.run import  get_runconfig
+        from databundles.cache import new_cache
+        from databundles.util import md5_for_file
+        from databundles.cache.filesystem import make_metadata
+
+        rc = get_runconfig((os.path.join(self.bundle_dir,'test-run-config.yaml'),RunConfig.USER_CONFIG))
+
+        fn = self.make_test_file()
+
+        md5 = md5_for_file(fn)
+
+        cache = new_cache(rc.filesystem('fscache'))
+
+        cache.put(fn, 'foo1')
+
+        abs_path = cache.path('foo1')
+
+        self.assertEquals(md5, cache.md5('foo1'))
+
+        cache = new_cache(rc.filesystem('compressioncache'))
+
+        cache.put(fn, 'foo2', metadata = make_metadata(fn) )
+
+        abs_path = cache.path('foo2')
+
+        self.assertEquals(md5, cache.md5('foo2'))
+
+
+        os.remove(fn)
+
+    def test_s3(self):
+        from databundles.run import  get_runconfig
+        from databundles.cache import new_cache
+        from databundles.bundle import DbBundle
+
+        rc = get_runconfig((os.path.join(self.bundle_dir,'test-run-config.yaml'),RunConfig.USER_CONFIG))
+
+
+        fn = self.bundle.database.path
+
+        # Opening the file might run the database updates in
+        # database.sqlite._on_connect_update_schema, which can affect the md5.
+        b = DbBundle(fn)
+        identity = b.identity
+
+        fsname = 'cached-compressed-s3'
+
+        config = rc.filesystem(fsname)
+        cache = new_cache(config)
+
+        r = cache.put(fn, b.identity.cache_key,b.identity.to_meta(md5=b.database.md5))
+
+        for p in b.partitions:
+            r =  cache.put(p.database.path, p.identity,p.identity.to_meta(md5=p.database.md5))
+
+
+
+        r = cache.get(b.identity.cache_key)
+
 
          
 def suite():

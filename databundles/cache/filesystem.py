@@ -11,6 +11,13 @@ from ..identity import Identity
 
 logger = get_logger(__name__)
 
+def make_metadata(file_name):
+    from databundles.util import md5_for_file
+    return dict(
+        md5 = md5_for_file(file_name)
+    )
+
+
 class FsCache(Cache):
     '''A cache that transfers files to and from a remote filesystem
     
@@ -46,31 +53,88 @@ class FsCache(Cache):
         if not os.path.isdir(self._cache_dir):
             raise ConfigurationError("Cache dir '{}' is not valid".format(self._cache_dir)) 
 
-    @property
-    def cache_dir(self):
-        return self._cache_dir
+    ##
 
-        
-    @property
-    def repo_id(self):
-        '''Return the ID for this repository'''
-        import hashlib
-        m = hashlib.md5()
-        m.update(self.cache_dir)
 
-        return m.hexdigest()
-    
-    def path(self, rel_path, **kwargs):
-        abs_path = os.path.join(self.cache_dir, rel_path)
-        
-        if os.path.exists(abs_path):
-            return abs_path
-        
-        if self.upstream:
-            return self.upstream.path(rel_path, **kwargs)        
-        
-        return abs_path
-    
+    def put(self, source, rel_path, metadata=None):
+        '''Copy a file to the repository
+
+        Args:
+            source: Absolute path to the source file, or a file-like object
+            rel_path: path relative to the root of the repository
+
+        '''
+
+        if isinstance(rel_path, Identity):
+            rel_path = rel_path.cache_key
+
+        sink = self.put_stream(rel_path, metadata=metadata)
+
+        try:
+            copy_file_or_flo(source, sink)
+        except (KeyboardInterrupt, SystemExit):
+            path_ = self.path(rel_path)
+            if os.path.exists(path_):
+                os.remove(path_)
+            raise
+
+        sink.close()
+
+        return os.path.join(self.cache_dir, rel_path)
+
+    def put_stream(self,rel_path, metadata=None):
+        """return a file object to write into the cache. The caller
+        is responsibile for closing the stream
+        """
+        from io import IOBase
+
+        if isinstance(rel_path, Identity):
+            rel_path = rel_path.cache_key
+
+        repo_path = os.path.join(self.cache_dir, rel_path)
+
+        if not os.path.isdir(os.path.dirname(repo_path)):
+            os.makedirs(os.path.dirname(repo_path))
+
+        if os.path.exists(repo_path):
+            os.remove(repo_path)
+
+        sink = open(repo_path,'wb')
+
+        upstream = self.upstream
+
+        class flo(IOBase):
+            '''This File-Like-Object class ensures that the file is also
+            sent to the upstream after it is stored in the FSCache. '''
+            def __init__(self, sink, upstream, repo_path, rel_path):
+
+                self._sink = sink
+                self._upstream = upstream
+                self._repo_path = repo_path
+                self._rel_path = rel_path
+
+
+            def write(self, str_):
+                self._sink.write(str_)
+
+            def close(self):
+                if not self._sink.closed:
+                    #print "Closing put_stream.flo {} is_closed={}!".format(self._repo_path, self._sink.closed)
+
+                    self._sink.close()
+
+                    if self._upstream and not self._upstream.readonly and not self._upstream.usreadonly:
+                        self._upstream.put(self._repo_path, self._rel_path, metadata=metadata)
+
+
+        self.put_metadata(rel_path, metadata)
+
+        return flo(sink, upstream, repo_path, rel_path)
+
+    ##
+    ## Retrieve
+    ##
+
     def get(self, rel_path, cb=None):
         '''Return the file path referenced but rel_path, or None if
         it can't be found. If an upstream is declared, it will try to get the file
@@ -116,9 +180,8 @@ class FsCache(Cache):
         
         logger.debug("FC {} got return from upstream {}".format(self.repo_id,rel_path)) 
         return path
-    
-    
-    def get_stream(self, rel_path, cb=None, return_meta=False):
+
+    def get_stream(self, rel_path, cb=None):
         p = self.get(rel_path)
         
         if p:
@@ -128,8 +191,38 @@ class FsCache(Cache):
         if not self.upstream:
             return None
 
-        return self.upstream.get_stream(rel_path, cb=cb, return_meta=return_meta)
-        
+        return self.upstream.get_stream(rel_path, cb=cb)
+
+    ##
+    ## Information
+    ##
+
+    def list(self, path=None,with_metadata=False):
+        '''get a list of all of the files in the repository'''
+
+        raise NotImplementedError()
+
+    def path(self, rel_path, **kwargs):
+        abs_path = os.path.join(self.cache_dir, rel_path)
+
+        if os.path.exists(abs_path):
+            return abs_path
+
+        if self.upstream:
+            return self.upstream.path(rel_path, **kwargs)
+
+        return abs_path
+
+    def md5(self, rel_path):
+        from databundles.util import md5_for_file
+
+        abs_path = self.path(rel_path)
+
+        if not abs_path:
+            return None
+
+        return md5_for_file(abs_path)
+
 
     def metadata(self,rel_path):
         import json
@@ -138,7 +231,7 @@ class FsCache(Cache):
             return None
 
         path = self.get(os.path.join('meta',rel_path))
-        
+
         if path and os.path.exists(path):
             try:
                 with open(path) as f:
@@ -148,100 +241,24 @@ class FsCache(Cache):
         else:
             return {}
 
-        
     def has(self, rel_path, md5=None, use_upstream=True):
         from ..util import md5_for_file
 
         abs_path = os.path.join(self.cache_dir, rel_path)
-     
-        
+
+
         if os.path.exists(abs_path) and ( not md5 or md5 == md5_for_file(abs_path)):
             return abs_path
-        
+
         if self.upstream and use_upstream:
             return self.upstream.has(rel_path, md5=md5, use_upstream=use_upstream)
-        
+
         return False
-        
 
+    ##
+    ## Delete
+    ##
 
-    def put(self, source, rel_path, metadata=None):
-        '''Copy a file to the repository
-        
-        Args:
-            source: Absolute path to the source file, or a file-like object
-            rel_path: path relative to the root of the repository
-        
-        '''
-
-        if isinstance(rel_path, Identity):
-            rel_path = rel_path.cache_key
-
-        sink = self.put_stream(rel_path, metadata=metadata)
-        
-        try:
-            copy_file_or_flo(source, sink)
-        except (KeyboardInterrupt, SystemExit):
-            path_ = self.path(rel_path)
-            if os.path.exists(path_):
-                os.remove(path_)
-            raise
-
-        sink.close()
-
-        return os.path.join(self.cache_dir, rel_path)
-
-    def put_stream(self,rel_path, metadata=None):
-        """return a file object to write into the cache. The caller
-        is responsibile for closing the stream
-        """
-        from io import IOBase
-        
-        if isinstance(rel_path, Identity):
-            rel_path = rel_path.cache_key
-        
-        repo_path = os.path.join(self.cache_dir, rel_path)
-      
-        if not os.path.isdir(os.path.dirname(repo_path)):
-            os.makedirs(os.path.dirname(repo_path))
-        
-        if os.path.exists(repo_path):
-            os.remove(repo_path)
-        
-        sink = open(repo_path,'wb')
-        
-        upstream = self.upstream
-        
-        class flo(IOBase):
-            '''This File-Like-Object class ensures that the file is also
-            sent to the upstream after it is stored in the FSCache. '''
-            def __init__(self, sink, upstream, repo_path, rel_path):
-                
-                self._sink = sink
-                self._upstream = upstream
-                self._repo_path = repo_path
-                self._rel_path = rel_path
-
-            
-            def write(self, str_):
-                self._sink.write(str_)
-            
-            def close(self):
-                if not self._sink.closed:
-                    #print "Closing put_stream.flo {} is_closed={}!".format(self._repo_path, self._sink.closed)
-
-                    self._sink.close()
-                    
-                    if self._upstream and not self._upstream.readonly and not self._upstream.usreadonly:
-                        self._upstream.put(self._repo_path, self._rel_path, metadata=metadata) 
-
-      
-        self.put_metadata(rel_path, metadata)
-        
-        return flo(sink, upstream, repo_path, rel_path)
-    
-
-    
     def remove(self,rel_path, propagate = False):
         '''Delete the file from the cache, and from the upstream'''
         repo_path = os.path.join(self.cache_dir, rel_path)
@@ -261,11 +278,19 @@ class FsCache(Cache):
         if self.upstream:
             self.upstream.clean()
 
-        
-    def list(self, path=None,with_metadata=False):
-        '''get a list of all of the files in the repository'''
 
-        raise NotImplementedError() 
+    @property
+    def cache_dir(self):
+        return self._cache_dir
+
+    @property
+    def repo_id(self):
+        '''Return the ID for this repository'''
+        import hashlib
+        m = hashlib.md5()
+        m.update(self.cache_dir)
+
+        return m.hexdigest()
 
 
     def __repr__(self):
@@ -439,7 +464,7 @@ class FsLimitedCache(FsCache):
 
         return m.hexdigest()
     
-    def get_stream(self, rel_path, cb=None, return_meta=False):
+    def get_stream(self, rel_path, cb=None):
         p = self.get(rel_path, cb=cb)
         
         if p:
@@ -449,7 +474,7 @@ class FsLimitedCache(FsCache):
         if not self.upstream:
             return None
 
-        return self.upstream.get_stream(rel_path, cb=cb, return_meta=return_meta)
+        return self.upstream.get_stream(rel_path, cb=cb)
         
     
     def get(self, rel_path, cb=None):
@@ -641,52 +666,83 @@ class FsCompressionCache(Cache):
         super(FsCompressionCache, self).__init__(upstream)
 
 
-    @property
-    def repo_id(self):
-        return "c"+self.upstream.repo_id()
-    
-    @property
-    def cache_dir(self):
-        return self.upstream.cache_dir
-  
-    def path(self, rel_path, **kwargs):
-        return self.upstream.path(self._rename(rel_path), **kwargs)
-      
-    @property
-    def remote(self):
-        '''Return a reference to an inner cache that is a remote'''
-        return self.upstream.remote
-    
-    @staticmethod
-    def _rename( rel_path):
-        return rel_path+".gz" if not rel_path.endswith('.gz') else rel_path
-    
-    def get_stream(self, rel_path, cb=None, return_meta=False):
+    ##
+    ## Put
+    ##
+
+
+    def put(self, source, rel_path, metadata=None):
+        from databundles.util import bundle_file_type
+        import gzip
+
+        # Pass through if the file is already compressed
+
+
+        if not metadata:
+            metadata = {}
+
+        metadata['Content-Encoding'] = 'gzip'
+
+        bft = bundle_file_type(source)
+
+        sink = self.upstream.put_stream(self._rename(rel_path), metadata = metadata)
+
+        if bft == 'gzip':
+            copy_file_or_flo(source,  sink)
+        else:
+            copy_file_or_flo(source,  gzip.GzipFile(fileobj=sink,  mode='wb'))
+
+        sink.close()
+
+        #self.put_metadata(rel_path, metadata)
+
+        return self.path(self._rename(rel_path))
+
+    def put_stream(self, rel_path,  metadata=None):
+        import gzip
+
+        if not metadata:
+            metadata = {}
+
+        metadata['Content-Encoding'] = 'gzip'
+
+        sink = self.upstream.put_stream(self._rename(rel_path),  metadata=metadata)
+
+
+        self.put_metadata(rel_path, metadata)
+
+        return gzip.GzipFile(fileobj=sink,  mode='wb')
+
+    ##
+    ## Get
+    ##
+
+    def get_stream(self, rel_path, cb=None):
         from ..util import bundle_file_type
         from ..util.flo import MetadataFlo
         import gzip
 
-        source = self.upstream.get_stream(self._rename(rel_path), return_meta=return_meta)
+        source = self.upstream.get_stream(self._rename(rel_path))
 
         if not source:
             return None
-  
+
         if bundle_file_type(source) == 'gzip':
-            logger.debug("CC returning {} with decompression".format(rel_path)) 
+            logger.debug("CC returning {} with decompression".format(rel_path))
             return MetadataFlo(gzip.GzipFile(fileobj=source), source.meta)
         else:
-            logger.debug("CC returning {} with passthrough".format(rel_path)) 
+            logger.debug("CC returning {} with passthrough".format(rel_path))
             return source
 
     def get(self, rel_path, cb=None):
-        
+
         source = self.get_stream(rel_path)
-        
+
         if not source:
             raise Exception('Failed to get a source for rel_path {} for {}, upstream {} '.format(rel_path, self, self.upstream))
-        
+
         uc_rel_path = os.path.join('uncompressed',rel_path)
-        
+
         sink = self.upstream.put_stream(uc_rel_path)
 
         try:
@@ -696,75 +752,61 @@ class FsCompressionCache(Cache):
             if os.path.exists(path_):
                 os.remove(path_)
             raise
-        
+
         return self.path(self._rename(rel_path))
 
-    def put(self, source, rel_path, metadata=None):
-        from databundles.util import bundle_file_type
-        import gzip
-
-        # Pass through if the file is already compressed
-    
-       
-        if not metadata:
-            metadata = {}
-     
-        metadata['Content-Encoding'] = 'gzip'
-    
-        sink = self.upstream.put_stream(self._rename(rel_path), metadata = metadata)
-
-        if bundle_file_type(source) == 'gzip':
-            copy_file_or_flo(source,  sink)
-        else:
-            copy_file_or_flo(source,  gzip.GzipFile(fileobj=sink,  mode='wb'))
-      
-        sink.close()
-        
-        #self.put_metadata(rel_path, metadata)
-        
-        return self.path(self._rename(rel_path))
-    
-    def put_stream(self, rel_path,  metadata=None):
-        import gzip 
-        
-        if not metadata:
-            metadata = {}
-
-        metadata['Content-Encoding'] = 'gzip'
-        
-        sink = self.upstream.put_stream(self._rename(rel_path),  metadata=metadata)
-        
-        
-        self.put_metadata(rel_path, metadata)
-        
-        return gzip.GzipFile(fileobj=sink,  mode='wb')
-
-    
     def find(self,query):
         '''Passes the query to the upstream, if it exists'''
         if not self.upstream:
             raise Exception("CompressionCache must have an upstream")
-        
+
         return self.upstream.find(query)
-    
+
+
+    ##
+    ## Delete
+    ##
+
+
     def remove(self,rel_path, propagate = False):
         '''Delete the file from the cache, and from the upstream'''
 
         if not self.upstream:
             raise Exception("CompressionCache must have an upstream")
 
-        # Must always propagate, since this is really just a filter. 
-        self.upstream.remove(self._rename(rel_path), propagate)    
+        # Must always propagate, since this is really just a filter.
+        self.upstream.remove(self._rename(rel_path), propagate)
 
         # In case someone called get()
         uc_rel_path = os.path.join('uncompressed',rel_path)
-    
+
         self.upstream.remove(uc_rel_path)
+
+
+    ##
+    ## Information
+    ##
+
+    @property
+    def remote(self):
+        '''Return a reference to an inner cache that is a remote'''
+        raise DeprecationWarning()
+        return self.upstream.remote
+
+    def path(self, rel_path, **kwargs):
+        return self.upstream.path(self._rename(rel_path), **kwargs)
+
+    def md5(self, rel_path):
+        '''Return the MD5 for the file. Since the file is compressed,
+        this will rely on the metadata'''
+
+        md = self.metadata(rel_path)
+
+        return md['md5']
 
     def list(self, path=None,with_metadata=False):
         '''get a list of all of the files in the repository'''
         return self.upstream.list(path,with_metadata=with_metadata)
-
 
     def has(self, rel_path, md5=None, use_upstream=True):
         
@@ -779,11 +821,26 @@ class FsCompressionCache(Cache):
 
         return self.upstream.has(self._rename(rel_path), md5=None, use_upstream=use_upstream)
 
-
     def metadata(self, rel_path):
         return self.upstream.metadata(self._rename(rel_path))
+
+
+    @staticmethod
+    def _rename( rel_path):
+        return rel_path+".gz" if not rel_path.endswith('.gz') else rel_path
+
+
+    @property
+    def repo_id(self):
+        return "c"+self.upstream.repo_id()
+
+    @property
+    def cache_dir(self):
+        return self.upstream.cache_dir
+
 
 
     def __repr__(self):
         return "FsCompressionCache: upstream=({})".format(self.upstream)
     
+

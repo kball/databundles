@@ -222,7 +222,7 @@ class LibraryDb(object):
     def _drop(self, s):
 
         if not self.enable_delete:
-            raise Exception("Deleting not enabled")
+            raise Exception("Deleting not enabled. Set library.database.enable_delete = True")
 
         for table in reversed(self.metadata.sorted_tables): # sorted by foreign key dependency
             table.drop(self.engine, checkfirst=True)
@@ -293,6 +293,7 @@ class LibraryDb(object):
                         name=ROOT_CONFIG_NAME,
                         vname=ROOT_CONFIG_NAME_V,
                         fqname='datasetroot-0.0.0~'+ROOT_CONFIG_NAME_V,
+                        cache_key=ROOT_CONFIG_NAME,
                         version='0.0.0',
                         source=ROOT_CONFIG_NAME,
                         dataset = ROOT_CONFIG_NAME,
@@ -327,7 +328,6 @@ class LibraryDb(object):
 
         return ValueInserter(self, None, table , **kwargs)
 
-
     ##
     ##
     ##
@@ -358,7 +358,6 @@ class LibraryDb(object):
     ##
     ## Configuration values
     ##
-
 
 
     def set_config_value(self, group, key, value):
@@ -424,11 +423,9 @@ class LibraryDb(object):
 
         self.set_config_value('activity','change', datetime.datetime.utcnow().isoformat())
 
-
     ##
     ## Install and remove bundles and partitions
     ##
-
 
     def install_bundle_file(self, identity, bundle_file):
         """Install a bundle in the database, starting from a file that may
@@ -525,7 +522,6 @@ class LibraryDb(object):
             self.rollback()
             raise e
 
-
     def install_partition(self, bundle,  p_id):
         """Install a single partition and its tables. This is mostly
         used for installing into warehouses, where it isn't desirable to install
@@ -558,7 +554,6 @@ class LibraryDb(object):
             self.rollback()
             raise e
 
-
     def install_table(self, table_or_vid, name=None):
         """Mark a table record as installed"""
         from databundles.orm import Table
@@ -579,7 +574,6 @@ class LibraryDb(object):
 
         s.merge(table)
         s.commit()
-
 
     def remove_bundle(self, bundle):
         '''remove a bundle from the database'''
@@ -609,7 +603,6 @@ class LibraryDb(object):
 
         self.commit()
 
-
     def remove_partition(self, partition):
         from ..bundle import LibraryDbBundle
         from ..orm import Partition
@@ -627,7 +620,6 @@ class LibraryDb(object):
         s.query(Partition).filter(Partition.t_vid  == dataset.partition.vid).delete()
 
         self.commit()
-
 
     ##
     ## Get objects by reference, or resolve a reference
@@ -692,7 +684,6 @@ class LibraryDb(object):
     def resolver(self):
         from .query import Resolver
         return  Resolver(self.session)
-
 
     def find(self, query_command):
         '''Find a bundle or partition record by a QueryCommand or Identity
