@@ -266,7 +266,7 @@ class S3Cache(Cache, RemoteMarker):
                 import io
                 
                 self.mp = this.bucket.initiate_multipart_upload(path, metadata=metadata)
-                self.part_number = 1;
+                self.part_number = 1
                 self.buffer = io.BytesIO()
                 self.total_size = 0
      
@@ -287,7 +287,7 @@ class S3Cache(Cache, RemoteMarker):
                 if self.buffer.tell() > buffer_size:
                     self._send_buffer() 
                     
-                    self.part_number += 1;
+                    self.part_number += 1
                     self.buffer = io.BytesIO()
 
             def writelines(self, lines):

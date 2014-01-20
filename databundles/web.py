@@ -1,6 +1,6 @@
-'''
-Support for creating web pages and text representations of schemas. 
-'''
+"""
+Support for creating web pages and text representations of schemas.
+"""
 from genshi.template import TemplateLoader
 import os 
 

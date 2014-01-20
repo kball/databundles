@@ -638,9 +638,9 @@ class ObjectNumber(object):
                   't': DLEN.TABLE,
                   'c': DLEN.TABLE+DLEN.COLUMN}
    
-    TCMAXVAL = 62**DLEN.TABLE -1; # maximum for table values. 
-    CCMAXVAL = 62**DLEN.COLUMN -1; # maximum for column values. 
-    PARTMAXVAL = 62**DLEN.PARTITION -1; # maximum for table and column values. 
+    TCMAXVAL = 62**DLEN.TABLE -1 # maximum for table values.
+    CCMAXVAL = 62**DLEN.COLUMN -1 # maximum for column values.
+    PARTMAXVAL = 62**DLEN.PARTITION -1 # maximum for table and column values.
      
     EPOCH = 1389210331 # About Jan 8, 2014
 
@@ -999,6 +999,7 @@ class Identity(object):
 
         # Update the patch number to always be the revision
         nv = Version(self._name.version)
+
         nv.patch = int(self._on.revision)
 
         self._name.version = str(nv)
@@ -1382,15 +1383,16 @@ class PartitionIdentity(Identity):
     def table(self):
         return self._name.table
 
-    @property
     def as_dataset(self):
         """Convert this identity to the identity of the corresponding dataset. """
         
-        on = ObjectNumber.parse(self.id_)
-        d = self.to_dict()
-        d['id'] = str(on.dataset)
-        
-        return  Identity(**d)
+        on = self.on.dataset
+
+        on.revision = self.on.revision
+
+        name = Name(**self.name.dict)
+
+        return  Identity(name, on)
 
     def as_partition(self, partition=0, **kwargs):
         raise NotImplementedError("Can't generated a PartitionIdentity from a PartitionIdentity")

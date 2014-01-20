@@ -8,6 +8,11 @@ library:
           port: 7979
           upstream: remote
 
+    local:
+        filesystem: local
+        database: local
+
+
     reader:
         filesystem: reader
         database: reader  
@@ -26,8 +31,6 @@ library:
           account: devtest.sandiegodata.org
 
 
-
-
 database:
   
     writer:
@@ -37,12 +40,21 @@ database:
     reader:
         dbname: '/tmp/server/reader.db'
         driver: sqlite  
-        
+
+    local:
+        dbname: '/tmp/server/local.db'
+        driver: sqlite
+
     server:
         dbname: '/tmp/server/server.db'
         driver: sqlite  
 
-filesystem:  
+filesystem:
+
+
+    local:
+        dir: '/tmp/server/local'
+
     writer:
         dir: '/tmp/server/writer'
         

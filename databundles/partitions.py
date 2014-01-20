@@ -203,7 +203,7 @@ class Partitions(object):
         try:
 
             partitions = [ self.partition(op, memory=kwargs.get('memory',False)) 
-                          for op in self._find_orm(pnq).all()];
+                          for op in self._find_orm(pnq).all()]
 
             if len(partitions) == 1:
                 p =  partitions.pop()

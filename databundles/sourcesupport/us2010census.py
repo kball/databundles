@@ -231,7 +231,7 @@ class Bundle(BuildBundle):
                         first = False
             
                     # Check that there are no extra lines. 
-                    lines_left = 0;
+                    lines_left = 0
                     for seg_number, g in gens: #@UnusedVariable
                         for row in g:
                             print 'Left Over', row

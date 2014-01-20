@@ -167,12 +167,21 @@ class RemoteLibrary(object):
 
     # @get('/resolve/<ref>')
     def resolve(self, ref):
-        '''Returns an identity given a vid, name, vname, cacke_key or object number'''
+        '''Returns an identity given a vid, name, vname, cache_key or object number'''
         from ..identity import Identity
 
         d =  self.get(self.url("/resolve/{}", ref))
 
-        return Identity.from_dict(d)
+        ident =  Identity.from_dict(d)
+
+        if ident.is_bundle:
+            return ident
+        else:
+            dsid = ident.as_dataset()
+            dsid.add_partition(ident)
+
+            return dsid
+
 
     # @get('/info/<ref>')
     def info(self, ref):

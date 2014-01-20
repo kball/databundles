@@ -1,8 +1,8 @@
-'''
+"""
 Created on Aug 31, 2012
 
 @author: eric
-'''
+"""
 import unittest
 from test_base import  TestBase  # @UnresolvedImport
 

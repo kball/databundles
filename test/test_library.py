@@ -220,17 +220,13 @@ class Test(TestBase):
 
         self.assertTrue(l.database.needs_dump())
       
-      
-
 
     def test_library_install(self):
         '''Install the bundle and partitions, and check that they are
         correctly installed. Check that installation is idempotent'''
       
         l = self.get_library()
-     
-        print l.info
-     
+
         l.put(self.bundle)
         l.put(self.bundle)
  
@@ -239,16 +235,12 @@ class Test(TestBase):
         self.assertIsNotNone(r)
         self.assertTrue(r is not False)
         self.assertEquals(r.identity.id_, r.identity.id_)
-        
-        print "Stored: ",  r.identity.name
-        
+
         # Install the partition, then check that we can fetch it
-        # a few different ways. 
+        # a few different ways.
         for partition in self.bundle.partitions:
             l.put(partition)
             l.put(partition)
-
-            print type(partition.identity), partition.identity
 
             r = l.get(partition.identity)
             self.assertIsNotNone(r)

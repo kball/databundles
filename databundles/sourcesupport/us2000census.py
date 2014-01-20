@@ -47,7 +47,7 @@ class Us2000CensusDimBundle(UsCensusDimBundle):
             for link in BeautifulSoup(df).find_all('a'):
                 tick('S')
                 if not link.get('href') or not link.string or not link.contents:
-                    continue;# Didn't get a sensible link
+                    continue# Didn't get a sensible link
                 # Only descend into links that name a state
                 state = link.get('href').strip('/')
               
@@ -78,7 +78,7 @@ class Us2000CensusDimBundle(UsCensusDimBundle):
         table = self.schema.table('geofile')
         header, unpack_str, length = table.get_fixed_unpack() #@UnusedVariable    
 
-        rows = 0;
+        rows = 0
 
         def test_zip_file(f):
             try:
@@ -156,7 +156,7 @@ class Us2000CensusFactBundle(UsCensusFactBundle):
             for link in BeautifulSoup(df).find_all('a'):
                 tick('S')
                 if not link.get('href') or not link.string or not link.contents:
-                    continue;# Didn't get a sensible link
+                    continue# Didn't get a sensible link
                 # Only descend into links that name a state
                 state = link.get('href').strip('/')
               
@@ -294,7 +294,7 @@ class Us2000CensusFactBundle(UsCensusFactBundle):
 
         geodim_gen = self.build_generate_geodim_rows(state) if geodim else None
      
-        rows = 0;
+        rows = 0
 
         def test_zip_file(f):
             import zipfile

@@ -117,6 +117,11 @@ class Test(TestBase):
         self.assertEquals(ident.vid, rl.resolve(ident.cache_key).vid)
         self.assertEquals(ident.vid, (rl.resolve(ident.sname).vid))
 
+        for p in self.bundle.partitions:
+            dsid = rl.resolve(p.identity.vid)
+            self.assertEquals(ident.vid, dsid.vid)
+            self.assertEquals(p.identity.vid, dsid.partition.vid)
+
     def test_load(self):
 
         from databundles.run import  get_runconfig, RunConfig
@@ -419,10 +424,13 @@ class Test(TestBase):
         self.stop_server()
 
         # Remote resolver only
-
         rr = RemoteResolver(local_resolver=None, remote_urls=[self.server_url])
+        self.assertIsNone(rr.resolve_ref_one(ident.vid)[1])
+
+        # Combined
+        rr = RemoteResolver(local_resolver=l.database.resolver, remote_urls=[self.server_url])
         self.assertEquals(ident.vid, rr.resolve_ref_one(ident.vid)[1].vid)
-        self.assertEquals('http://localhost:7979', rr.resolve_ref_one(ident.vid)[1].url)
+        self.assertIsNone(rr.resolve_ref_one(ident.vid)[1].url)
 
 
     def test_files(self):
@@ -463,12 +471,40 @@ class Test(TestBase):
         b = DbBundle(path)
         self.assertEquals(ck, b.identity.cache_key)
 
-
         # It should have been copied, so the fs should still have
         # it after disconnecting.
 
         fs.upstream = None
         self.assertTrue(fs.has(ck))
+
+    def test_library_get(self):
+        from databundles.library import new_library
+
+        vid = self.bundle.identity.vid
+
+        config = self.server_library_config()
+
+        # Create the library so we can get the same remote config
+        server_l = new_library(config)
+
+        server_l.put_bundle(self.bundle)
+
+        # Local only; no connection to server
+        local_l  = new_library(self.server_rc.library("local"))
+
+        remote_l = new_library(self.server_rc.library("reader"))
+
+        self.assertEquals(vid, server_l.resolve(vid).vid)
+        self.assertIsNone(local_l.resolve(vid))
+        self.assertIsNone(remote_l.resolve(vid))
+
+        self.start_server()
+
+        self.assertEquals(vid, remote_l.resolve(vid).vid)
+
+        b = remote_l.get(vid)
+
+        print b.identity.fqname
 
 
     # =======================

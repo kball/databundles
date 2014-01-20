@@ -471,7 +471,10 @@ class RemoteResolver(object):
 
         if self.local_resolver:
             ip,ident = self.local_resolver.resolve_ref_one(ref)
-            idents = [ident]
+            if ident:
+                idents = [ident]
+            else:
+                idents = []
         else:
             ip = Identity.classify(ref)
             idents = []

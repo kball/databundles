@@ -1,8 +1,8 @@
-'''
+"""
 Created on Jun 22, 2012
 
 @author: eric
-'''
+"""
 import unittest
 from  testbundle.bundle import Bundle
 from databundles.identity import * #@UnusedWildImport
@@ -137,8 +137,12 @@ class TestBase(unittest.TestCase):
             return
         
         a = RemoteLibrary(self.server_url)
-       
-        is_debug = a.get_is_debug()
+
+        try:
+            is_debug = a.get_is_debug()
+        except ConnectionError:
+            # Already closed:
+            return
   
         if not is_debug:
             logger.info("Server is not debug, won't stop")

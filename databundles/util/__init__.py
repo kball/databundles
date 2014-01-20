@@ -884,10 +884,10 @@ def daemonize(f, args,  rc, prog_name='databundles'):
             )
         
       
-        os.chown(log_file, uid, gid);
-        os.chown(lib_dir, uid, gid);
-        os.chown(run_dir, uid, gid);
-        os.chown(log_dir, uid, gid);
+        os.chown(log_file, uid, gid)
+        os.chown(lib_dir, uid, gid)
+        os.chown(run_dir, uid, gid)
+        os.chown(log_dir, uid, gid)
 
         setproctitle.setproctitle(prog_name)
                 

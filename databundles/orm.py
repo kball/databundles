@@ -283,8 +283,8 @@ class Dataset(Base):
 def _clean_flag( in_flag):
     
     if in_flag is None or in_flag == '0':
-        return False;
-    
+        return False
+
     return bool(in_flag)
 
 class Column(Base):
@@ -684,7 +684,7 @@ Columns:
             regular expression to  parsing a fixed width file.'''
             import re
 
-            pos = 0;
+            pos = 0
             regex = ''
             header = []
             

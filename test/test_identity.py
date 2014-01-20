@@ -1,8 +1,8 @@
-'''
+"""
 Created on Jul 6, 2013
 
 @author: eric
-'''
+"""
 import unittest
 from databundles.identity import *
 
@@ -304,6 +304,20 @@ class Test(unittest.TestCase):
         ident.locations.set(LocationRef.LOCATION.SOURCE)
         self.assertEquals(' SLR', str(ident.locations))
 
+        # Partitions, converting to datasets
+
+        ident = Identity(name, dn)
+        pi = ident.as_partition(8, time='time',
+                                space='space',
+                                format='hdf')
+
+        self.assertEquals('source.com-foobar-orig-time-space-hdf-0.0.1~p002Bi008001', pi.fqname)
+
+        iid = pi.as_dataset()
+
+        self.assertEquals(ident.fqname, iid.fqname)
+
+
     def test_identity_from_dict(self):
         from databundles.partition.sqlite import SqlitePartitionIdentity
         from databundles.partition.hdf import HdfPartitionIdentity
@@ -407,8 +421,6 @@ class Test(unittest.TestCase):
         self.assertIsInstance(ip.version, Spec)
         self.assertEquals('source.com-foobar-orig',ip.sname)
         self.assertIsNone(ip.vname)
-
-
 
 
     def test_bundle_build(self):

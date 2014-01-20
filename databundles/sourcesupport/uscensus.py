@@ -129,7 +129,7 @@ class UsCensusBundle(BuildBundle):
         else:
             pass
 
-        chariter = (int(chariter) if chariter.strip()  else  -1) + 1;
+        chariter = (int(chariter) if chariter.strip()  else  -1) + 1
         cifsn = (int(cifsn) if cifsn.strip()  else  -1) + 1
 
         geoid= ("{:d}{:02d}{:03d}{:02d}{:03d}{:02d}"
@@ -390,7 +390,7 @@ class UsCensusDimBundle(UsCensusBundle):
             try:
                 # ignore_first removes the first id field from the header. We only need
                 # it here on the first call to tempfile, since the object is cached. 
-                ptmtf = partition.table_map.tempfile(suffix=state,ignore_first=True);
+                ptmtf = partition.table_map.tempfile(suffix=state,ignore_first=True)
                 if ptmtf.exists:
                     tf.delete()
             except:
@@ -474,7 +474,7 @@ class UsCensusDimBundle(UsCensusBundle):
         import time
         import struct
         t_start = time.time()
-        row_i = 0;
+        row_i = 0
         for partition in  self.geo_partition_map().values(): 
             
             # Get a handle on the dmb database that translated hash values to 
@@ -487,8 +487,8 @@ class UsCensusDimBundle(UsCensusBundle):
 
                 if not row['hash']:
                     print partition.table.name, row
-                    continue;
-          
+                    continue
+
                 dbm[str(row['hash'])] = str(row[0])
                 if row_i % 1000 == 0:
                     self.log("Rehash "+partition.table.name+" "+
@@ -503,11 +503,11 @@ class UsCensusDimBundle(UsCensusBundle):
         After translating the rows, inserts the row into the main database. 
         '''
         import time
-        rcp = self.get_record_code_partition();
+        rcp = self.get_record_code_partition()
 
         translators = []
         for col in rcp.table.columns[4:]:
-            name = col.name.replace('_id','');
+            name = col.name.replace('_id','')
             partition = self.partitions.find_table(name)
 
             if not partition:
@@ -610,9 +610,9 @@ class UsCensusDimBundle(UsCensusBundle):
             force = False
 
         hash_set = set()
-        row_i = 0;
-        primary_key = 0;
-        
+        row_i = 0
+        primary_key = 0
+
         partition.database.dbm(partition.table).delete()
         dbm = partition.database.dbm(partition.table).writer
         
@@ -691,7 +691,7 @@ class UsCensusDimBundle(UsCensusBundle):
             if partition.table.name == 'record_code':
                 record_code_partition = partition
                 
-        return record_code_partition;
+        return record_code_partition
 
     def build_generate_geodim_rows(self, state):
         '''Generate the rows that were created to link the geo split files with the
@@ -756,8 +756,8 @@ class UsCensusDimBundle(UsCensusBundle):
                 pass
                 vals = [c.default for c in table.columns]
                 vals[-1] = self.row_hash(vals)
-                vals[0] = 0;
-                
+                vals[0] = 0
+
                 ins = insert_or_ignore(table.name, table.columns)
                 db = partition.database
                 db.dbapi_cursor.execute(ins, vals)
@@ -1025,8 +1025,8 @@ class UsCensusFactBundle(UsCensusBundle):
             
             if table.data.get("split_table", False) or table.name == 'geofile':
                 # Don't look at geo dim tables
-                continue;
-   
+                continue
+
             if segment != int(table.data['segment']):
                 last_col = 4
                 segment = int(table.data['segment'])

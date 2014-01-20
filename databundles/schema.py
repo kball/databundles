@@ -10,8 +10,8 @@ from databundles.orm import Column
 def _clean_flag( in_flag):
     
     if in_flag is None or in_flag == '0':
-        return False;
-    
+        return False
+
     return bool(in_flag)
 
 def _clean_int(i):
@@ -342,8 +342,8 @@ class Schema(object):
                           **kwargs
                           )
 
-            at.append_column(ac);
-            
+            at.append_column(ac)
+
             if column.foreign_key:
                 fk = column.foreign_key
                 fks = "{}.{}_id".format(fk.capitalize(), fk)
@@ -462,7 +462,7 @@ class Schema(object):
 
         new_table = True
         last_table = None
-        line_no = 1; # Accounts for file header. Data starts on line 2
+        line_no = 1 # Accounts for file header. Data starts on line 2
 
         errors = []
         warnings = []
@@ -849,7 +849,7 @@ class {name}(Base):
             o = ""
             for col in table.columns:
                 opts = []
-                optstr = '';
+                optstr = ''
 
                 if col.is_primary_key: opts.append("primary_key=True") 
                 if col.foreign_key: opts.append("ForeignKey('{tablelc}')".format(

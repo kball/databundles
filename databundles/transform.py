@@ -23,7 +23,7 @@ def coerce_int(v):
         return v
     
 def coerce_int_except(v, msg):   
-    '''Convert to an int, throw an exception if it isn't'''
+    """Convert to an int, throw an exception if it isn't"""
    
     try:
         return int(v)

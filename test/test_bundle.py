@@ -1,8 +1,8 @@
-'''
+"""
 Created on Jun 22, 2012
 
 @author: eric
-'''
+"""
 import unittest
 from  testbundle.bundle import Bundle
 from databundles.identity import * #@UnusedWildImport
@@ -201,7 +201,7 @@ class Test(TestBase):
      
         for i, test in enumerate(tests): 
             table_name, truth, row = test
-            table =  self.bundle.schema.table(table_name);
+            table =  self.bundle.schema.table(table_name)
             vd = table._get_validator()
             
             if truth:
@@ -233,7 +233,7 @@ class Test(TestBase):
      
         for i, test in enumerate(tests): 
             table_name, truth, row = test
-            table =  self.bundle.schema.table(table_name);
+            table =  self.bundle.schema.table(table_name)
             vd =table._get_validator(and_join=False)
             if truth:
                 self.assertTrue(vd(row), "Test {} not 'true' for table '{}': {}".format(i+1, table_name,row))
@@ -251,8 +251,8 @@ class Test(TestBase):
         
         for i, test in enumerate(tests): 
             table_name, hashed_str, row = test
-            table =  self.bundle.schema.table(table_name);
-           
+            table =  self.bundle.schema.table(table_name)
+
             m = hashlib.md5()
             m.update(hashed_str)
             
@@ -367,7 +367,7 @@ class Test(TestBase):
 
         
     def test_runconfig(self):
-        '''Check the the RunConfig expands  the library configuration'''
+        """Check the the RunConfig expands  the library configuration"""
         from databundles.run import  get_runconfig, RunConfig
         
         rc = get_runconfig((os.path.join(self.bundle_dir,'test-run-config.yaml'),RunConfig.USER_CONFIG))

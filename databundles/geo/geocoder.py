@@ -183,7 +183,7 @@ class Geocoder(object):
         street_type = ps.street_type
         number = ps.number
         
-        q = """SELECT  * FROM segments WHERE name = ?""";
+        q = """SELECT  * FROM segments WHERE name = ?"""
 
         # If this fails, the "city" is probably an unincorporated place, which is in the county. 
         try: in_city = self.by_name[ps.city.title()]
@@ -232,8 +232,8 @@ class Geocoder(object):
 
         q = """SELECT  * FROM nodes 
         WHERE street_1 = ? and street_2 = ?
-        OR street_1 = ? and street_2 = ? LIMIT 1""";
-      
+        OR street_1 = ? and street_2 = ? LIMIT 1"""
+
         intr = self.addresses.query(q, ps1.street_name, ps2.street_name, ps2.street_name, ps1.street_name).first()
 
         if intr:
@@ -288,7 +288,7 @@ class Geocoder(object):
     def _do_search(self, queries, number, street, street_type, city, state):
         from collections import defaultdict
         if not number:
-            return [];
+            return []
 
         candidates = defaultdict(list)
 
@@ -349,7 +349,7 @@ class Geocoder(object):
         street_type = ps.street_type
 
         if not number:
-            return [];
+            return []
 
         city = city.title()
         street = street.title()
@@ -392,7 +392,7 @@ class Geocoder(object):
     def _address_geocode_parts(self, number, street, street_type, city, state):
 
         if not number:
-            return [];
+            return []
 
         city = city.title()
         street = street.title()

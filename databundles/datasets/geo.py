@@ -151,8 +151,9 @@ class UsState:
         return self.row['stusab']
             
     def __str__(self):
-        return "<{}:{}>".format('USState',self.row['name']);
-        
+        return "<{}:{}>".format('USState',self.row['name'])
+
+
 class UsCounty(object):
     
     def __init__(self,library, row):

@@ -315,11 +315,11 @@ class SqliteDatabase(RelationalDatabase):
     def dbapi_close(self):
         '''Close both the cursor and the connection'''
         if  self._dbapi_cursor:
-            self._dbapi_cursor.close();
+            self._dbapi_cursor.close()
             self._dbapi_cursor = None
             
         if  self._dbapi_connection:
-            self._dbapi_connection.close();
+            self._dbapi_connection.close()
             self._dbapi_connection = None    
 
         

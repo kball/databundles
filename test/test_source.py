@@ -1,8 +1,8 @@
-'''
+"""
 Created on Jun 30, 2012
 
 @author: eric
-'''
+"""
 
 import unittest
 import os.path
