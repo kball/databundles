@@ -102,7 +102,7 @@ class Ckan(object):
             'author_email' : bundle.identity.creator,
             'author': props.get('author',None),
             'maintainer_email' : bundle.identity.creator,
-            'maintainer': props.get('maintainer',None),            
+            'maintainer': props.get('maintainer',None),
             'extras': {
                 'bundle/type' : 'bundle',
                 'bundle/source' : bundle.identity.source,
@@ -129,7 +129,7 @@ class Ckan(object):
         
         old_extras = old.get('extras', {})
         if len(old_extras): del old['extras'] 
-        new_extras = new.get('extras', {})      
+        new_extras = new.get('extras', {})
         if len(new_extras): del new['extras']    
 
         # Copy over the new items

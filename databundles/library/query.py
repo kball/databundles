@@ -6,6 +6,8 @@ of the bundles that have been installed into it.
 # Revised BSD License, included in this distribution as LICENSE.txt
 
 
+from ..util import lru_cache
+
 
 class _qc_attrdict(object):
 
@@ -316,6 +318,7 @@ class Resolver(object):
 
         return ip, out
 
+
     def resolve_ref_all(self, ref):
 
         return self._resolve_ref(ref)
@@ -325,6 +328,8 @@ class Resolver(object):
 
         '''
         import semantic_version
+
+
         ip, refs = self.resolve_ref_all(ref)
 
         if isinstance(ip.version, semantic_version.Spec):
@@ -343,47 +348,6 @@ class Resolver(object):
                 return ip, None
             else:
                 return ip, versions[best]
-
-
-    def get_id(self, id_):
-        from ..identity import Identity
-
-        queries = [QueryCommand().identity(vid=id_),
-                   QueryCommand().partition(vid=id_),
-                   QueryCommand().identity(id=id_),
-                   QueryCommand().partition(id=id_)]
-
-        for q in queries:
-
-            r = self.find(q)
-
-            if len(r) > 0:
-                r  = r[0]
-                return Identity.from_dict(r['identity']),\
-                       Identity.from_dict(r['partition']) if 'partition' in r else None
-
-
-        return False, False
-
-    def get_name(self, name):
-        from ..identity import Identity
-
-        queries = [QueryCommand().identity(vname=name),
-                   QueryCommand().partition(vname=name),
-                   QueryCommand().identity(name=name),
-                   QueryCommand().partition(name=name)]
-
-        for q in queries:
-
-            r = self.find(q)
-
-            if len(r) > 0:
-                r  = r[0]
-                return Identity.from_dict(r['identity']),\
-                       Identity.from_dict(r['partition']) if 'partition' in r else None
-
-        return False, False
-
 
     def find(self, query_command):
         '''Find a bundle or partition record by a QueryCommand or Identity
@@ -490,6 +454,56 @@ class Resolver(object):
         return query
 
 
+class RemoteResolver(object):
+    '''Find a reference to a dataset or partition based on a string,
+    which may be a name or object number '''
+
+    def __init__(self, local_resolver, remote_urls):
+        self.local_resolver = local_resolver
+        self.urls = remote_urls
 
 
+    def resolve_ref_one(self, ref):
+        from requests.exceptions import ConnectionError
+        from databundles.client.rest import RemoteLibrary
+        import semantic_version
+        from ..identity import Identity
+
+        if self.local_resolver:
+            ip,ident = self.local_resolver.resolve_ref_one(ref)
+            idents = [ident]
+        else:
+            ip = Identity.classify(ref)
+            idents = []
+
+        # If the local returned a result, we only need to go to the
+        # remote if this is a semantic version request, to possible
+        # get a newer version
+        if len(idents) == 0 or isinstance(ip.version, semantic_version.Spec):
+            if self.urls:
+                for url in self.urls:
+                    rl = RemoteLibrary(url)
+
+                    try:
+                        ident = rl.resolve(ref)
+                    except ConnectionError:
+                        continue
+
+                    if ident:
+                        ident.url = url
+                        idents.append(ident)
+
+        if not idents:
+            return ip, None
+
+        idents = sorted(idents, reverse=True, key=lambda x: x.on.revision )
+
+        # Since we sorted by revision, and the internal resolutions take care of semantic versioning,
+        # if this is a semantic version request, the idents array should be sorted with the highest revision number
+        # for the spec at the top
+        return ip, idents.pop(0)
+
+
+    def find(self, query_command):
+        raise NotImplementedError
 

@@ -456,7 +456,7 @@ class BuildBundle(Bundle):
 
         if not self.config.group('build'): 
             raise ConfigurationError("Configuration does not have 'build' group")
-        if not self.config.group('build').get('sources',None): 
+        if not self.config.group('build').get('sources',None):
             raise ConfigurationError("Configuration does not have 'build.sources' group")
             
         return self.config.build.sources

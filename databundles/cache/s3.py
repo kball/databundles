@@ -29,7 +29,9 @@ class S3Cache(Cache, RemoteMarker):
 
         self.conn = S3Connection(self.access_key, self.secret, is_secure = False )
         self.bucket = self.conn.get_bucket(self.bucket_name)
-  
+
+        self.options = kwargs.get('options',None)
+
         self.cdn = None
         if cdn:
             self._init_cdn(cdn)
@@ -323,6 +325,16 @@ class S3Cache(Cache, RemoteMarker):
         key = self._get_boto_key(rel_path)
         if key:
             key.delete()   
+
+    def clean(self):
+        '''Delete Everything'''
+
+        for e in self.bucket.list(self.prefix):
+            path = e.name.replace(self.prefix,'',1).strip('/')
+            if path.startswith('_'):
+                continue
+
+            self.remove(path)
 
         
     def list(self, path=None,with_metadata=False, include_partitions=False):

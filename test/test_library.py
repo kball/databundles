@@ -407,7 +407,7 @@ class Test(TestBase):
         db.drop()
         db.create()
 
-        db.install_bundle(self.bundle)
+        l.put_bundle(self.bundle)
 
         #for _, ident in db.list().items():
         #    print '--', ident.fqname
@@ -434,6 +434,17 @@ class Test(TestBase):
         ip, result = r.resolve_ref_one('source/dataset-subset-variation-0.0.1/tthree.db')
         self.assertEquals('source-dataset-subset-variation-tthree-0.0.1~piEGPXmDC8001001',str(result.partition))
 
+
+        # Now in the library, which has a slightly different interface.
+
+        ident = l.resolve(vname)
+        self.assertEquals(vname, ident.vname)
+
+        ident = l.resolve('source-dataset-subset-variation-0.0.1~diEGPXmDC8001')
+        self.assertEquals('diEGPXmDC8001', ident.vid)
+
+        ident = l.resolve('source-dataset-subset-variation-tthree-0.0.1~piEGPXmDC8001001')
+        self.assertEquals('piEGPXmDC8001001', ident.vid)
 
         ##
         ## Test semantic version matching
@@ -588,8 +599,8 @@ class Test(TestBase):
         config = rc.library('default')
         library =  new_library(config)
 
-        print library.remote
-        print library.remote.last_upstream()
+        print library.upstream
+        print library.upstream.last_upstream()
         print library.cache
         print library.cache.last_upstream()  
                                            

@@ -31,7 +31,7 @@ class DumperThread (threading.Thread):
 
         self.library.logger.debug("Run Dumper")
 
-        if not self.library.remote:
+        if not self.library.upstream:
             self.library.logger.debug("No remote")
             return
 

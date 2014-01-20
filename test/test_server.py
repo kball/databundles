@@ -68,7 +68,6 @@ class Test(TestBase):
     
         return True
 
-
     def test_connection(self):
         '''
         Test some of the server's test functions
@@ -85,6 +84,11 @@ class Test(TestBase):
 
         with self.assertRaises(Exception):
             a.get_test_exception()
+
+        r = a.get_root()
+
+        self.assertEquals('devtest.sandiegodata.org', r['upstream']['bucket'])
+        self.assertEquals('library-test', r['upstream']['prefix'])
 
     def test_resolve(self):
         import re
@@ -108,18 +112,18 @@ class Test(TestBase):
 
         ident = self.bundle.identity
 
-        self.assertEquals(ident.vid, Identity.from_dict(rl.resolve(ident.vid)).vid)
-        self.assertEquals(ident.vid, Identity.from_dict(rl.resolve(ident.vname)).vid)
-        self.assertEquals(ident.vid, Identity.from_dict(rl.resolve(ident.cache_key)).vid)
-        self.assertEquals(ident.vid, Identity.from_dict(rl.resolve(ident.sname)).vid)
+        self.assertEquals(ident.vid, rl.resolve(ident.vid).vid)
+        self.assertEquals(ident.vid, rl.resolve(ident.vname).vid)
+        self.assertEquals(ident.vid, rl.resolve(ident.cache_key).vid)
+        self.assertEquals(ident.vid, (rl.resolve(ident.sname).vid))
 
     def test_load(self):
-        import re
-        import time
+
         from databundles.run import  get_runconfig, RunConfig
         from databundles.client.rest import RemoteLibrary
         from databundles.cache import new_cache
         from databundles.util import md5_for_file
+        from databundles.identity import Identity
 
         self.start_server()
 
@@ -168,7 +172,7 @@ class Test(TestBase):
         self.assertNotIn('source-dataset-subset-variation-0.0.1~diEGPXmDC8001',
                          set([i.fqname for i in rl.list()]))
 
-        # Load from  S3, directly
+        # Load from  S3, directly in to the local library
 
         identity.add_md5(md5_for_file(fn))
 
@@ -188,23 +192,13 @@ class Test(TestBase):
         self.assertIn('source-dataset-subset-variation-0.0.1~diEGPXmDC8001',
                       set([i.fqname for i in rl.list()]))
 
-    def test_find_upstream(self):
+        # Check that we can get the record from the library
 
-        from databundles.run import  get_runconfig
-        from databundles.filesystem import Filesystem
-        from databundles.cache import RemoteMarker, new_cache
+        self.assertEquals(identity.vid, Identity.from_dict(rl.resolve(identity.vid)).vid)
+        self.assertEquals(identity.vid, Identity.from_dict(rl.resolve(identity.vname)).vid)
+        self.assertEquals(identity.vid, Identity.from_dict(rl.resolve(identity.cache_key)).vid)
+        self.assertEquals(identity.vid, Identity.from_dict(rl.resolve(identity.sname)).vid)
 
-        def get_cache(fsname):
-            rc = get_runconfig((os.path.join(self.bundle_dir,'test-run-config.yaml'),RunConfig.USER_CONFIG))
-            config = rc.filesystem(fsname)
-            cache = new_cache(config)
-            return cache
-
-        cache = get_cache("cached-compressed-s3")
-
-        print cache
-
-        print cache.get_upstream(RemoteMarker)
 
     def test_caches(self):
         '''Basic test of put(), get() and has() for all cache types'''
@@ -260,49 +254,49 @@ class Test(TestBase):
         r = cache.put(fn, 'a')
 
 
-    def test_by_url(self):
-
-        import pprint
-        import requests
-
-        config = self.start_server()
-
-        url = 'http://{}:{}{{}}'.format(config['host'], config['port'])
-
-        r = requests.get(url.format('/test/echo/foobar'), params={})
-
-        print r.json()
-
-
     def test_simple_install(self):
-
-        from databundles.cache.remote import RestCache
+        from databundles.client.rest import RemoteLibrary
+        from databundles.cache.remote import RestReadCache
         
         config = self.start_server()
-        
+
         # Create the library so we can get the same remote config
         l = new_library(config)
-        s3 = l.remote.last_upstream()
 
-        print "Starting server with config: {}".format(config.to_dict())
+        s3 = l.upstream.last_upstream()
 
-        api = RestCache(upstream=s3, **config)
+        s3.clean()
 
-        r =  api.put_bundle(self.bundle)
-        print r
-        self.web_exists(s3,self.bundle.identity.cache_key)
+        print "S3 cache ", str(s3)
+
+        if not s3.has(self.bundle.identity.cache_key):
+            print 'Uploading: ', self.bundle.identity.cache_key
+            s3.put(self.bundle.database.path,self.bundle.identity.cache_key)
+            self.web_exists(s3,self.bundle.identity.cache_key)
+
+        for p in self.bundle.partitions:
+            if not s3.has(p.identity.cache_key):
+                print 'Uploading: ', p.identity.cache_key
+                s3.put(p.database.path,p.identity.cache_key)
+                self.web_exists(s3,p.identity.cache_key)
+            else:
+                print 'Has      : ', p.identity.cache_key
+
+        #
+        # Kick the remote library to load the dataset
+        #
+        rl = RemoteLibrary(self.server_url)
+        ident = self.bundle.identity
+        ident.add_md5(file=self.bundle.database.path)
+        rl.load_dataset(ident)
+        self.assertIn('source-dataset-subset-variation-0.0.1~diEGPXmDC8001',
+                      set([i.fqname for i in rl.list()]))
 
 
-        for partition in self.bundle.partitions:
-            r =  api.put_partition(partition)
 
-            r = api.get(partition.identity.cache_key)
 
-            self.web_exists(s3,partition.identity.cache_key )
-            #os.remove(r)
-  
-        return 
-  
+        return
+
         # Try variants of find. 
         r = api.find(self.bundle.identity.name)
         self.assertEquals(self.bundle.identity.name, r[0].name)
@@ -313,7 +307,172 @@ class Test(TestBase):
         for partition in self.bundle.partitions:
             r = api.find((QueryCommand().partition(name = partition.identity.name)).to_dict())
             self.assertEquals(partition.identity.name, r[0].name)
-  
+
+    def test_push(self):
+        from databundles.identity import Identity
+        from functools import partial
+        config = self.server_library_config()
+
+        # Create the library so we can get the same remote config
+        l = new_library(config)
+        s3 = l.upstream.last_upstream()
+        print l.info
+        db = l.database
+        db.enable_delete = True
+        db.drop()
+        db.create()
+
+        s3 = l.upstream.last_upstream()
+        s3.clean()
+
+        l.put_bundle(self.bundle)
+
+        def push_cb(expect, action, metadata, time):
+            import json
+
+            if action == 'Pushed':
+                rate = int(float(metadata['size']) / time / float( 1024*1024))
+            else:
+                rate = None
+
+            self.assertIn(action, expect)
+
+            identity = Identity.from_dict(json.loads(metadata['identity']))
+            print action, identity.cache_key, metadata['size'], '{} Mb/s'.format(rate) if rate else ''
+
+        def throw_cb(action, metadata, time):
+            raise Exception("Push shonld not run")
+
+        l.push(cb=partial(push_cb,('Pushed','Pushing')))
+
+        # ALl should be pushed, so suhould not run
+        l.push(cb=throw_cb)
+
+        # Resetting library, but not s3, should already have all
+        # records
+        db = l.database
+        db.enable_delete = True
+        db.drop()
+        db.create()
+        l.put_bundle(self.bundle)
+
+        l.push(cb=partial(push_cb,('Has')))
+
+        self.web_exists(s3,self.bundle.identity.cache_key)
+
+        for p in self.bundle.partitions:
+            self.web_exists(s3,p.identity.cache_key)
+
+
+    def test_joint_resolve(self):
+        '''Test resolving from either a remote or local library, from the local interface '''
+
+        from databundles.identity import Identity
+        from databundles.client.rest import RemoteLibrary
+        from databundles.library.query import RemoteResolver
+
+        config = self.server_library_config()
+
+        # Create the library so we can get the same remote config
+        l = new_library(config)
+
+        s3 = l.upstream.last_upstream()
+        print l.info
+        db = l.database
+        db.enable_delete = True
+        db.clean()
+
+        l.put_bundle(self.bundle)
+
+        # This might not do anything if the files already are in s3
+        def push_cb(action, metadata, time):
+            print action, metadata['fqname']
+
+        l.push(cb=push_cb)
+
+        # Check they are on the web
+        self.web_exists(s3,self.bundle.identity.cache_key)
+        for p in self.bundle.partitions:
+            self.web_exists(s3,p.identity.cache_key)
+
+        # Check the basic resolvers
+        ident = self.bundle.identity
+        self.assertEquals(ident.vid, l.resolve(ident.vid).vid)
+
+        self.start_server()
+
+        rl = RemoteLibrary(self.server_url)
+        self.assertEquals(ident.vid, rl.resolve(ident.vname).vid)
+
+        # That's the basics, now test the primary use case with the remote resolver.
+
+        # Remote resolver only
+        rr = RemoteResolver(local_resolver=None, remote_urls=[self.server_url])
+        self.assertEquals(ident.vid, rr.resolve_ref_one(ident.vid)[1].vid)
+        self.assertEquals('http://localhost:7979', rr.resolve_ref_one(ident.vid)[1].url)
+
+        # Local Resolver only
+        rr = RemoteResolver(local_resolver=l.database.resolver, remote_urls=None)
+        self.assertEquals(ident.vid, rr.resolve_ref_one(ident.vid)[1].vid)
+        self.assertIsNone(rr.resolve_ref_one(ident.vid)[1].url)
+
+        self.stop_server()
+
+        # Remote resolver only
+
+        rr = RemoteResolver(local_resolver=None, remote_urls=[self.server_url])
+        self.assertEquals(ident.vid, rr.resolve_ref_one(ident.vid)[1].vid)
+        self.assertEquals('http://localhost:7979', rr.resolve_ref_one(ident.vid)[1].url)
+
+
+    def test_files(self):
+        '''
+        Test some of the server's file functions
+        :return:
+        '''
+
+        from databundles.cache import new_cache
+        from databundles.bundle import DbBundle
+
+        fs = new_cache(self.server_rc.filesystem('rrc-fs'))
+        fs.clean()
+        remote = new_cache(self.server_rc.filesystem('rrc'))
+
+        config = self.start_server()
+
+        l = new_library(config)
+
+        l.put_bundle(self.bundle)
+
+        ident = self.bundle.identity
+        ck = ident.cache_key
+
+        # The remote is tied to the REST server, so it has the
+        # bundle, but the new filesystem cache does not.
+
+        self.assertFalse(fs.has(ck))
+        self.assertTrue(remote.has(ck))
+
+        # But if we tie them together, the FS cache should have it
+
+        fs.upstream = remote
+        self.assertTrue(fs.has(ck))
+
+        path = fs.get(ck)
+
+        b = DbBundle(path)
+        self.assertEquals(ck, b.identity.cache_key)
+
+
+        # It should have been copied, so the fs should still have
+        # it after disconnecting.
+
+        fs.upstream = None
+        self.assertTrue(fs.has(ck))
+
+
+    # =======================
+
     def x_test_remote_library(self):
    
         # This test does not work with the threaded test server. 
@@ -374,10 +533,7 @@ class Test(TestBase):
 
         self.assertTrue(bool(r))
         self.assertTrue(os.path.exists(r.partition.database.path))
-        
-        
-        
-   
+
     def x_test_remote_library_partitions(self):
 
         self.start_server()
@@ -449,7 +605,7 @@ class Test(TestBase):
 
     def _test_put_bundle(self, name, remote_config=None):
         from databundles.bundle import DbBundle
-        from databundles.library import QueryCommand
+        from databundles.library.query import QueryCommand
         
         rm_rf('/tmp/server')
         
@@ -495,9 +651,6 @@ class Test(TestBase):
     def x_test_put_bundle_remote(self):
         return self._test_put_bundle('default-remote', self.rc.accounts)
 
-
-
-            
     def x_test_remote_cache(self):
         self.start_server(name='default-remote')
     
@@ -566,7 +719,6 @@ class Test(TestBase):
 
         self.assertEquals("source-dataset-subset-variation-ca0d",b.identity.name )
 
-        
     def x_test_dump(self):
         import time
         import logging 

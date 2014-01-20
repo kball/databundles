@@ -107,7 +107,7 @@ class Resolver(ResolverInterface):
 
     def url(self, name):
         
-        dsi = self.library.remote.get_ref(name)
+        dsi = self.library.upstream.get_ref(name)
 
         if not dsi:
             return None
@@ -123,7 +123,7 @@ class Resolver(ResolverInterface):
     def csv_parts(self, name, tid):
         import requests
         
-        dsi = self.library.remote.get_ref(name)
+        dsi = self.library.upstream.get_ref(name)
 
         if not dsi:
             return None

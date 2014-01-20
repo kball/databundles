@@ -2,30 +2,30 @@ library:
   
     writer:
         filesystem: writer
-        database: writer  
+        database: writer
         upstream:
           host: localhost
-          port: 7979   
-          upstream: remote    
-  
+          port: 7979
+          upstream: remote
+
     reader:
         filesystem: reader
         database: reader  
-        upstream:
-          host: localhost   
-          port: 7979
+        remotes:
+          - http://localhost:7979
           
     default:
         filesystem: server
         database: server  
         host: localhost   
         port: 7979
-        remote:
+        upstream:
           options: [compress]
           prefix: library-test
           bucket: devtest.sandiegodata.org
           account: devtest.sandiegodata.org
-        
+
+
 
 
 database:
@@ -52,7 +52,13 @@ filesystem:
     server:
         dir: '/tmp/server/server'
    
-   
+
+    rrc-fs:
+      dir: '/tmp/server/remote'
+
+    rrc:
+      url: http://localhost:7979
+
     remote:
       prefix: server-test
       bucket: devtest.sandiegodata.org

@@ -251,7 +251,7 @@ def library_rebuild(args, l, config):
 
     
     l.database.enable_delete = True
-    if args.remote:
+    if args.upstream:
         prt("Rebuild library from remote")
         l.remote_rebuild()
     else:
@@ -311,7 +311,7 @@ def library_info(args, l, config, list_all=False):
         prt("Name:     {}",args.name)
         prt("Database: {}",l.database.dsn)
         prt("Cache:    {}",l.cache)
-        prt("Remote:   {}",l.remote if l.remote else 'None')
+        prt("Remote:   {}",l.upstream if l.upstream else 'None')
 
     
 def library_push(args, l, config):
@@ -323,7 +323,7 @@ def library_push(args, l, config):
     
     files_ = l.database.get_file_by_state(state)
     if len(files_):
-        prt("-- Pushing to {}",l.remote)
+        prt("-- Pushing to {}",l.upstream)
         for f in files_:
             
             if f.type_ not in ('partition','bundle'):

@@ -45,7 +45,7 @@ class Test(TestBase):
         for i in range(1,10): #@UnusedVariable
             try:
                 # An echo request to see if the server is running. 
-                a.test.echo('foobar').get(bar='baz') 
+                a.test.echo('foobar').get(bar='baz')
                 break
             except:
                 logger.info( 'Server not started yet, waiting')

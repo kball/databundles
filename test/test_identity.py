@@ -197,12 +197,12 @@ class Test(unittest.TestCase):
         pname = PartialPartitionName(time = 'time',
                                   space='space',
                                   table='table',
-                                  format='format'
+                                  format='csv'
                                   )
 
         part_name = pname.promote(name)
         
-        self.assertEquals('source.com-dataset-variation-table-time-space-format-0.0.1',part_name.vname) 
+        self.assertEquals('source.com-dataset-variation-table-time-space-csv-0.0.1',part_name.vname)
 
         # Cloning
 
@@ -233,7 +233,7 @@ class Test(unittest.TestCase):
 
         self.assertEquals('source.com-foobar-orig-0.0.1', ident.name.dict['vname'])
         
-        self.assertEquals({'id','vid','revision','name', 'vname',
+        self.assertEquals({'id','vid','revision','name', 'vname', 'cache_key',
                                'variation', 'dataset', 'source', 'version'},
                           set(ident.dict.keys()))
 
@@ -269,7 +269,7 @@ class Test(unittest.TestCase):
         ident = PartitionIdentity.new_subclass(part_name, pn)
 
 
-        self.assertEquals(set(['id','vid','revision',
+        self.assertEquals(set(['id','vid','revision', 'cache_key',
                                'name', 'vname', 'space', 'format',
                                'variation', 'dataset', 'source', 
                                'version', 'time']), 
@@ -326,18 +326,22 @@ class Test(unittest.TestCase):
 
         ident = Identity.from_dict(pidict)
         self.assertIsInstance(ident, SqlitePartitionIdentity)
+        self.assertEquals('source.com/foobar-orig-0.0.1.db', ident.cache_key)
 
         pidict['format'] = 'hdf'
         ident = Identity.from_dict(pidict)
         self.assertIsInstance(ident, HdfPartitionIdentity)
+        self.assertEquals('source.com/foobar-orig-0.0.1.hdf', ident.cache_key)
 
         pidict['format'] = 'csv'
         ident = Identity.from_dict(pidict)
         self.assertIsInstance(ident, CsvPartitionIdentity)
+        self.assertEquals('source.com/foobar-orig-0.0.1.csv', ident.cache_key)
 
         pidict['format'] = 'geo'
         ident = Identity.from_dict(pidict)
         self.assertIsInstance(ident, GeoPartitionIdentity)
+        self.assertEquals('source.com/foobar-orig-0.0.1.geodb', ident.cache_key)
 
 
     def test_split(self):
@@ -410,6 +414,7 @@ class Test(unittest.TestCase):
     def test_bundle_build(self):
         from  testbundle.bundle import Bundle
         from sqlalchemy.exc import IntegrityError
+        from databundles.dbexceptions import ConflictError
 
         bundle = Bundle()
         bundle.exit_on_fatal = False
@@ -427,7 +432,7 @@ class Test(unittest.TestCase):
             bp._new_orm_partition(PartialPartitionName(time = 't2', space=None))
 
 
-        with self.assertRaises(IntegrityError):
+        with self.assertRaises(ConflictError):
             with bundle.session:
                 bp._new_orm_partition(PartialPartitionName(time = 't1', space='s1'))
 
@@ -437,8 +442,8 @@ class Test(unittest.TestCase):
                  for p in bp._find_orm(pnq).all()]
 
 
-        self.assertEqual(set([u'source-dataset-subset-variation-t2-s1-0.0.1',
-                              u'source-dataset-subset-variation-t1-s1-0.0.1']),
+        self.assertEqual({'source-dataset-subset-variation-t2-s1-0.0.1',
+                          'source-dataset-subset-variation-t1-s1-0.0.1'},
                          set(names))
 
         names = [p.vname
@@ -449,16 +454,16 @@ class Test(unittest.TestCase):
         names = [p.vname
                  for p in bp._find_orm(PartitionNameQuery(time='t1',space=NameQuery.ANY)).all()]
 
-        self.assertEqual(set(['source-dataset-subset-variation-t1-s2-0.0.1',
+        self.assertEqual({'source-dataset-subset-variation-t1-s2-0.0.1',
                               'source-dataset-subset-variation-t1-0.0.1',
-                              'source-dataset-subset-variation-t1-s1-0.0.1']),
+                              'source-dataset-subset-variation-t1-s1-0.0.1'},
                          set(names))
 
 
         names = [p.vname
                  for p in bp._find_orm(PartitionNameQuery(time='t1',space=NameQuery.NONE)).all()]
 
-        self.assertEqual(set(['source-dataset-subset-variation-t1-0.0.1']),
+        self.assertEqual({'source-dataset-subset-variation-t1-0.0.1'},
                          set(names))
 
         # Start over, use a higher level function to create the partitions
@@ -484,9 +489,9 @@ class Test(unittest.TestCase):
         names = [p.vname
                  for p in bp._find_orm(PartitionNameQuery(time='t1',space=NameQuery.ANY)).all()]
 
-        self.assertEqual(set(['source-dataset-subset-variation-t1-s2-0.0.1',
+        self.assertEqual({'source-dataset-subset-variation-t1-s2-0.0.1',
                               'source-dataset-subset-variation-t1-0.0.1',
-                              'source-dataset-subset-variation-t1-s1-0.0.1']),
+                              'source-dataset-subset-variation-t1-s1-0.0.1'},
                          set(names))
 
 
@@ -511,11 +516,11 @@ class Test(unittest.TestCase):
         p = bp.find_or_new_hdf(time = 't2', space='s1')
         self.assertEquals('source-dataset-subset-variation-t2-s1-hdf-0.0.1~piEGPXmDC8003001', p.identity.fqname)
 
-        p = bp.find_or_new_csv(time = 't2', space='s1')
-        self.assertEquals('source-dataset-subset-variation-t2-s1-csv-0.0.1~piEGPXmDC8004001', p.identity.fqname)
-
         p = bp.find_or_new_geo(time = 't2', space='s1')
-        self.assertEquals('source-dataset-subset-variation-t2-s1-geo-0.0.1~piEGPXmDC8005001', p.identity.fqname)
+        self.assertEquals('source-dataset-subset-variation-t2-s1-geo-0.0.1~piEGPXmDC8004001', p.identity.fqname)
+
+        p = bp.find_or_new_csv(time = 't2', space='s1')
+        self.assertEquals('source-dataset-subset-variation-t2-s1-csv-0.0.1~piEGPXmDC8005001', p.identity.fqname)
 
 
         # Ok! Build!

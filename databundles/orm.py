@@ -455,7 +455,8 @@ class Column(Base):
         self.vid = str(con)
         self.id = str(con.rev(None))
 
-    def to_dict(self):
+    @property
+    def dict(self):
         x =  {k:v for k,v in self.__dict__.items() if k in ['id','vid','sequence_id', 't_vid', 'name', 'description', 'keywords', 'datatype', 'size', 'is_primary_key', 'data']}
         x['schema_type'] = self.schema_type
         return x
@@ -543,8 +544,9 @@ class Table(Base):
             self.name = self.mangle_name(self.name)
 
         self.init_on_load()
-    
-    def to_dict(self):
+
+    @property
+    def dict(self):
         return {k:v for k,v in self.__dict__.items() if k in ['id_','vid', 'sequence_id', 'name', 
                                                               'vname', 'description', 'keywords', 'installed', 'data']}
     
@@ -558,12 +560,12 @@ id   : {id_}
 vid  : {vid}   
 name : {name} 
 Columns:      
-""".format(**self.to_dict())
+""".format(**self.dict)
         
         for c in self.columns:
             # ['id','vid','sequence_id', 't_vid', 'name', 'description', 'keywords', 'datatype', 'size', 'is_primary_kay', 'data']}
 
-            x += "   {sequence_id:3d} {name:12s} {schema_type:8s} {description}\n".format(**c.to_dict())
+            x += "   {sequence_id:3d} {name:12s} {schema_type:8s} {description}\n".format(**c.dict)
          
         return x   
         
@@ -916,8 +918,9 @@ class File(Base, SavableMixin):
       
     def __repr__(self):
         return "<file: {}; {}>".format(self.path, self.state)
-    
-    def to_dict(self):
+
+    @property
+    def dict(self):
 
         return  dict((col, getattr(self, col)) for col 
                      in ['path', 'source_url', 'process', 'state', 'content_hash', 'modified', 'size', 'group', 'ref', 'type_','data'])

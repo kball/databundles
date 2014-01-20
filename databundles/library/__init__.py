@@ -34,8 +34,7 @@ def _new_library(config):
 
     database.create()
 
-    remote = new_cache(config['remote']) if 'remote' in config else None
-
+    upstream = new_cache(config['upstream']) if 'upstream' in config else None
 
     config['name'] = config['_name'] if '_name' in config else 'NONE'
 
@@ -43,19 +42,16 @@ def _new_library(config):
         if key in config:
             del config[key]
 
+    if upstream and (not isinstance(upstream, RemoteMarker)
+                   and not isinstance(upstream.last_upstream(), RemoteMarker)):
+        raise ConfigurationError("Library upstream must have a RemoteMarker interface: {}".format(config))
 
-    if remote and (not isinstance(remote, RemoteMarker)
-                   and not isinstance(remote.last_upstream(), RemoteMarker)):
-        raise ConfigurationError("Library remote must have a RemoteMarker interface: {}".format(config))
-
-    # Idea for integrating the remote into the cache.
-    #lus = cache.last_upstream()
-    #lus.upstream = remote
-    #remote = remote.last_upstream
+    if 'upstream' in config:
+        del config['upstream']
 
     l =  Library(cache = cache,
                  database = database,
-                 remote = remote,
+                 upstream = upstream,
                  **config)
 
     return l
@@ -97,7 +93,7 @@ class Library(object):
     '''
     import collections
 
-    def __init__(self, cache,database, name =None, remote=None, sync=False, require_upload = False, host=None,port = None):
+    def __init__(self, cache,database, name =None, upstream=None, sync=False, require_upload = False, host=None,port = None):
         '''
         Libraries are constructed on the root cache name for the library.
         If the cache does not exist, it will be created.
@@ -114,7 +110,7 @@ class Library(object):
         self.name = name
         self.cache = cache
         self._database = database
-        self._remote = remote
+        self._upstream = upstream
         self.sync = sync
         self.bundle = None # Set externally in bundle.library()
         self.host = host
@@ -135,13 +131,13 @@ class Library(object):
 
     def clone(self):
 
-        return self.__class__(self.cache, self.database.clone(), self._remote, self.sync, self.require_upload, self.host, self.port)
+        return self.__class__(self.cache, self.database.clone(), self._upstream, self.sync, self.require_upload, self.host, self.port)
 
 
     @property
-    def remote(self):
-        if self._remote:
-            return self._remote # When it is a URL to a REST interface.
+    def upstream(self):
+        if self._upstream:
+            return self._upstream # When it is a URL to a REST interface.
         else:
             return None
 
@@ -151,49 +147,37 @@ class Library(object):
         return self._database
 
     def load(self, rel_path, decl_md5=None):
-        '''Load a record into the cache from the remote'''
+        '''Load a bundle from the remote to the local cache and install it'''
         from ..util.flo import copy_file_or_flo
         from  ..dbexceptions import ConflictError
 
-        if not self.remote.has(rel_path):
-            raise ConfigurationError('Remote {} does not have cacke key  {}'.format(self.remote, rel_path))
+        if not self.upstream.has(rel_path):
+            raise ConfigurationError('Remote {} does not have cache key  {}'.format(self.upstream, rel_path))
 
-        source = self.remote.get_stream(rel_path)
+        if not self.cache.has(rel_path):
+            source = self.upstream.get_stream(rel_path)
 
-        sink = self.cache.put_stream(rel_path, metadata=source.meta)
+            sink = self.cache.put_stream(rel_path, metadata=source.meta)
 
-        try:
-            copy_file_or_flo(source, sink)
-        except:
-            self.cache.remove(rel_path, propagate=True)
-            raise
+            try:
+                copy_file_or_flo(source, sink)
+            except:
+                self.cache.remove(rel_path, propagate=True)
+                raise
 
-        source.close()
-        sink.close()
+            source.close()
+            sink.close()
 
         file_md5 = self.cache.md5(rel_path)
 
         if file_md5 != decl_md5:
             raise ConflictError('MD5 Mismatch: file={} != declared={} '.format( file_md5 , decl_md5))
 
-            # First, try deleting the cached copy and re-fetching
-            # but don't delete it unless there is an intervening cache
-            # if library.remote.path(identity.cache_key).startswith('http'):
-            #    raise exc.Conflict("MD5 Mismatch (a)")
-
-            library.remote.remove(identity.cache_key)
-            db_path = library.remote.get(identity.cache_key)
-
-            md5 = md5_for_file(db_path)
-            if md5 != identity.md5:
-                logger.debug('MD5 Mismatch, persisting after refetch: {} != {} '.format( md5 , identity.md5))
-                raise exc.Conflict("MD5 Mismatch (b)")
-
         abs_path = self.cache.path(rel_path)
         b = DbBundle(abs_path)
 
         if b.identity.cache_key != rel_path:
-            raise Conflict("Identity of downloaded bundle doesn't match request payload")
+            raise ConflictError("Identity of downloaded bundle doesn't match request payload")
 
         self.put(b)
 
@@ -206,24 +190,13 @@ class Library(object):
         d,p = self.get_ref(bp_id)
 
         try:
-            api = self.remote.get_upstream(RemoteMarker)
+            api = self.upstream.get_upstream(RemoteMarker)
         except AttributeError: # No api
-            api = self.remote
+            api = self.upstream
 
         if self.cache.has(d.cache_key):
             b = self.get(d.vid)
             config = b.db_config.dict
-
-        elif api:
-            from client.exceptions import NotFound
-
-            try:
-                r = api.get(d.vid, p.vid if p else None)
-                if r:
-                    remote_d = r['dataset']['config']
-
-            except NotFound as e:
-                pass
         else:
             return None
 
@@ -231,9 +204,8 @@ class Library(object):
     ## Storing
     ##
 
-
     def put(self, bundle, force=False):
-        '''Install a bundle or partition file into the library.
+        '''Install a single bundle or partition file into the library.
 
         :param bundle: the file object to install
         :rtype: a `Partition`  or `Bundle` object
@@ -250,6 +222,15 @@ class Library(object):
 
         return dst, cache_key, url
 
+
+    def put_bundle(self, bundle, force=False):
+
+        self.put(bundle, force=force)
+
+        for p in bundle.partitions:
+            self.put(p, force=force)
+
+
     def _put_file(self, identity, file_path, state='new', force=False):
         '''Store a dataset or partition file, without having to open the file
         to determine what it is, by using  seperate identity'''
@@ -265,8 +246,8 @@ class Library(object):
         if not os.path.exists(dst):
             raise Exception("cache {}.put() didn't return an existent path. got: {}".format(type(self.cache), dst))
 
-        if self.remote and self.sync:
-            self.remote.put(identity, file_path)
+        if self.upstream and self.sync:
+            self.upstream.put(identity, file_path)
 
 
         if identity.is_bundle:
@@ -309,8 +290,6 @@ class Library(object):
 
         return sorted(datasets.values(), key=lambda x: x.vname)
 
-
-
     def path(self, rel_path):
         """Return the cache path for a cache key"""
 
@@ -324,6 +303,14 @@ class Library(object):
         # from the local database.
 
         ip, dataset = self.database.resolver.resolve_ref_one(bp_id)
+
+        if dataset:
+            pass
+        else:
+            # We don't have the object in this database, so look for it elsewhere.
+            pass
+
+
 
         if dataset and dataset.partition:
             return self._get_partition(dataset, dataset.partition, force, cb=cb)
@@ -340,7 +327,7 @@ class Library(object):
 
         identity = Identity.from_dict(dataset.dict)
 
-        source = self.remote.get_stream(identity.cache_key)
+        source = self.upstream.get_stream(identity.cache_key)
 
         if not source:
             return False
@@ -372,7 +359,7 @@ class Library(object):
         from ..identity import  Identity
         from ..util import copy_file_or_flo
 
-        identity = new_identity(partition.to_dict(), bundle=bundle)
+        identity = bundle.identity.as_partition(**partition.dict)
 
         p = bundle.partitions.get(identity.id_) # Get partition information from bundle
 
@@ -388,7 +375,7 @@ class Library(object):
 
         # Now actually get it from the remote.
 
-        source = self.remote.get_stream(p.identity.cache_key, return_meta=True)
+        source = self.upstream.get_stream(p.identity.cache_key, return_meta=True)
 
         # Store it in the local cache.
         sink = self.cache.put_stream(p.identity.cache_key, metadata=source.meta)
@@ -426,12 +413,6 @@ class Library(object):
         # Try to get the file from the cache.
         abs_path = self.cache.get(dataset.cache_key, cb=cb)
 
-        # Not in the cache, try to get it from the remote library,
-        # if a remote was set.
-
-        if ( not abs_path or force )  and self.remote :
-            abs_path = self._get_remote_dataset(dataset)
-
         if not abs_path or not os.path.exists(abs_path):
             return False
 
@@ -440,7 +421,6 @@ class Library(object):
         except DatabaseError:
             self.logger.error("Failed to load databundle at path {}".format(abs_path))
             raise
-
 
         # Do we have it in the database? If not install it.
         # It should be installed if it was retrieved remotely,
@@ -473,7 +453,7 @@ class Library(object):
 
         if not rp or not os.path.exists(p.database.path) or p.database.is_empty() or force:
 
-            if self.remote:
+            if self.upstream:
                 try:
 
                     if os.path.exists(p.database.path) and (force or p.database.is_empty()) :
@@ -531,6 +511,19 @@ class Library(object):
     @property
     def resolver(self):
         return self.database.resolver
+
+    def resolve(self, ref):
+
+        ip, dataset =  self.resolver.resolve_ref_one(ref)
+
+        if not dataset:
+            return None
+
+        if dataset.partition:
+            return dataset.partition
+
+        return dataset
+
 
     ##
     ## Dependencies
@@ -621,36 +614,50 @@ class Library(object):
         for nf in new_files:
             yield nf
 
-    def push(self, file_=None):
-        """Push any files marked 'new' to the remote
+    def push(self, ref=None , cb=None):
+        """Push any files marked 'new' to the upstream
 
         Args:
             file_: If set, push a single file, obtailed from new_files. If not, push all files.
 
         """
+        import time
 
-        if not self.remote:
-            raise Exception("Can't push() without defining a remote. ")
+        if not self.upstream:
+            raise Exception("Can't push() without defining a upstream. ")
 
-        if file_ is not None:
+        if ref is not None:
 
-            dataset, partition = self.database.get_id(file_.ref)
+            ip, dsid = self.resolver.resolve_ref_one(ref)
 
-            if not dataset:
-                raise Exception("Didn't get id from database for file ref: {}, type {}".format(file_.ref, file_.type_))
+            if not dsid:
+                raise Exception("Didn't get id from database for ref: {}".format(ref))
 
-            if partition:
-                identity = partition
+            if dsid.partition:
+                identity = dsid.partition
             else:
-                identity = dataset
+                identity = dsid
 
-            self.remote.put(file_.path, identity.cache_key, metadata=identity.to_meta(file=file_.path))
-            file_.state = 'pushed'
+            files = self.database.get_file_by_ref(identity.vid)
+            file_ = files.pop(0)
 
+            md = identity.to_meta(file=file_.path)
+
+            if self.upstream.has(identity.cache_key):
+                if cb: cb('Has',md,0)
+                file_.state = 'pushed'
+            else:
+                start = time.clock()
+                if cb: cb('Pushing',md, start)
+                self.upstream.put(file_.path, identity.cache_key, metadata=md)
+                file_.state = 'pushed'
+                if cb: cb('Pushed',md, time.clock()-start)
+
+            self.database.session.merge(file_)
             self.database.commit()
         else:
             for file_ in self.new_files:
-                self.push(file_)
+                self.push(file_.ref, cb=cb)
 
 
     #
@@ -691,7 +698,7 @@ class Library(object):
 
         self.database.dump(backup_file)
 
-        path = self.remote.put(backup_file,'_/library.db')
+        path = self.upstream.put(backup_file,'_/library.db')
 
         os.remove(backup_file)
 
@@ -729,18 +736,18 @@ class Library(object):
     def remote_rebuild(self):
         '''Rebuild the library from the contents of the remote'''
 
-        self.logger.info("Rebuild library from: {}".format(self.remote))
+        self.logger.info("Rebuild library from: {}".format(self.upstream))
 
         #self.database.drop()
         #self.database.create()
 
         # This should almost always be an object store, like S3. Well, it better be,
         # inst that is the only cache that has the include_partitions parameter.
-        rlu = self.remote.last_upstream()
+        rlu = self.upstream.last_upstream()
 
         remote_partitions = rlu.list(include_partitions=True)
 
-        for rel_path in self.remote.list():
+        for rel_path in self.upstream.list():
 
 
             path = self.load(rel_path)
@@ -837,12 +844,12 @@ Database: {database}
 Cache:    {cache}
 Remote:   {remote}
         """.format(name=self.name, database=self.database.dsn,
-                   cache=self.cache, remote=self.remote if self.remote else '')
+                   cache=self.cache, remote=self.upstream if self.upstream else '')
 
     @property
     def dict(self):
         return dict(name=str(self.name),
                     database=str(self.database.dsn),
                     cache=str(self.cache),
-                    remote=str(self.remote) if self.remote else None)
+                    remote=str(self.upstream) if self.upstream else None)
 

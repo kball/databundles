@@ -167,13 +167,51 @@ class RemoteLibrary(object):
 
     # @get('/resolve/<ref>')
     def resolve(self, ref):
+        '''Returns an identity given a vid, name, vname, cacke_key or object number'''
+        from ..identity import Identity
 
-        return self.get(self.url("/resolve/{}", ref))
+        d =  self.get(self.url("/resolve/{}", ref))
 
+        return Identity.from_dict(d)
+
+    # @get('/info/<ref>')
+    def info(self, ref):
+        '''Returns the server's information page for an object, given any kind of ref'''
+        from ..identity import Identity
+
+        return self.get(self.url("/info/{}", ref))
+
+    def get_stream(self, ref):
+        '''Return a FLO that streams the file associated with a the given reference'''
+
+        info = self.info(ref)
+
+        url = info['urls']['db']
+
+        r = requests.get(url, verify=False, stream=True)
+
+        if r.status_code != 200:
+            from xml.dom import minidom
+
+            o = minidom.parse(r.raw)
+
+            # Assuming the response is in XML because we are usually calling s3
+            raise RestError("{} Error from server after redirect to {} : XML={}"
+            .format(r.status_code, location, o.toprettyxml()))
+
+        if r.headers['content-encoding'] == 'gzip':
+            from ..util import FileLikeFromIter
+            # In  the requests library, iter_content will auto-decompress
+            response = FileLikeFromIter(r.iter_content())
+        else:
+            response = r.raw
+
+
+        return response
 
     # @get('/datasets/<did>')
     def dataset(self, vid):
-        '''Get infomation about a dataset, including the identity and
+        '''Get information about a dataset, including the identity and
         all of the partitions '''
         from ..identity import Identity
 
@@ -195,6 +233,10 @@ class RemoteLibrary(object):
 
         r = self.post(self.url("/datasets/{}", ident.vid), data=ident.dict)
 
+    def x_put(self, b_or_p):
+
+        pass
+
     # @get('/datasets/<did>/csv')
     # @post('/datasets/<did>/partitions/<pid>')
     # @get('/datasets/<did>/db')
@@ -209,6 +251,11 @@ class RemoteLibrary(object):
     # @get('/datasets/<did>/partitions/<pid>/tables/<tid>/csv/parts')
     # @get('/datasets/<did>/partitions/<pid>/csv')
     # @get('/datasets/<did>/partitions/<pid>/csv/parts')
+
+
+    #
+    # Testing
+    #
 
     # @get('/test/echo/<arg>')
     def get_test_echo(self, term):
@@ -231,7 +278,12 @@ class RemoteLibrary(object):
 
     # @put('/test/exception')
     # @get('/test/isdebug')
+    def get_is_debug(self):
+        return self.get(self.url("/test/isdebug"))
+
     # @post('/test/close')
+    def post_close(self):
+        return self.post(self.url("/test/close"))
 
 
 class OldRestApi(object):

@@ -53,7 +53,7 @@ def remote_info(args, l, rc):
     
     if args.term:
         try:
-            dsi = l.remote.get_ref(args.term)
+            dsi = l.upstream.get_ref(args.term)
         except NotFound:
             dsi = None
 
@@ -67,14 +67,14 @@ def remote_info(args, l, rc):
         _print_info(l,d,p)
 
     else:
-        prt(str(l.remote))
+        prt(str(l.upstream))
 
 def remote_list(args, l, rc, return_meta=False):
         
     if args.datasets:
         # List just the partitions in some data sets. This should probably be combined into info. 
         for ds in args.datasets:
-            dsi = l.remote.get_ref(ds)
+            dsi = l.upstream.get_ref(ds)
 
             prt("dataset {0:11s} {1}",dsi['dataset']['id'],dsi['dataset']['name'])
 
@@ -88,7 +88,7 @@ def remote_list(args, l, rc, return_meta=False):
             
     else:
 
-        datasets = l.remote.list(with_metadata=return_meta)
+        datasets = l.upstream.list(with_metadata=return_meta)
 
 
         for id_, data in sorted(datasets.items(), key = lambda x: x[1]['identity']['vname']):

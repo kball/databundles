@@ -166,8 +166,6 @@ def _host_port(library):
 def process_did(did, library):
     from ..identity import ObjectNumber, DatasetNumber
 
-    did = did.replace('|','/')
-
     try:
         d_on = ObjectNumber.parse(did)
     except ValueError:
@@ -187,7 +185,6 @@ def process_did(did, library):
 def process_pid(did, pid, library):
     from ..identity import ObjectNumber, PartitionNumber
 
-    pid = pid.replace('|','/')
 
     try:
         p_on = ObjectNumber.parse(pid)
@@ -303,12 +300,12 @@ def _download_redirect(identity, library):
     '''This is very similar to get_key'''
     from databundles.cache import RemoteMarker
 
-    if library.remote:
+    if library.upstream:
 
-        remote = library.remote.get_upstream(RemoteMarker)
+        remote = library.upstream.get_upstream(RemoteMarker)
 
         if not remote:
-            raise exc.InternalError("Library remote diesn not have a proper upstream")
+            raise exc.InternalError("Library remote does not have a proper upstream")
 
         url =  remote.path(identity.cache_key)
 
@@ -396,12 +393,18 @@ def _send_csv(library, did, pid, table, i, n, where, sep=',' ):
 def get_root(library):
     
     hp = _host_port(library)
-    
+
     return {
            'datasets' : "{}/datasets".format(hp),
            'find': "{}/datasets/find".format(hp),
-           'info': library.dict
+           'info': library.dict,
+           'upstream': dict(
+               options = library.upstream.last_upstream().options,
+               bucket = library.upstream.last_upstream().bucket_name,
+               prefix = library.upstream.last_upstream().prefix)
            }
+
+
 
 @get('/resolve/<ref:path>')
 @CaptureException
@@ -410,7 +413,74 @@ def get_resolve(library, ref):
 
     ip, dataset = library.resolver.resolve_ref_one(ref)
 
-    return dataset.dict if dataset else None
+    if not dataset:
+        return None
+
+    if dataset.partition:
+        return dataset.partition.dict
+
+    return dataset.dict
+
+@get('/info/<ref:path>')
+@CaptureException
+def get_info(ref, library):
+    '''Resolve the reference, and redirect to the dataset or partition page'''
+    from databundles.cache import RemoteMarker
+
+    ip, dataset = library.resolver.resolve_ref_one(ref)
+
+    if not dataset:
+        return None
+
+
+    if dataset.partition:
+        url = '{}/datasets/{}/partitions/{}'.format(_host_port(library),
+                                                    dataset.vid,
+                                                    dataset.partition.vid)
+    else:
+        url = '{}/datasets/{}'.format(_host_port(library), dataset.vid)
+
+    return redirect(url)
+
+
+@get('/files/<key:path>')
+@CaptureException
+def get_file(key, library):
+    '''Download a file based on a cache key '''
+
+    path = library.cache.get(key)
+    metadata = library.cache.metadata(key)
+
+    if not path:
+        raise exc.NotFound("No file for key: {} ".format(key))
+
+    if 'etag' in metadata:
+        del metadata['etag']
+
+    return static_file(path, root='/', download=key.replace('/','-'))
+
+@get('/key/<key:path>')
+@CaptureException
+def get_key(key, library):
+    from databundles.cache import RemoteMarker
+
+    if library.upstream:
+
+        remote = library.upstream.get_upstream(RemoteMarker)
+
+        if not remote:
+            raise exc.InternalError("Library remote does not have a proper upstream")
+
+        url =  remote.path(key)
+
+    else:
+        url = "{}/files/{}".format(_host_port(library), key)
+
+
+    return redirect(url)
+
+
+
 
 @get('/datasets')
 def get_datasets(library):
@@ -435,35 +505,6 @@ def get_datasets(library):
                   }
                  } 
             for dsid in library.list()}
-   
-@get('/datasets/find/<term>')
-def get_datasets_find(term, library):
-    '''Find a partition or data bundle with a, id or name term '''
-    from databundles.library.query import QueryCommand
-    
-    term = term.replace('|','/')
-    
-    dataset, partition  = library.get_ref(term)
-     
-    if dataset is False:
-        return False
-     
-    # if found, find again to put it in the same for as the
-    # POST version, which uses the find() method. 
-
-    if partition:
-        qc =  QueryCommand().partition(vid=partition.vid)
-    else:
-        qc =  QueryCommand().identity(vid=dataset.vid)
-  
-    results = library.find(qc)
-
-
-    out = []
-    for r in results:
-        out.append(r)
-        
-    return out
 
 @post('/datasets/find')
 def post_datasets_find(library):
@@ -475,7 +516,6 @@ def post_datasets_find(library):
     bq = QueryCommand(q)
     results = library.find(bq)
 
-
     out = []
     for r in results:
         out.append(r)
@@ -486,11 +526,9 @@ def post_datasets_find(library):
 @CaptureException
 def post_dataset(did,library): 
     '''Accept a payload that describes a bundle in the remote. Download the
-    bundle and install it. '''
+    bundle from the remote and install it. '''
 
     from databundles.identity import  Identity
-
-    print '!!!', request.json
 
     identity = Identity.from_dict(request.json)
 
@@ -507,7 +545,7 @@ def post_dataset(did,library):
     if not db_path:
         logger.error("Failed to get {} from cache while posting dataset".format(identity.cache_key))
         logger.error("  cache =  {}".format(library.cache))
-        logger.error("  remote = {}".format(library.remote))
+        logger.error("  remote = {}".format(library.upstream))
         raise exc.NotFound("Didn't  get bundle file for cache key {} ".format(identity.cache_key))
 
     logger.debug("Loading {} for identity {} ".format(db_path, identity))
@@ -530,23 +568,21 @@ def get_dataset(did, library, pid=None):
     # Construct the response
     d = {'identity' : gr.identity.dict, 'partitions' : {}}
          
-    file_ = library.database.get_file_by_ref(gr.identity.vid)
+    files = library.database.get_file_by_ref(gr.identity.vid)
     
     # Get direct access to the cache that implements the remote, so
     # we can get a URL with path()
     #remote = library.remote.get_upstream(RemoteMarker)
 
-    d['urls'] = dict(database = "{}/datasets/{}/db".format(_host_port(library), gr.identity.vid))
+    d['urls'] = dict(db = "{}/datasets/{}/db".format(_host_port(library), gr.identity.vid))
     
-    if file_:
+    if files and len(files) > 0:
         d['file'] = dict(
-            ref = file_.dict,
+            ref = files[0].dict,
             config = gr.db_config.dict
         )
 
-
     if pid:
-        pid = pid.replace('|','/')
         partitions = [gr.partitions.partition(pid)]
     else:
         partitions = gr.partitions.all_nocsv
@@ -557,9 +593,10 @@ def get_dataset(did, library, pid=None):
 
         d['partitions'][partition.identity.id_]['identity'] = partition.identity.dict
  
-        file_ = library.database.get_file_by_ref(partition.identity.vid)
+        files = library.database.get_file_by_ref(partition.identity.vid)
         
-        if file_:
+        if len(files) > 0:
+            file_ = files.pop(0)
 
             fd = file_.dict
             d['partitions'][partition.identity.id_]['file']  = { k:v for k,v in fd.items() if k in ['state'] }
@@ -600,9 +637,7 @@ def get_dataset(did, library, pid=None):
             'parts': parts_link,
             'tables': tables
           }
-                                    
         }
-        
 
     return d
 
@@ -615,11 +650,8 @@ def get_dataset_csv(did, library, pid=None):
 @post('/datasets/<did>/partitions/<pid>') 
 @CaptureException   
 def post_partition(did, pid, library):
-    from databundles.identity import new_identity, Identity
+    from databundles.identity import  Identity
     from databundles.util import md5_for_file
-
-    did = did.replace('|','/')
-    pid = pid.replace('|','/')
 
     b =  library.get(did)
 
@@ -627,7 +659,7 @@ def post_partition(did, pid, library):
         raise exc.NotFound("No bundle found for id {}".format(did))
 
     payload = request.json
-    identity = new_identity(payload['identity'])
+    identity = Identity.from_dict(payload['identity'])
 
     p = b.partitions.get(pid)
     
@@ -641,88 +673,27 @@ def post_partition(did, pid, library):
 
     return identity.dict
 
+
+
 @get('/datasets/<did>/db') 
 @CaptureException   
 def get_dataset_file(did, library):
     from databundles.cache import RemoteMarker
-    
-    did = did.replace('|','/')
 
-    dataset, _ = library.get_ref(did)
+    ident = library.resolve(did)
     
-    if not dataset:
+    if not ident:
         raise exc.NotFound("No dataset found for identifier '{}' ".format(did))
 
-    return redirect(_download_redirect(dataset, library))
+    return redirect(_download_redirect(ident, library))
 
-@get('/files/<key:path>') 
-@CaptureException   
-def get_file(key, library):
-
-    path = library.cache.get(key)
-    metadata = library.cache.metadata(key)
-
-    if not path:
-        raise exc.NotFound("No file for key: {} ".format(key))
-
-    if 'etag' in metadata:
-        del metadata['etag']
-
-    return static_file(path, root='/', download=key.replace('/','-'))
-
-@get('/key/<key:path>') 
-@CaptureException   
-def get_key(key, library):
-    from databundles.cache import RemoteMarker
-
-    
-    if library.remote:
-    
-        remote = library.remote.get_upstream(RemoteMarker)
-        
-        if not remote:
-            raise exc.InternalError("Library remote does not have a proper upstream")
-       
-        url =  remote.path(key)   
-    
-    else:
-        url = "{}/files/{}".format(_host_port(library), key)
-
- 
-    return redirect(url)
-   
-@get('/ref/<ref:path>') 
-@CaptureException   
-def get_ref(ref, library):
-    '''Convert a name or id for a dataset or partitions into a set of 
-    information. Returns the same information as get_dataset or get_partition'''
-  
-    ref = ref.replace('|','/')
-  
-    d,p = library.get_ref(ref)
-  
-
-    if not d:
-        raise exc.NotFound("No object for ref: {}".format(ref))
-  
-    if p:
-        r =  get_partition(d.vid, p.vid, library)
-        r['ref_type'] = 'partition'
-    else:
-        r =  get_dataset(d.vid, library)
-        r['ref_type'] = 'dataset'
-        
-    return r
-
-@get('/datasets/<did>/<typ:re:schema\\.?.*>') 
-@CaptureException   
+@get('/datasets/<did>/<typ:re:schema\\.?.*>')
+@CaptureException
 def get_dataset_schema(did, typ, library):
     from databundles.cache import RemoteMarker
-    
+
     ct = _get_ct(typ)
 
-    did = did.replace('|','/')
- 
     b =  library.get(did)
 
     if not b:
@@ -739,30 +710,26 @@ def get_dataset_schema(did, typ, library):
         import json
         s = b.schema.as_struct()
         return s
-    elif ct == 'yaml': 
-        import yaml 
+    elif ct == 'yaml':
+        import yaml
         s = b.schema.as_struct()
         response.content_type = 'application/x-yaml'
         return  yaml.dump(s)
     else:
-        raise Exception("Unknown format" )   
+        raise Exception("Unknown format" )
 
-@get('/datasets/<did>/partitions/<pid>') 
-@CaptureException   
+@get('/datasets/<did>/partitions/<pid>')
+@CaptureException
 def get_partition(did, pid, library):
     from databundles.cache import RemoteMarker
-    from databundles.identity import new_identity, Identity
-    
+
     return get_dataset(did, library, pid)
 
-@get('/datasets/<did>/partitions/<pid>/db') 
-@CaptureException   
+@get('/datasets/<did>/partitions/<pid>/db')
+@CaptureException
 def get_partition_file(did, pid, library):
     from databundles.cache import RemoteMarker
     from databundles.identity import new_identity, Identity
-    
-    did = did.replace('|','/')
-    pid = pid.replace('|','/')
 
     b =  library.get(did)
 
@@ -778,117 +745,119 @@ def get_partition_file(did, pid, library):
 
     return redirect(_download_redirect(p.identity, library))
 
-@get('/datasets/<did>/partitions/<pid>/tables') 
-@CaptureException   
+@get('/datasets/<did>/partitions/<pid>/tables')
+@CaptureException
 def get_partition_tables(did, pid, library):
     '''
     '''
 
-     
+
     did, _, _ = process_did(did, library)
     pid, _, _  = process_pid(did, pid, library)
-    
+
     p = library.get(pid).partition # p_orm is a database entry, not a partition
-  
+
     o = {}
-  
+
     for table_name in p.tables:
         table = p.bundle.schema.table(table_name)
         d = table.dict
-        
-        args = (_host_port(library), did.replace('/','|'), pid.replace('/','|'), table.id_)
+
+        args = (_host_port(library), did, pid, table.id_)
         csv_link = "{}/datasets/{}/partitions/{}/tables/{}/csv".format(*args)
         parts_link = "{}/datasets/{}/partitions/{}/tables/{}/csv/parts".format(*args)
-        
+
         d['urls'] = {
             'csv':{
                 'csv': csv_link,
                 'parts': parts_link
             }
         }
-        
+
         o[table.name] = d
     return o
-        
-@get('/datasets/<did>/partitions/<pid>/tables/<tid>/csv') 
-@CaptureException   
+
+@get('/datasets/<did>/partitions/<pid>/tables/<tid>/csv')
+@CaptureException
 def get_partition_table_csv(did, pid, tid, library):
     '''
     '''
 
     did, _, _ = process_did(did, library)
     pid, _, _  = process_pid(did, pid, library)
-    
+
     p = library.get(pid).partition # p_orm is a database entry, not a partition
-  
+
     table = p.bundle.schema.table(tid)
-  
+
     if table == p.table:
         pass
-  
+
     return _send_csv_if(did, pid, table, library)
-    
-@get('/datasets/<did>/partitions/<pid>/tables/<tid>/csv/parts') 
-@CaptureException   
+
+@get('/datasets/<did>/partitions/<pid>/tables/<tid>/csv/parts')
+@CaptureException
 def get_partition_table_csv_parts(did, pid, tid, library):
     '''
     '''
 
     did, _, _ = process_did(did, library)
     pid, _, _  = process_pid(did, pid, library)
-    
+
     p = library.get(pid).partition # p_orm is a database entry, not a partition
-  
+
     table = p.bundle.schema.table(tid)
-  
+
     if table == p.table:
         pass
-  
+
     return _table_csv_parts(library,p.bundle,pid, table)
 
-@get('/datasets/<did>/partitions/<pid>/csv') 
-@CaptureException   
+@get('/datasets/<did>/partitions/<pid>/csv')
+@CaptureException
 def get_partition_csv(did, pid, library):
     '''Stream as CSV, a  segment of the main table of a partition
-    
+
     Query
         n: The total number of segments to break the CSV into
         i: Which segment to retrieve
-        header:If existent and not 'F', include the header on the first line. 
-    
+        header:If existent and not 'F', include the header on the first line.
+
     '''
- 
+
     return _send_csv_if(did, pid, None, library)
 
-@get('/datasets/<did>/partitions/<pid>/csv/parts') 
-@CaptureException   
+@get('/datasets/<did>/partitions/<pid>/csv/parts')
+@CaptureException
 def get_partition_csv_parts(did, pid, library):
     '''Return a set of URLS for optimal CSV parts of a partition'''
-    
+
     did, d_on, b = process_did(did, library)
     pid, p_on, p_orm  = process_pid(did, pid, library)
 
     b = library.get(did)
-    
+
     p = b.partitions.partition(p_orm)
-    
+
     csv_parts = p.get_csv_parts()
-    
+
     if len(csv_parts):
-        # This partition has defined CSV parts, so we should link to those. 
-        
+        # This partition has defined CSV parts, so we should link to those.
+
         parts = []
-        
+
         for csv_p in sorted(csv_parts, key=lambda x: x.identity.segment):
             parts.append("{}/datasets/{}/partitions/{}/db#{}"
-                         .format(_host_port(library), b.identity.vid, 
+                         .format(_host_port(library), b.identity.vid,
                                  csv_p.identity.vid, csv_p.identity.segment))
-        
+
         pass
     else:
         return _table_csv_parts(library,b,pid)
-        
+
     return parts
+
+
 
 #### Test Code
 
@@ -922,7 +891,7 @@ def get_test_isdebug():
         global stoppable_wsgi_server_run
         if stoppable_wsgi_server_run is True:
             return True
-        else: 
+        else:
             return False
     except NameError:
         return False
@@ -936,18 +905,18 @@ def get_test_close():
         logger.debug("SERVER CLOSING")
         stoppable_wsgi_server_run = False
         return True
-    
+
     else:
         raise exc.NotAuthorized("Not in debug mode, won't close")
 
 class StoppableWSGIRefServer(ServerAdapter):
     '''A server that can be stopped by setting the module variable
     stoppable_wsgi_server_run to false. It is primarily used for testing. '''
-    
+
     def run(self, handler): # pragma: no cover
         global stoppable_wsgi_server_run
         stoppable_wsgi_server_run = True
-   
+
         from wsgiref.simple_server import make_server, WSGIRequestHandler
         if self.quiet:
             class QuietHandler(WSGIRequestHandler):
@@ -962,7 +931,7 @@ server_names['stoppable'] = StoppableWSGIRefServer
 def test_run(config):
     '''Run method to be called from unit tests'''
     from bottle import run, debug #@UnresolvedImport
-  
+
     debug()
 
     port = config['port'] if config['port'] else 7979
@@ -976,49 +945,49 @@ def test_run(config):
     logger.info("Starting test server on http://{}:{}".format(host, port))
     logger.info("Library at: {}".format(l.database.dsn))
 
-    
+
     install(LibraryPlugin(lf))
-    
+
     return run(host=host, port=port, reloader=False, server='stoppable')
 
 def local_run(config, reloader=False):
- 
+
     global stoppable_wsgi_server_run
     stoppable_wsgi_server_run = None
 
     debug()
 
-    lf = lambda:  new_library(config, True)  
+    lf = lambda:  new_library(config, True)
 
     l = lf()
     l.database.create()
-    
+
     logger.info("starting local server for library '{}' on http://{}:{}".format(l.name, l.host, l.port))
 
     install(LibraryPlugin(lf))
     return run(host=l.host, port=l.port, reloader=reloader)
-    
+
 def local_debug_run(config):
 
     debug()
 
     port = config['port'] if config['port'] else 7979
     host = config['host'] if config['host'] else 'localhost'
-    
+
     logger.info("starting debug server on http://{}:{}".format(host, port))
-    
-    lf = lambda: new_library(config, True)  
-    
+
+    lf = lambda: new_library(config, True)
+
     l = lf()
     l.database.create()
-    
+
     install(LibraryPlugin(lf))
-    
+
     return run(host=host, port=port, reloader=True, server='stoppable')
 
 def production_run(config, reloader=False):
 
-    lf = lambda:  new_library(config, True)  
+    lf = lambda:  new_library(config, True)
 
 
     l = lf()
@@ -1029,8 +998,8 @@ def production_run(config, reloader=False):
     install(LibraryPlugin(lf))
 
     return run(host=l.host, port=l.port, reloader=reloader, server='paste')
-    
+
 if __name__ == '__main__':
     local_debug_run()
-    
+
 

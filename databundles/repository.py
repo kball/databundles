@@ -35,7 +35,7 @@ class Repository(object):
         import databundles.client.ckan
         repo_group = self.bundle.config.group('datarepo')
         
-        if not repo_group.get(self.repo_name): 
+        if not repo_group.get(self.repo_name):
             raise ConfigurationError("'repository' group in configure either nonexistent"+
                                      " or missing {} sub-group ".format(self.repo_name))
         
@@ -107,7 +107,7 @@ class Repository(object):
 
         if extract_data.get('function',False):
             file_ = self._do_function_extract(extract_data)
-        if extract_data.get('file',False):  
+        if extract_data.get('file',False):
             file_ = self._do_copy_file(extract_data) 
         else:
             file_ = self._do_query_extract(extract_data)

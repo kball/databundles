@@ -138,7 +138,7 @@ class Counter(dict):
     def __missing__(self, key):
         return 0
 
-def lru_cache(maxsize=128):
+def lru_cache(maxsize=128, maxtime=60):
     '''Least-recently-used cache decorator.
 
     Arguments to the cached function must be hashable.
@@ -150,6 +150,7 @@ def lru_cache(maxsize=128):
     maxqueue = maxsize * 10
     def decorating_function(user_function,
             len=len, iter=iter, tuple=tuple, sorted=sorted, KeyError=KeyError): #@ReservedAssignment
+        from time import time
         cache = {}                  # mapping of args to results
         queue = collections.deque() # order that keys have been used
         refcount = Counter()        # times each key is in the queue
@@ -173,11 +174,20 @@ def lru_cache(maxsize=128):
 
             # get cache entry or compute if not found
             try:
-                result = cache[key]
+                result, expire_time = cache[key]
+
+                if expire_time and time() > expire_time:
+                    raise KeyError('Expired')
+
                 wrapper.hits += 1
             except KeyError:
                 result = user_function(*args, **kwds)
-                cache[key] = result
+                if maxtime:
+                    expire_time = time() + maxtime
+                else:
+                    expire_time = None
+
+                cache[key] = result, expire_time
                 wrapper.misses += 1
 
                 # purge least recently used cache entry

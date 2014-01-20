@@ -10,7 +10,7 @@ def new_cache(config):
         if 'size' in config:
             from filesystem import FsLimitedCache
             fsclass = FsLimitedCache
-        elif 'host' in config:
+        elif 'url' in config:
             from remote import RestReadCache
             fsclass = RestReadCache
         elif 'account' in config:

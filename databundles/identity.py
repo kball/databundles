@@ -334,9 +334,13 @@ class PartialPartitionName(Name):
     def promote(self, name):
         '''Promote to a PartitionName by combining with 
         a bundle Name'''
+        from partition import name_class_from_format_name
 
-        
-        return PartitionName(**dict(name.dict.items() +
+
+        cls = name_class_from_format_name(self.format)
+
+
+        return cls(**dict(name.dict.items() +
                                     self.dict.items() ))
         
 
@@ -816,7 +820,6 @@ class DatasetNumber(ObjectNumber):
                 self._ds_str()+
                 ObjectNumber._rev_str(self.revision))
 
-
 class TableNumber(ObjectNumber):
     '''An identifier for a table'''
     def __init__(self, dataset, table, revision=None):
@@ -842,7 +845,6 @@ class TableNumber(ObjectNumber):
                 ObjectNumber.base62_encode(self.table).rjust(self.DLEN.TABLE,'0')+
                 ObjectNumber._rev_str(self.revision))
 
-
 class ColumnNumber(ObjectNumber):
     '''An identifier for a column'''
     def __init__(self, table, column, revision=None):
@@ -860,9 +862,7 @@ class ColumnNumber(ObjectNumber):
    
         if not self.revision and table.revision:
             self.revision = table.revision
-             
-   
-   
+
     @property
     def dataset(self):
         '''Return the dataset number for ths partition '''
@@ -877,7 +877,6 @@ class ColumnNumber(ObjectNumber):
                 ObjectNumber.base62_encode(self.column).rjust(self.DLEN.COLUMN,'0')+
                 ObjectNumber._rev_str(self.revision)
                 )
-
 
 class PartitionNumber(ObjectNumber):
     '''An identifier for a partition'''
@@ -908,7 +907,6 @@ class PartitionNumber(ObjectNumber):
                 self.dataset._ds_str()+
                 ObjectNumber.base62_encode(self.partition).rjust(self.DLEN.PARTITION,'0')+
                 ObjectNumber._rev_str(self.revision))
-
 
 class LocationRef(object):
 
@@ -963,7 +961,6 @@ class Locations(object):
         self._locations[code].revision = revision
         self._locations[code].version = version
 
-
 class Identity(object):
     '''Identities represent the defining set of information about a 
     bundle or a partition. Only the vid is actually required to 
@@ -984,6 +981,7 @@ class Identity(object):
     locations = None
     partitions = None
     urls = None # Url dict, from a remote library.
+    url = None # Url of remote where object should be retrieved
     md5 = None #
 
     def __init__(self, name, object_number):
@@ -1136,7 +1134,8 @@ class Identity(object):
     def to_meta(self, md5=None, file=None):
         '''Return a dictionary of metadata, for use in the Remote api'''
         import json
-        
+        import os
+
         if not md5:
             if not file:
                 raise ValueError("Must specify either file or md5")
@@ -1150,7 +1149,9 @@ class Identity(object):
                 'identity': json.dumps(self.dict),
                 'name':self.sname,
                 'fqname':self.fqname,
-                'md5':md5}
+                'md5':md5,
+                'size': os.stat(file).st_size if file else None
+                }
 
 
     def add_md5(self, md5=None, file=None):

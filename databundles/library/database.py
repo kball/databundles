@@ -122,7 +122,9 @@ class LibraryDb(object):
         from sqlalchemy.orm import sessionmaker
 
         if not self.Session:
-            self.Session = sessionmaker(bind=self.engine)
+            # expire_on_commit=False prevents DetatchedInstanceErrors when
+            # using database object outside the database.
+            self.Session = sessionmaker(bind=self.engine, expire_on_commit=False)
 
         if not self._session:
             self._session = self.Session()
@@ -979,7 +981,7 @@ class LibraryDb(object):
         try:
             q = s.query(File).filter(File.ref == ref)
 
-            if type:
+            if type_ is not None:
                 q = q.filter(File.type_ == type_)
 
             return q.all()

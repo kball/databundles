@@ -225,9 +225,9 @@ def _print_info(l,d,p, list_partitions=False):
    
     api = None
     try:
-        api = l.remote.get_upstream(RemoteMarker)
+        api = l.upstream.get_upstream(RemoteMarker)
     except AttributeError: # No api
-        api = l.remote
+        api = l.upstream
     
     remote_d = None
     remote_p = None

@@ -1,4 +1,5 @@
 from . import CacheInterface, RemoteInterface, RemoteMarker, new_cache
+from ..client.rest import RemoteLibrary
 
 # Setup a default logger. The logger is re-assigned by the
 # bundle when the bundle instantiates the logger. 
@@ -10,86 +11,55 @@ logger = get_logger(__name__)
 #logger.setLevel(logging.DEBUG) 
 
 class RestReadCache(RemoteInterface):
-    '''A cache that looks up the cache key with the repote API and returns
+    '''A cache that looks up the cache key with the remote API and returns
     a URL to download '''
 
-    def __init__(self,  host,  port = None, upstream=None, **kwargs):
+    def __init__(self,  url, **kwargs):
+        self.url = url
 
-
-        return
-
-        from ..client.rest import RestApi
-        self.host = host
-        self.port = port if port else 80
- 
-        self.url = 'http://{}:{}'.format(self.host, self.port)
- 
-        self.api = RestApi(self.url)
- 
-        if upstream:
-            
-         
-            if isinstance(upstream, (CacheInterface, RemoteMarker)):
-                self.upstream = upstream
-            else:
-                self.upstream = new_cache(upstream)
-                
-        else:
-            self.upstream = None
-        
+        self.rl = RemoteLibrary(self.url)
 
     def path(self, rel_path, **kwargs): 
-        if self.upstream:
-            
-            if not self.upstream.has(rel_path):
-                return None
-            
-            return self.upstream.path(rel_path, **kwargs)
-        else:
-            raise Exception
-        
-    def get(self, did, pid=None): 
-        
-        return self.api.get(did, pid)
-    
-    def get_ref(self, ref):
 
-        return self.api.get_ref(ref)
-        
+        info = self.rl.info(rel_path)
+
+        if not info:
+            return None
+
+        return info['urls']['db']
+
+    def get(self, did, pid=None):
+        raise NotImplementedError("Use get_stream instead")
+
     def get_stream(self, rel_path, cb=None):
-        return self.api.get_stream_by_key(rel_path, cb=cb)
+
+        return self.rl.get_stream(rel_path)
 
     def has(self, rel_path, md5=None, use_upstream=True):
-        if self.upstream:
-            return self.upstream.has(rel_path)
-        else:
-            raise NotImplementedError()
+        return bool(self.path(rel_path))
+
 
     def remove(self,rel_path, propagate = False): 
-        
-        self.upstream.remove(rel_path, propagate)
-        
+        return False
+
     
     def metadata(self,rel_path):
-        if self.upstream:
-            return self.upstream.metadata(rel_path)
-        else:
-            raise NotImplementedError()
+        raise  NotImplementedError()
     
-    def find(self,query): raise NotImplementedError()
+    def find(self,query):
+        raise NotImplementedError()
     
-    def list(self, path=None,with_metadata=False): 
-        
-        return  self.api.list()
+    def list(self, path=None,with_metadata=False):
+        return  self.rl.list()
         
         
     def get_upstream(self, type_):
         ''''''
          
-        return self._upstream  
+        return None
        
     def __repr__(self):
-        return "RestRemote: url={}  upstream=({})".format(self.url, self.upstream)
+        return "RestReadCache: url={}".format(self.url)
        
 class Save(object):
 

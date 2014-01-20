@@ -172,8 +172,11 @@ class FsCache(Cache):
         
         with open(path,'w') as f:
             shutil.copyfileobj(stream, f)
-        
-        stream.close()
+
+        try:
+            stream.close()
+        except AttributeError:
+            pass # HTTPResponse objects don't have close()
         
         if not os.path.exists(path):
             raise Exception("Failed to copy upstream data to {} ".format(path))
@@ -791,7 +794,7 @@ class FsCompressionCache(Cache):
     def remote(self):
         '''Return a reference to an inner cache that is a remote'''
         raise DeprecationWarning()
-        return self.upstream.remote
+        return self.upstream.upstream
 
     def path(self, rel_path, **kwargs):
         return self.upstream.path(self._rename(rel_path), **kwargs)

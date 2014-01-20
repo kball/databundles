@@ -307,7 +307,7 @@ class Partitions(object):
         '''Create a new ORM Partrition object, or return one if
         it already exists '''
         from databundles.orm import Partition as OrmPartition, Table
-        from sqlalchemy.orm.exc import  NoResultFound
+        from sqlalchemy.exc import IntegrityError
    
         assert type(pname) == PartialPartitionName, "Expected PartialPartitionName, got {}".format(type(pname))
         
@@ -346,10 +346,14 @@ class Partitions(object):
 
         d = pname.dict
 
-        d['cache_key'] = pname.cache_key
+        # Promoting to a PartitionName create the partitionName subcless from
+        # the format, which is required to get the correct cache_key
+        d['cache_key'] = pname.promote(self.bundle.identity.name).cache_key
+
 
         if not 'format' in d:
             d['format']  = 'db'
+
         
         try: del d['table'] # OrmPartition requires t_id instead
         except: pass
@@ -369,7 +373,12 @@ class Partitions(object):
         
         # We need to do this here to ensure that the before_commit()
         # routine is run, which sets the fqname and vid, which are needed later
-        session.commit()
+        try:
+            session.commit()
+        except IntegrityError as e:
+            from dbexceptions import ConflictError
+            raise ConflictError('Integrity error in database {}, while creating partition {}\n{}\n{}'
+                                .format(self.bundle.database.dsn, str(pname), pname.cache_key,  e.message))
         
         
         if not op.format:

@@ -26,7 +26,7 @@ def new_warehouse(config):
 
     library =  Library(cache = NullCache(), 
                  database = library_database, 
-                 remote = None)
+                 upstream= None)
 
 
     if service == 'bigquery':
