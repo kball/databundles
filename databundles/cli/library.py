@@ -262,8 +262,8 @@ def library_list(args, l, config):
 
     if not args.term:
 
-        for ident in sorted(l.list(add_remote=(not args.local_only)), key=lambda x: x['vname']):
-            prt("{:2s} {:10s} {}", ''.join(ident['location']), ident['vid'], ident['vname'])
+        for ident in l.list(key='fqname'):
+            prt("{:2s} {:10s} {}", str(ident.locations), ident.vid, ident.vname)
     else:
         library_info(args, l, config, list_all=True)    
  
@@ -297,13 +297,13 @@ def library_info(args, l, config, list_all=False):
 
     if args.term:
 
-        d,p = l.get_ref(args.term)
+        ident = l.resolve(args.term)
 
-        if not d:
+        if not ident:
             err("Failed to find record for: {}", args.term)
             return 
  
-        _print_info(l,d,p, list_partitions=list_all)
+        _print_info(l,ident, list_partitions=list_all)
 
     else:
 

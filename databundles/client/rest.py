@@ -82,6 +82,7 @@ class RemoteLibrary(object):
 
 
     def handle_status(self, r):
+        import exceptions
 
         if r.status_code >= 300:
 
@@ -90,11 +91,12 @@ class RemoteLibrary(object):
             except:
                 o = None
 
-
-
             if isinstance(o, dict) and 'exception' in o:
                 e = self.handle_exception(o)
                 raise e
+
+            if 400 <= r.status_code < 500:
+                raise exceptions.NotFound("Failed to find resource for URL: {}".format(r.url))
 
             r.raise_for_status()
 

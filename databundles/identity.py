@@ -307,7 +307,10 @@ class Name(object):
 
         return nc(**dict(self.dict.items() + kwargs.items()))
 
-    
+    def as_namequery(self):
+        return NameQuery(**self._dict(with_name=False))
+
+
     def __str__(self):
         return self.name
 
@@ -363,14 +366,14 @@ class PartitionName(PartialPartitionName, Name):
             parts.append(self.table)
             
         l = []
-        if self.time: l.append(self.time)
-        if self.space: l.append(self.space)
+        if self.time: l.append(str(self.time))
+        if self.space: l.append(str(self.space))
         
         if l: parts.append(self.NAME_PART_SEP.join(l))
             
         l = []
-        if self.grain: l.append(self.grain)
-        if self.segment: l.append(self.segment)
+        if self.grain: l.append(str(self.grain))
+        if self.segment: l.append(str(self.segment))
 
         if l: parts.append(self.NAME_PART_SEP.join([ str(x) for x in l ]))
         
@@ -395,10 +398,9 @@ class PartitionName(PartialPartitionName, Name):
         '''The path of the partition source. Includes the revision. '''
 
         try:
-            return os.path.join(*(
-                              [super(PartitionName, self).path]+
-                              self._local_parts())
-                            )
+            parts = ([super(PartitionName, self).path] + self._local_parts())
+
+            return os.path.join(*parts)
         except TypeError as e:
             raise TypeError("Path failed for partition {}: {}".format(self.name, e.message))
 
@@ -436,6 +438,12 @@ class PartitionName(PartialPartitionName, Name):
     def extension(self):
         return self.PATH_EXTENSION
 
+    def as_namequery(self):
+        return PartitionNameQuery(**self._dict(with_name=False))
+
+
+    def as_partialname(self):
+        return PartialPartitionName( ** self.dict)
 
 class PartialMixin(object):
 

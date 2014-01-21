@@ -33,6 +33,9 @@ class HdfPartition(PartitionBase):
           
         return self._database
 
+    def create(self):
+        pass
+
 
     def __repr__(self):
         return "<hdf partition: {}>".format(self.name)

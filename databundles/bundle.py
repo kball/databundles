@@ -5,8 +5,6 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-
- 
 from .filesystem import  BundleFilesystem
 from .schema import Schema
 from .partitions import Partitions
@@ -592,7 +590,7 @@ class BuildBundle(Bundle):
             return False
         
         try:
-            b = self.library.get(self.identity.id_)
+            b = self.library.resolve(self.identity.id_)
             
             if b and b.identity.revision >= self.identity.revision:
                 self.fatal(("Can't build this version. Library has version {} "
@@ -601,7 +599,8 @@ class BuildBundle(Bundle):
                 return False
             
         except Exception as e:
-            self.error("Error in consulting library: {}".format(e.message))
+            raise
+            self.error("Error in consulting library: {}\nException: {}".format(self.library.info,e.message))
         
 
         return True

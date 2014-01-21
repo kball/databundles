@@ -217,30 +217,15 @@ def _print_bundle_list(*args,**kwargs):
             prt("{} {:35s}",''.join(flags), k, v.get('source_dir','<none'))
 
        
-def _print_info(l,d,p, list_partitions=False):
+def _print_info(l,ident, list_partitions=False):
     from ..cache import RemoteMarker
     from ..bundle import LibraryDbBundle # Get the bundle from the library
-    from sqlalchemy.orm.exc import NoResultFound
-    import time
-   
-    api = None
-    try:
-        api = l.upstream.get_upstream(RemoteMarker)
-    except AttributeError: # No api
-        api = l.upstream
-    
-    remote_d = None
-    remote_p = None
 
-    if api:
-        from ..client.exceptions import NotFound
-        try:
-            r = api.get(d.vid, p.vid if p else None)
-            if r:
-                remote_d = r['dataset']
-                remote_p = r['partitions'].items()[0][1] if p and 'partitions' in r and len(r['partitions']) != 0 else None
-        except NotFound:
-            pass 
+    resolved_ident = l.resolve(ident.vid) # Re-resolve to get the URL or Locations
+
+    d = ident
+    p = ident.partition
+
 
     prt("D --- Dataset ---")
     prt("D Dataset   : {}; {}",d.vid, d.vname)
@@ -248,8 +233,8 @@ def _print_info(l,d,p, list_partitions=False):
     prt("D Rel Path  : {}",d.cache_key)
     prt("D Abs Path  : {}",l.cache.path(d.cache_key) if l.cache.has(d.cache_key) else '')
 
-    if remote_d:
-        prt("D Web Path  : {}",remote_d['url'])
+    if d.url:
+        prt("D Web Path  : {}",d)
 
     if l.cache.has(d.cache_key):
         b = LibraryDbBundle(l.database, d.vid)
@@ -261,14 +246,17 @@ def _print_info(l,d,p, list_partitions=False):
                 prt("P {:15s} {}", partition.identity.vid, partition.identity.vname)
 
     if p:
+
+        resolved_ident = l.resolve(ident.partition).partition
+
         prt("P --- Partition ---")
         prt("P Partition : {}; {}",p.vid, p.vname)
         prt("P Is Local  : {}",(l.cache.has(p.cache_key) is not False) if p else '')
         prt("P Rel Path  : {}",p.cache_key)
         prt("P Abs Path  : {}",l.cache.path(p.cache_key) if l.cache.has(p.cache_key) else '' )   
 
-        if remote_p:
-            prt("P Web Path  : {}",remote_p['urls']['db'])
+        if resolved_ident.url:
+            prt("P Web Path  : {}",resolved_ident.url)
             
 
 def main():

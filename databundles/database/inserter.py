@@ -181,7 +181,7 @@ class ValueInserter(ValueWriter):
                  orm_table = None,
                  cast_error_handler = None,
                  cache_size=50000, text_factory = None, 
-                 replace=False,  skip_none=True, update_size = True): 
+                 replace=False,  skip_none=True, update_size = True):
 
         super(ValueInserter, self).__init__(db, bundle,  cache_size=cache_size, text_factory = text_factory)  
    

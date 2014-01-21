@@ -14,13 +14,13 @@ def partition_classes():
 
     class PartitionClasses(object):
         name_by_format = { pnc.format_name():pnc for pnc in (GeoPartitionName, HdfPartitionName,
-                                                     CsvPartitionName, SqlitePartitionName )}
+                                                            CsvPartitionName, SqlitePartitionName )}
 
         extension_by_format = {pc.format_name(): pc.extension() for pc in (GeoPartitionName, HdfPartitionName,
-                                                          CsvPartitionName, SqlitePartitionName )}
+                                                            CsvPartitionName, SqlitePartitionName )}
 
         partition_by_format = {pc.format_name():pc for pc in (GeoPartition, HdfPartition,
-                                                     CsvPartition, SqlitePartition )}
+                                                            CsvPartition, SqlitePartition )}
 
         identity_by_format = {ic.format_name(): ic for ic in (GeoPartitionIdentity, HdfPartitionIdentity,
                                                             CsvPartitionIdentity, SqlitePartitionIdentity )}
@@ -134,7 +134,7 @@ class PartitionInterface(object):
 
     def updater(self, table_or_name=None,**kwargs):  raise NotImplementedError()
 
-    def write_stats(self):  raise NotImplementedError()
+    def write_stats(self, min_key, max_key, count):  raise NotImplementedError()
 
 
 class PartitionBase(PartitionInterface):

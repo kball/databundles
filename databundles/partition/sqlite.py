@@ -200,8 +200,10 @@ class SqlitePartition(PartitionBase):
                 ident = self.identity
                 ident.segment = seg
 
-                p = self.bundle.partitions.find_or_new_csv(**ident.dict)
+                p = self.bundle.partitions.find_or_new_csv(**vars(ident.name.as_partialname()))
+
                 ins = p.inserter( write_header=write_header)
+
                 if logger:
                     logger.always("New CSV Segment: {}".format(p.identity.name), now=True)
                 

@@ -528,6 +528,9 @@ class Test(TestBase):
         local_l  = new_library(self.server_rc.library("local"))
 
         remote_l = new_library(self.server_rc.library("reader"))
+        remote_l.purge()
+
+        self.assertTrue(len(remote_l.list()) == 0)
 
         self.assertEquals(vid, server_l.resolve(vid).vid)
         self.assertIsNone(local_l.resolve(vid))
@@ -544,6 +547,8 @@ class Test(TestBase):
         for p in self.bundle.partitions:
             b = remote_l.get(p.identity.vid)
             self.assertTrue(p.identity.fqname, b.partition.identity.fqname)
+
+        self.assertEqual(1, len(remote_l.list()))
 
 
     # =======================

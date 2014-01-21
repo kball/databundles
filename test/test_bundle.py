@@ -17,8 +17,6 @@ class Test(TestBase):
         self.bundle = Bundle()    
         self.bundle_dir = self.bundle.bundle_dir
 
-
-        
     def save_bundle(self):
         pass
         
@@ -260,14 +258,24 @@ class Test(TestBase):
         
     def test_partition(self):
         from databundles.dbexceptions import ConflictError
-        from  databundles.identity import PartitionIdentity, PartitionNameQuery
+        from databundles.identity import PartitionIdentity, PartitionNameQuery
+        from databundles.partition.csv import CsvPartition
+        from databundles.partition.hdf import HdfPartition
 
         self.bundle.clean()
         self.bundle.prepare()
 
-        self.bundle.partitions.new_db_partition(time=10, space=10, data={'pid':'pid1'})
-        self.bundle.partitions.new_db_partition(time=20, space=20, data={'pid':'pid2'})
-        self.bundle.partitions.new_db_partition(space=30, data={'pid':'pid3'})
+        p = self.bundle.partitions.new_db_partition(time=10, space=10, data={'pid':'pid1'})
+
+        p = self.bundle.partitions.new_csv_partition(time=20, space=20, data={'pid':'pid2'})
+        self.assertIsInstance(p, CsvPartition )
+        p = self.bundle.partitions.find_or_new_csv(time=20, space=20)
+        self.assertIsInstance(p, CsvPartition)
+
+        p = self.bundle.partitions.new_hdf_partition(space=30, data={'pid':'pid3'})
+        self.assertIsInstance(p, HdfPartition)
+        p = self.bundle.partitions.find_or_new_hdf(space=30)
+        self.assertIsInstance(p, HdfPartition)
 
         with self.assertRaises(ConflictError):
             self.bundle.partitions.new_db_partition(time=10, space=10, data={'pid':'pid1'})
@@ -380,19 +388,7 @@ class Test(TestBase):
         self.assertEquals('filesystem3', l['filesystem']['upstream']['upstream']['_name'])
         self.assertEquals('devtest.sandiegodata.org', l['filesystem']['upstream']['upstream']['account']['_name'])
         
-    def x_test_tempfile(self):
-  
-        self.test_generate_schema()
-  
-        table = self.bundle.schema.tables[0]
-        print "TABLE", table.name
-        tf = self.bundle.database.tempfile(table)
-        
-        print "PATH",tf.path
-        w = tf.writer
-        
-        for i in range(10):
-            w.writerow([i,i,i])
+
 
 
     def test_build_bundle_hdf(self):
