@@ -959,7 +959,9 @@ class Partition(Base):
     table = relationship('Table', backref='partitions', lazy='subquery')
     # Already have a 'partitions' replationship on Dataset
     #dataset = relationship('Dataset', backref='partitions')
-    
+
+
+
     def __init__(self,dataset, **kwargs):
         self.id_ = kwargs.get("id",kwargs.get("id_",None)) 
         self.name = kwargs.get("name",kwargs.get("name",None)) 
@@ -987,6 +989,13 @@ class Partition(Base):
             self.t_vid = str(ton.rev( don.revision))
 
         assert self.cache_key is not None
+
+        if True: # Debugging
+            from partition import extension_for_format_name
+
+            ext = extension_for_format_name(self.format)
+
+            assert self.cache_key.endswith(ext)
 
     @property
     def identity(self):

@@ -911,7 +911,12 @@ class LibraryDb(object):
         self.add_file(identity.cache_key, 'remote', identity.vid, state='remote')
 
 
-    def add_file(self,path, group, ref, state='new', type_='bundle', data=None, source_url=None):
+    def add_file(self,
+                 path, group, ref,
+                 state='new',
+                 type_='bundle',
+                 data=None,
+                 source_url=None):
         from databundles.orm import  File
 
         if os.path.exists(path):

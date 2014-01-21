@@ -1011,6 +1011,8 @@ class Identity(object):
     @classmethod
     def from_dict(cls, d):
 
+        assert isinstance(d,dict)
+
         if 'id' in d and 'revision' in d:
             # The vid should be constructed from the id and the revision
             on = (ObjectNumber.parse(d['id']).rev(d['revision']))
@@ -1136,6 +1138,8 @@ class Identity(object):
         '''Return a dictionary of metadata, for use in the Remote api'''
         import json
         import os
+        from collections import OrderedDict
+
 
         if not md5:
             if not file:
@@ -1150,8 +1154,9 @@ class Identity(object):
                 'identity': json.dumps(self.dict),
                 'name':self.sname,
                 'fqname':self.fqname,
-                'md5':md5,
-                'size': os.stat(file).st_size if file else None
+                'md5':md5
+                # This causes errors with calculating the AWS signature
+                #,'size': os.stat(file).st_size if file else None
                 }
 
 

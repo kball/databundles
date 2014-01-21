@@ -172,6 +172,9 @@ class RemoteLibrary(object):
 
         d =  self.get(self.url("/resolve/{}", ref))
 
+        if not d:
+            return None
+
         ident =  Identity.from_dict(d)
 
         if ident.is_bundle:
@@ -200,13 +203,20 @@ class RemoteLibrary(object):
         r = requests.get(url, verify=False, stream=True)
 
         if r.status_code != 200:
+
             from xml.dom import minidom
+            from xml.parsers.expat import ExpatError
+            try:
 
-            o = minidom.parse(r.raw)
+                o = minidom.parse(r.raw)
+                # Assuming the response is in XML because we are usually calling s3
+                raise RestError("{} Error from server after redirect to {} : XML={}"
+                .format(r.status_code, location, o.toprettyxml()))
+            except ExpatError:
+                raise RestError("Failed to get {}, status = {}, content = {} "
+                                .format(url, r.status_code, r.content))
 
-            # Assuming the response is in XML because we are usually calling s3
-            raise RestError("{} Error from server after redirect to {} : XML={}"
-            .format(r.status_code, location, o.toprettyxml()))
+
 
         if r.headers['content-encoding'] == 'gzip':
             from ..util import FileLikeFromIter

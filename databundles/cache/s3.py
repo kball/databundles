@@ -94,10 +94,13 @@ class S3Cache(Cache, RemoteMarker):
                 method = 'GET'
             
             k = self._get_boto_key(rel_path)
-            
+
+            if not k:
+                from ..dbexceptions import NotFoundError
+                raise NotFoundError("Didn't find key for {}/{}, {} ".format(self.bucket_name, self.prefix, rel_path))
+
             return k.generate_url(300, method=method) # expires in 5 minutes
-        
-  
+
     @property
     def cache_dir(self):
         return None
@@ -159,7 +162,7 @@ class S3Cache(Cache, RemoteMarker):
         '''For S3, get requires an upstream, where the downloaded file can be stored
         '''
         
-        raise NotImplemented("Can't get() from an S3, since it has no plae to put a file. Wrap with an FsCache. ")
+        raise NotImplemented("Can't get() from an S3, since it has no place to put a file. Wrap with an FsCache. ")
     
     def _get_boto_key(self, rel_path):
         from boto.s3.key import Key
@@ -264,7 +267,7 @@ class S3Cache(Cache, RemoteMarker):
        
             def __init__(self):
                 import io
-                
+
                 self.mp = this.bucket.initiate_multipart_upload(path, metadata=metadata)
                 self.part_number = 1
                 self.buffer = io.BytesIO()

@@ -290,12 +290,13 @@ class Resolver(object):
 
         out = []
         if dqp is not None:
-            for dataset in (self.session.query(Dataset).filter(dqp)
-                            .order_by(Dataset.revision.desc()).all()):
+
+            for dataset in (self.session.query(Dataset).filter(dqp).order_by(Dataset.revision.desc()).all()):
                 out.append((dataset, None))
 
         if pqp is not None:
-            for row in (self.session.query(Dataset, Partition).join(Partition).filter(pqp)\
+
+            for row in (self.session.query(Dataset, Partition).join(Partition).filter(pqp)
                         .order_by(Dataset.revision.desc()).all()):
                 out.append((row.Dataset, row.Partition))
 

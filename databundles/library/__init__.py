@@ -18,8 +18,8 @@ import logging.handlers
 
 libraries = {}
 
-def _new_library(config):
 
+def _new_library(config):
     import copy
     from ..cache import new_cache, RemoteMarker
     from database import LibraryDb
@@ -40,22 +40,22 @@ def _new_library(config):
 
     config['name'] = config['_name'] if '_name' in config else 'NONE'
 
-    for key in ['_name', 'filesystem', 'database', 'remotes' ]:
+    for key in ['_name', 'filesystem', 'database', 'remotes']:
         if key in config:
             del config[key]
 
     if upstream and (not isinstance(upstream, RemoteMarker)
-                   and not isinstance(upstream.last_upstream(), RemoteMarker)):
+                     and not isinstance(upstream.last_upstream(), RemoteMarker)):
         raise ConfigurationError("Library upstream must have a RemoteMarker interface: {}".format(config))
 
     if 'upstream' in config:
         del config['upstream']
 
-    l =  Library(cache = cache,
-                 database = database,
-                 upstream = upstream,
-                 remotes = remotes,
-                 **config)
+    l = Library(cache=cache,
+                database=database,
+                upstream=upstream,
+                remotes=remotes,
+                **config)
 
     return l
 
@@ -84,12 +84,21 @@ def new_library(config, reset=False):
     if name not in libraries:
         libraries[name] = _new_library(config)
 
-    l =  libraries[name]
+    l = libraries[name]
     l.clear_dependencies()
 
     return l
 
+def clear_libraries():
+
+    global libraries
+
+    libraries = {}
+
+
+
 import collections
+
 
 class Library(object):
     '''
@@ -122,7 +131,7 @@ class Library(object):
         self.dep_cb = None# Callback for dependency resolution
         self.require_upload = require_upload
         self._dependencies = None
-        self.remotes = remotes
+        self._remotes = remotes
 
         if not self.cache:
             raise ConfigurationError("Must specify library.cache for the library in bundles.yaml")
@@ -135,7 +144,8 @@ class Library(object):
 
     def clone(self):
 
-        return self.__class__(self.cache, self.database.clone(), self._upstream, self.sync, self.require_upload, self.host, self.port)
+        return self.__class__(self.cache, self.database.clone(), self._upstream, self.sync, self.require_upload,
+                              self.host, self.port)
 
 
     @property
@@ -153,7 +163,7 @@ class Library(object):
     def load(self, rel_path, decl_md5=None):
         '''Load a bundle from the remote to the local cache and install it'''
         from ..util.flo import copy_file_or_flo
-        from  ..dbexceptions import ConflictError
+        from ..dbexceptions import ConflictError
 
         if not self.upstream.has(rel_path):
             raise ConfigurationError('Remote {} does not have cache key  {}'.format(self.upstream, rel_path))
@@ -175,7 +185,7 @@ class Library(object):
         file_md5 = self.cache.md5(rel_path)
 
         if file_md5 != decl_md5:
-            raise ConflictError('MD5 Mismatch: file={} != declared={} '.format( file_md5 , decl_md5))
+            raise ConflictError('MD5 Mismatch: file={} != declared={} '.format(file_md5, decl_md5))
 
         abs_path = self.cache.path(rel_path)
         b = DbBundle(abs_path)
@@ -191,7 +201,7 @@ class Library(object):
 
         from ..cache import RemoteMarker
 
-        d,p = self.get_ref(bp_id)
+        d, p = self.get_ref(bp_id)
 
         try:
             api = self.upstream.get_upstream(RemoteMarker)
@@ -221,7 +231,6 @@ class Library(object):
         if not isinstance(bundle, (PartitionInterface, Bundle)):
             raise ValueError("Can only install a Partition or Bundle object")
 
-
         dst, cache_key, url = self._put_file(bundle.identity, bundle.database.path, force=force)
 
         return dst, cache_key, url
@@ -239,11 +248,12 @@ class Library(object):
         '''Store a dataset or partition file, without having to open the file
         to determine what it is, by using  seperate identity'''
         from ..identity import Identity
-        if isinstance(identity , dict):
+
+        if isinstance(identity, dict):
             identity = Identity.from_dict(identity)
 
         if not self.cache.has(identity.cache_key) or force:
-            dst = self.cache.put(file_path,identity.cache_key)
+            dst = self.cache.put(file_path, identity.cache_key)
         else:
             dst = self.cache.path(identity.cache_key)
 
@@ -253,12 +263,11 @@ class Library(object):
         if self.upstream and self.sync:
             self.upstream.put(identity, file_path)
 
-
         if identity.is_bundle:
             self.database.install_bundle_file(identity, file_path)
-            self.database.add_file(dst, self.cache.repo_id, identity.vid,  state, type_ ='bundle')
+            self.database.add_file(dst, self.cache.repo_id, identity.vid, state, type_='bundle')
         else:
-            self.database.add_file(dst, self.cache.repo_id, identity.vid,  state, type_ = 'partition')
+            self.database.add_file(dst, self.cache.repo_id, identity.vid, state, type_='partition')
 
         return dst, identity.cache_key, self.cache.last_upstream().path(identity.cache_key)
 
@@ -269,7 +278,7 @@ class Library(object):
 
         self.database.remove_bundle(bundle)
 
-        self.cache.remove(bundle.identity.cache_key, propagate = True)
+        self.cache.remove(bundle.identity.cache_key, propagate=True)
 
 
     ##
@@ -277,7 +286,7 @@ class Library(object):
     ##
 
 
-    def list(self, datasets=None, with_meta = True, key='vid'):
+    def list(self, datasets=None, with_meta=True, key='vid'):
         '''Lists all of the datasets in the partition, optionally with
         metadata. Does not include partitions. This returns a dictionary
         in  a form that is similar to the remote and source lists. '''
@@ -289,7 +298,6 @@ class Library(object):
         if datasets is None:
             datasets = {}
 
-
         self.database.list(datasets=datasets)
 
         return sorted(datasets.values(), key=lambda x: x.vname)
@@ -299,10 +307,28 @@ class Library(object):
 
         return self.cache.path(rel_path)
 
+    def _attach_rrc(self, url, gets, cb):
+        from ..cache.remote import RestReadCache
 
-    def get(self,ref, force = False, cb=None):
+        # Attach and detach the appropriate RestReadCache
+
+        orig_last_upstream = self.cache.last_upstream()
+        orig_last_upstream.upstream = RestReadCache(url)
+
+        # Gets from the remote are slow, but after that, gets from the
+        # file system cache are fast, so we can afford to repeat the gets later.
+
+        for get in gets:
+            self.cache.get(get.cache_key, cb=cb)
+
+
+        orig_last_upstream.upstream = None
+
+    def get(self, ref, force=False, cb=None):
         '''Get a bundle, given an id string or a name '''
         from sqlite3 import DatabaseError
+        from sqlalchemy.orm.exc import NoResultFound
+        from ..dbexceptions import NotFoundError
 
         # Get a reference to the dataset, partition and relative path
         # from the local database.
@@ -310,21 +336,13 @@ class Library(object):
         dataset = self.resolve(ref)
 
         if dataset.url: # This means that the reference came from a REST interface.
-            from ..cache.remote import RestReadCache
 
-            # Attach and detach the appropriate RestReadCache
-
-            orig_last_upstream = self.cache.last_upstream()
-            orig_last_upstream.upstream = RestReadCache(dataset.url)
-
-            # Gets from the remote are slow, but after that, gets from the
-            # file system cache are fast, so we can afford to repeat the gets later.
-            self.cache.get(dataset.cache_key, cb=cb)
+            gets = [dataset]
 
             if dataset.partition:
-                self.cache.get(dataset.partitioncache_key)
+                gets.append(dataset.partition)
 
-            orig_last_upstream.upstream = None
+            self._attach_rrc(dataset.url,gets,cb=cb)
 
         # First, get the bundle and instantiate it. If what was requested
         # was just the bundle, return it, otherwise, return it. If it was
@@ -343,25 +361,61 @@ class Library(object):
         # Do we have it in the database? If not install it.
         # It should be installed if it was retrieved remotely,
         # but may not be installed if there is a local copy in the dcache.
-        d = self.database.get(bundle.identity.vid)
+        try:
+            d = self.database.get(bundle.identity.vid)
+        except NoResultFound:
+            d = None
+
         if not d:
             self.database.install_bundle(bundle)
-            self.database.add_file(abs_path, self.cache.repo_id, bundle.identity.vid, 'pulled')
+            self.database.add_file(abs_path, self.cache.repo_id, bundle.identity.vid, 'pulled',
+                                   source_url=dataset.url)
 
         bundle.library = self
 
         if dataset.partition:
+
             # Ensure the partition is in the cache
-            self.cache.get(dataset.partition.cache_key, cb=cb)
+            if not self.cache.has(dataset.partition.cache_key):
+                remote_dataset = self.resolve(dataset.partition.cache_key)
+
+                if not remote_dataset:
+                    raise NotFoundError("Failed to get partition from resolver: {}".format(dataset.partition.cache_key))
+
+                url = dataset.url
+
+                if not url:
+                    # This happens when a second call to get() gets a partition of a dataset
+                    # that was retrieved in the first. The resolve() call returns from the local resolver,
+                    # and url is not set.
+
+                    file_ = self.database.get_file_by_ref(bundle.identity.vid).pop(0)
+                    url = file_.source_url
+
+                assert url is not None
+                self._attach_rrc(url, [dataset.partition], cb = cb)
+
+            abs_path = self.cache.get(dataset.partition.cache_key, cb=cb)
+
+            if not abs_path or not os.path.exists(abs_path):
+
+                raise NotFoundError('Failed to get partition {} from cache '.format(dataset.partition.fqname))
 
             partition = bundle.partitions.get(dataset.partition.vid)
 
             if not partition:
                 from ..dbexceptions import NotFoundError
+
                 raise NotFoundError('Failed to get partition {} from bundle '.format(dataset.partition.fqname))
 
-        else:
-            return bundle
+            self.database.add_file(abs_path, self.cache.repo_id, partition.identity.vid, 'pulled',
+                                   source_url=url)
+
+            # Attach the partition into the bundle, and return both.
+            bundle.partition = partition
+
+        return bundle
+
 
     ##
     ## Finding
@@ -375,23 +429,18 @@ class Library(object):
     @property
     def resolver(self):
 
-        if self.remotes:
+        if self._remotes:
             from .query import RemoteResolver
-            return RemoteResolver(local_resolver=self.database.resolver, remote_urls=self.remotes)
+
+            return RemoteResolver(local_resolver=self.database.resolver, remote_urls=self._remotes)
         else:
             return self.database.resolver
 
     def resolve(self, ref):
 
-        ip, dataset =  self.resolver.resolve_ref_one(ref)
+        ip, ident = self.resolver.resolve_ref_one(ref)
 
-        if not dataset:
-            return None
-
-        if dataset.partition:
-            return dataset.partition
-
-        return dataset
+        return ident
 
 
     ##
@@ -399,8 +448,7 @@ class Library(object):
     ##
 
     @property
-
-    def dep(self,name):
+    def dep(self, name):
         """"Bundle version of get(), which uses a key in the
         bundles configuration group 'dependencies' to resolve to a name"""
 
@@ -414,9 +462,8 @@ class Library(object):
         if not b:
             raise NotFoundError("Failed to get dependency, key={}, id={}".format(name, bundle_name))
 
-
         if self.dep_cb:
-            self.dep_cb( self, name, bundle_name, b)
+            self.dep_cb(self, name, bundle_name, b)
 
         return b
 
@@ -424,7 +471,7 @@ class Library(object):
     def dependencies(self):
 
         if not self._dependencies:
-            self ._dependencies = self._get_dependencies()
+            self._dependencies = self._get_dependencies()
 
         return self._dependencies
 
@@ -437,7 +484,6 @@ class Library(object):
         if not self.bundle:
             raise ConfigurationError("Can't use the dep() method for a library that is not attached to a bundle");
 
-
         group = self.bundle.config.group('build')
 
         try:
@@ -449,20 +495,22 @@ class Library(object):
             return {}
 
         out = {}
-        for k,v in deps.items():
+        for k, v in deps.items():
 
             try:
                 Identity.parse_name(v)
                 out[k] = v
             except Exception as e:
-                self.bundle.error("Failed to parse dependency name '{}' for '{}': {}".format(v, self.bundle.identity.name, e.message))
+                self.bundle.error(
+                    "Failed to parse dependency name '{}' for '{}': {}".format(v, self.bundle.identity.name, e.message))
 
         return out
 
     def check_dependencies(self, throw=True):
         from ..util import Progressor
+
         errors = {}
-        for k,v in self.dependencies.items():
+        for k, v in self.dependencies.items():
             self.logger.info('Download and check dependency: {}'.format(v))
             b = self.get(v, cb=Progressor().progress)
 
@@ -483,7 +531,7 @@ class Library(object):
         for nf in new_files:
             yield nf
 
-    def push(self, ref=None , cb=None):
+    def push(self, ref=None, cb=None):
         """Push any files marked 'new' to the upstream
 
         Args:
@@ -513,14 +561,14 @@ class Library(object):
             md = identity.to_meta(file=file_.path)
 
             if self.upstream.has(identity.cache_key):
-                if cb: cb('Has',md,0)
+                if cb: cb('Has', md, 0)
                 file_.state = 'pushed'
             else:
                 start = time.clock()
-                if cb: cb('Pushing',md, start)
+                if cb: cb('Pushing', md, start)
                 self.upstream.put(file_.path, identity.cache_key, metadata=md)
                 file_.state = 'pushed'
-                if cb: cb('Pushed',md, time.clock()-start)
+                if cb: cb('Pushed', md, time.clock() - start)
 
             self.database.session.merge(file_)
             self.database.commit()
@@ -551,6 +599,7 @@ class Library(object):
         '''Run a thread that will check the database and call the callback when the database should be
         backed up after a change. '''
         from util import DumperThread
+
         dt = DumperThread(self.clone())
         dt.start()
 
@@ -559,15 +608,14 @@ class Library(object):
     def backup(self):
         '''Backup the database to the remote, but only if the database needs to be backed up. '''
 
-
         if not self.database.needs_dump():
             return False
 
-        backup_file = temp_file_name()+".db"
+        backup_file = temp_file_name() + ".db"
 
         self.database.dump(backup_file)
 
-        path = self.upstream.put(backup_file,'_/library.db')
+        path = self.upstream.put(backup_file, '_/library.db')
 
         os.remove(backup_file)
 
@@ -628,7 +676,7 @@ class Library(object):
             bundle = DbBundle(path)
             identity = bundle.identity
 
-            self.database.add_file(path, self.cache.repo_id, identity.vid,  'pulled')
+            self.database.add_file(path, self.cache.repo_id, identity.vid, 'pulled')
             self.logger.info('Installing: {} '.format(bundle.identity.name))
             try:
                 self.database.install_bundle_file(identity, path)
@@ -661,7 +709,7 @@ class Library(object):
 
         self.logger.info("Rebuilding from dir {}".format(self.cache.cache_dir))
 
-        for r,d,f in os.walk(self.cache.cache_dir): #@UnusedVariable
+        for r, d, f in os.walk(self.cache.cache_dir): #@UnusedVariable
 
             if '/meta/' in r:
                 continue
@@ -669,21 +717,20 @@ class Library(object):
             for file_ in f:
 
                 if file_.endswith(".db"):
-                    path_ = os.path.join(r,file_)
+                    path_ = os.path.join(r, file_)
                     try:
                         b = DbBundle(path_)
                         # This is a fragile hack -- there should be a flag in the database
                         # that diferentiates a partition from a bundle.
                         f = os.path.splitext(file_)[0]
 
-                        if b.db_config.get_value('info','type') == 'bundle':
+                        if b.db_config.get_value('info', 'type') == 'bundle':
                             self.logger.info("Queing: {} from {}".format(b.identity.vname, file_))
                             bundles.append(b)
 
                     except Exception as e:
                         pass
                         #self.logger.error('Failed to process {}, {} : {} '.format(file_, path_, e))
-
 
         for bundle in bundles:
             self.logger.info('Installing: {} '.format(bundle.identity.vname))
@@ -694,13 +741,14 @@ class Library(object):
                 self.logger.error('Failed to install bundle {}'.format(bundle.identity.vname))
                 continue
 
-            self.database.add_file(bundle.database.path, self.cache.repo_id, bundle.identity.vid,  'rebuilt', type_='bundle')
+            self.database.add_file(bundle.database.path, self.cache.repo_id, bundle.identity.vid, 'rebuilt',
+                                   type_='bundle')
 
             for p in bundle.partitions:
                 if self.cache.has(p.identity.cache_key, use_upstream=False):
                     self.logger.info('            {} '.format(p.identity.vname))
-                    self.database.add_file(p.database.path, self.cache.repo_id, p.identity.vid,  'rebuilt', type_='partition')
-
+                    self.database.add_file(p.database.path, self.cache.repo_id, p.identity.vid, 'rebuilt',
+                                           type_='partition')
 
         self.database.commit()
         return bundles

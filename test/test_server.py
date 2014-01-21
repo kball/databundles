@@ -37,6 +37,13 @@ class Test(TestBase):
         self.bundle_dir = self.bundle.bundle_dir
 
     def tearDown(self):
+        from databundles.library import clear_libraries
+
+        # new_library() caches the library, and the test runner uses different threads
+        # which together with the sqlite driver's inability to use threads, can cause some problems.
+
+        clear_libraries()
+
         self.stop_server()
 
     def get_library(self, name = 'default'):
@@ -46,7 +53,6 @@ class Test(TestBase):
         config = self.server_rc.library(name)
 
         l =  new_library(config, reset = True)
-
 
         return l
 
@@ -91,19 +97,11 @@ class Test(TestBase):
         self.assertEquals('library-test', r['upstream']['prefix'])
 
     def test_resolve(self):
-        import re
-        import time
-        from databundles.run import  get_runconfig, RunConfig
         from databundles.client.rest import RemoteLibrary
-        from databundles.cache import new_cache
-        from databundles.identity import Identity
-
-        self.start_server()
-
-        rl = RemoteLibrary(self.server_url)
 
         l = self.get_library()
-
+        l.purge()
+        print l.info
         #
         # Check that the library can list datasets that are inserted externally
         #
@@ -112,15 +110,50 @@ class Test(TestBase):
 
         ident = self.bundle.identity
 
+        # Local Library
+        self.assertEquals(ident.vid, l.resolve(ident.vid).vid)
+        self.assertEquals(ident.vid, l.resolve(ident.vname).vid)
+        self.assertEquals(ident.vid, l.resolve(ident.cache_key).vid)
+        self.assertEquals(ident.vid, l.resolve(ident.sname).vid)
+
+        for p in self.bundle.partitions:
+            print '--', p.identity.cache_key
+            dsid = l.resolve(p.identity.vid)
+            self.assertEquals(ident.vid, dsid.vid)
+            self.assertEquals(p.identity.vid, dsid.partition.vid)
+
+            dsid = l.resolve(p.identity.cache_key)
+
+            if not dsid:
+                ck = p.identity.cache_key
+                l.resolve(ck)
+
+            self.assertIsNotNone(dsid)
+            self.assertEquals(ident.vid, dsid.vid)
+            self.assertEquals(p.identity.vid, dsid.partition.vid)
+
+        # Remote Library
+
+        self.start_server()
+
+        rl = RemoteLibrary(self.server_url)
+
         self.assertEquals(ident.vid, rl.resolve(ident.vid).vid)
         self.assertEquals(ident.vid, rl.resolve(ident.vname).vid)
         self.assertEquals(ident.vid, rl.resolve(ident.cache_key).vid)
         self.assertEquals(ident.vid, (rl.resolve(ident.sname).vid))
 
         for p in self.bundle.partitions:
+            print '--',p.identity.cache_key
             dsid = rl.resolve(p.identity.vid)
             self.assertEquals(ident.vid, dsid.vid)
             self.assertEquals(p.identity.vid, dsid.partition.vid)
+
+            dsid = rl.resolve(p.identity.cache_key)
+            self.assertEquals(ident.vid, dsid.vid)
+            self.assertEquals(p.identity.vid, dsid.partition.vid)
+
+        print rl.resolve('source/dataset-subset-variation-0.0.1/geot1.geodb')
 
     def test_load(self):
 
@@ -135,6 +168,7 @@ class Test(TestBase):
         rl = RemoteLibrary(self.server_url)
 
         l = self.get_library()
+        print l.info
 
         #
         # Check that the library can list datasets that are inserted externally
@@ -199,10 +233,66 @@ class Test(TestBase):
 
         # Check that we can get the record from the library
 
-        self.assertEquals(identity.vid, Identity.from_dict(rl.resolve(identity.vid)).vid)
-        self.assertEquals(identity.vid, Identity.from_dict(rl.resolve(identity.vname)).vid)
-        self.assertEquals(identity.vid, Identity.from_dict(rl.resolve(identity.cache_key)).vid)
-        self.assertEquals(identity.vid, Identity.from_dict(rl.resolve(identity.sname)).vid)
+        self.assertEquals(identity.vid, rl.resolve(identity.vid).vid)
+        self.assertEquals(identity.vid, rl.resolve(identity.vname).vid)
+        self.assertEquals(identity.vid, rl.resolve(identity.cache_key).vid)
+        self.assertEquals(identity.vid, rl.resolve(identity.sname).vid)
+
+
+    def test_push(self):
+        from databundles.identity import Identity
+        from functools import partial
+
+        config = self.server_library_config()
+
+        # Create the library so we can get the same remote config
+        l = new_library(config)
+        s3 = l.upstream.last_upstream()
+        print l.info
+        db = l.database
+        db.enable_delete = True
+        try:
+            db.drop()
+            db.create()
+        except:
+            pass
+
+        s3 = l.upstream.last_upstream()
+        s3.clean()
+
+        l.put_bundle(self.bundle)
+
+        def push_cb(expect, action, metadata, time):
+            import json
+
+
+            self.assertIn(action, expect)
+
+            identity = Identity.from_dict(json.loads(metadata['identity']))
+            print action, identity.cache_key
+
+        def throw_cb(action, metadata, time):
+            raise Exception("Push shonld not run")
+
+        l.push(cb=partial(push_cb, ('Pushed', 'Pushing')))
+
+        # ALl should be pushed, so suhould not run
+        l.push(cb=throw_cb)
+
+        # Resetting library, but not s3, should already have all
+        # records
+        db = l.database
+        db.enable_delete = True
+        db.drop()
+        db.create()
+        l.put_bundle(self.bundle)
+
+        l.push(cb=partial(push_cb, ('Has')))
+
+        self.web_exists(s3, self.bundle.identity.cache_key)
+
+        for p in self.bundle.partitions:
+            self.web_exists(s3, p.identity.cache_key)
 
 
     def test_caches(self):
@@ -214,7 +304,7 @@ class Test(TestBase):
         from databundles.util import md5_for_file
         from databundles.bundle import DbBundle
 
-        self.start_server() # For the rest-cache
+        #self.start_server() # For the rest-cache
 
         #fn = '/tmp/1mbfile'
         #with open(fn, 'wb') as f:
@@ -232,7 +322,8 @@ class Test(TestBase):
 
         rc = get_runconfig((os.path.join(self.bundle_dir,'test-run-config.yaml'),RunConfig.USER_CONFIG))
 
-        for i, fsname in enumerate(['fscache', 'limitedcache', 'compressioncache','cached-s3', 'cached-compressed-s3']): #'compressioncache',
+        for i, fsname in enumerate(['fscache', 'limitedcache', 'compressioncache',
+                                    'cached-s3', 'cached-compressed-s3']):
 
             config = rc.filesystem(fsname)
             cache = new_cache(config)
@@ -242,6 +333,7 @@ class Test(TestBase):
             relpath = identity.cache_key
 
             r = cache.put(fn, relpath,identity.to_meta(md5=md5))
+
             r = cache.get(relpath)
 
             if not r.startswith('http'):
@@ -312,69 +404,14 @@ class Test(TestBase):
         for partition in self.bundle.partitions:
             r = api.find((QueryCommand().partition(name = partition.identity.name)).to_dict())
             self.assertEquals(partition.identity.name, r[0].name)
-
-    def test_push(self):
-        from databundles.identity import Identity
-        from functools import partial
-        config = self.server_library_config()
-
-        # Create the library so we can get the same remote config
-        l = new_library(config)
-        s3 = l.upstream.last_upstream()
-        print l.info
-        db = l.database
-        db.enable_delete = True
-        db.drop()
-        db.create()
-
-        s3 = l.upstream.last_upstream()
-        s3.clean()
-
-        l.put_bundle(self.bundle)
-
-        def push_cb(expect, action, metadata, time):
-            import json
-
-            if action == 'Pushed':
-                rate = int(float(metadata['size']) / time / float( 1024*1024))
-            else:
-                rate = None
-
-            self.assertIn(action, expect)
-
-            identity = Identity.from_dict(json.loads(metadata['identity']))
-            print action, identity.cache_key, metadata['size'], '{} Mb/s'.format(rate) if rate else ''
-
-        def throw_cb(action, metadata, time):
-            raise Exception("Push shonld not run")
-
-        l.push(cb=partial(push_cb,('Pushed','Pushing')))
-
-        # ALl should be pushed, so suhould not run
-        l.push(cb=throw_cb)
-
-        # Resetting library, but not s3, should already have all
-        # records
-        db = l.database
-        db.enable_delete = True
-        db.drop()
-        db.create()
-        l.put_bundle(self.bundle)
-
-        l.push(cb=partial(push_cb,('Has')))
-
-        self.web_exists(s3,self.bundle.identity.cache_key)
-
-        for p in self.bundle.partitions:
-            self.web_exists(s3,p.identity.cache_key)
-
-
     def test_joint_resolve(self):
         '''Test resolving from either a remote or local library, from the local interface '''
 
         from databundles.identity import Identity
         from databundles.client.rest import RemoteLibrary
         from databundles.library.query import RemoteResolver
+
+        self.start_server()
 
         config = self.server_library_config()
 
@@ -404,8 +441,6 @@ class Test(TestBase):
         ident = self.bundle.identity
         self.assertEquals(ident.vid, l.resolve(ident.vid).vid)
 
-        self.start_server()
-
         rl = RemoteLibrary(self.server_url)
         self.assertEquals(ident.vid, rl.resolve(ident.vname).vid)
 
@@ -432,7 +467,6 @@ class Test(TestBase):
         self.assertEquals(ident.vid, rr.resolve_ref_one(ident.vid)[1].vid)
         self.assertIsNone(rr.resolve_ref_one(ident.vid)[1].url)
 
-
     def test_files(self):
         '''
         Test some of the server's file functions
@@ -451,6 +485,7 @@ class Test(TestBase):
         l = new_library(config)
 
         l.put_bundle(self.bundle)
+        l.push()
 
         ident = self.bundle.identity
         ck = ident.cache_key
@@ -505,6 +540,10 @@ class Test(TestBase):
         b = remote_l.get(vid)
 
         print b.identity.fqname
+
+        for p in self.bundle.partitions:
+            b = remote_l.get(p.identity.vid)
+            self.assertTrue(p.identity.fqname, b.partition.identity.fqname)
 
 
     # =======================

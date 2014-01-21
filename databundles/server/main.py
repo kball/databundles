@@ -3,12 +3,12 @@ REST Server For DataBundle Libraries.
 '''
 
 
-from bottle import  error, hook, get, put, post, request, response, redirect #@UnresolvedImport
-from bottle import HTTPResponse, static_file, install, url #@UnresolvedImport
-from bottle import ServerAdapter, server_names, Bottle  #@UnresolvedImport
-from bottle import run, debug #@UnresolvedImport
+from bottle import  error, hook, get, put, post, request, response, redirect
+from bottle import HTTPResponse, static_file, install, url
+from bottle import ServerAdapter, server_names, Bottle
+from bottle import run, debug
 
-from decorator import  decorator #@UnresolvedImport
+from decorator import  decorator
 from  databundles.library import new_library
 import databundles.util
 from databundles.bundle import DbBundle
@@ -78,7 +78,7 @@ def capture_return_exception(e):
     return {'exception':
      {'class':e.__class__.__name__, 
       'args':e.args,
-      'trace': "\n".join(tb_list)
+      'trace': tb_list
      }
     }   
 

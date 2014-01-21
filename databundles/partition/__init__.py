@@ -1,61 +1,78 @@
 
 
 import os
-from ..identity import Identity, Name, NameQuery
-from ..identity import ObjectNumber, PartitionNumber, PartitionIdentity
+from ..util import lru_cache
 
+
+@lru_cache()
+def partition_classes():
+
+    from geo import GeoPartitionName,GeoPartitionName,GeoPartition,GeoPartitionIdentity
+    from hdf import HdfPartitionName,HdfPartitionName,HdfPartition,HdfPartitionIdentity
+    from csv import CsvPartitionName,CsvPartitionName,CsvPartition,CsvPartitionIdentity
+    from sqlite import SqlitePartitionName,SqlitePartitionName,SqlitePartition,SqlitePartitionIdentity
+
+    class PartitionClasses(object):
+        name_by_format = { pnc.format_name():pnc for pnc in (GeoPartitionName, HdfPartitionName,
+                                                     CsvPartitionName, SqlitePartitionName )}
+
+        extension_by_format = {pc.format_name(): pc.extension() for pc in (GeoPartitionName, HdfPartitionName,
+                                                          CsvPartitionName, SqlitePartitionName )}
+
+        partition_by_format = {pc.format_name():pc for pc in (GeoPartition, HdfPartition,
+                                                     CsvPartition, SqlitePartition )}
+
+        identity_by_format = {ic.format_name(): ic for ic in (GeoPartitionIdentity, HdfPartitionIdentity,
+                                                            CsvPartitionIdentity, SqlitePartitionIdentity )}
+
+
+    return PartitionClasses()
 
 def name_class_from_format_name(name):
 
-    from geo import GeoPartitionName
-    from hdf import HdfPartitionName
-    from csv import CsvPartitionName
-    from sqlite import SqlitePartitionName
 
     if not name:
         name = 'db'
 
-    for pc in (GeoPartitionName, HdfPartitionName, CsvPartitionName, SqlitePartitionName ):
-        if name == pc.format_name():
-            return pc
-
-    raise KeyError("Unknown format name: {}".format(name))
-
+    try:
+        return partition_classes().name_by_format[name]
+    except KeyError:
+        raise KeyError("Unknown format name: {}".format(name))
 
 
 def partition_class_from_format_name(name):
 
-    from geo import GeoPartition
-    from hdf import HdfPartition
-    from csv import CsvPartition
-    from sqlite import SqlitePartition
 
     if not name:
         name = 'db'
 
-    for pc in (GeoPartition, HdfPartition, CsvPartition, SqlitePartition ):
-        if name == pc.format_name():
-            return pc
-
-    raise KeyError("Unknown format name: {}".format(name))
+    try:
+        return partition_classes().partition_by_format[name]
+    except KeyError:
+        raise KeyError("Unknown format name: {}".format(name))
 
 
 def identity_class_from_format_name(name):
 
-    from geo import GeoPartitionIdentity
-    from hdf import HdfPartitionIdentity
-    from csv import CsvPartitionIdentity
-    from sqlite import SqlitePartitionIdentity
+    if not name:
+        name = 'db'
+
+    try:
+        return partition_classes().identity_by_format[name]
+    except KeyError:
+        raise KeyError("Unknown format name: {}".format(name))
+
+def extension_for_format_name(name):
 
     if not name:
         name = 'db'
 
-    for ic in (GeoPartitionIdentity, HdfPartitionIdentity,
-               CsvPartitionIdentity, SqlitePartitionIdentity ):
-        if name == ic.format_name():
-            return ic
+    try:
+        return partition_classes().extension_by_format[name]
+    except KeyError:
+        raise KeyError("Unknown format name: {}".format(name))
 
-    raise KeyError("Unknown format name: {}".format(name))
+
 
 def new_partition(bundle, orm_partition, **kwargs):
 
