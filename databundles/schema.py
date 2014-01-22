@@ -270,7 +270,7 @@ class Schema(object):
         type_ =  Column.types[column.datatype][0]
     
         if column.datatype == Column.DATATYPE_NUMERIC:
-            return type_(column.precision, column._scale)
+            return type_(column.precision, column.scale)
         elif column.size:
             return type_(column.size)
         else:
@@ -635,9 +635,9 @@ class Schema(object):
 
         # also add data columns for the table
         
-        for k,v in table.data.items():
-            data_fields.add(k)                      
-        
+            for k,v in table.data.items():
+                data_fields.add(k)
+
             
         data_fields = sorted(data_fields)
                      
@@ -1282,15 +1282,15 @@ class {name}(Base):
         self.bundle.log("Adding code table: {}".format(name))
         
         with self.bundle.session as s:
-            
+
             # This has to come before the add_table, or the self.col_sequence values get screwed up
             table = self.table(source_table_name)
-            self.add_column(table, source_column_name+'_code', 
+            self.add_column(table, source_column_name+'_code',
                              datatype = 'varchar',
                              sequence_id = len(table.columns)+1,
                              description='Non-integer code value for column {}'.format(source_column_name))
-            
-            
+
+
             t = self.add_table(name, data={'code_key':json.dumps([source_table_name, source_column_name])})
             self.add_column(t, 'id', datatype='integer', is_primary_key = True, sequence_id=1)
             self.add_column(t, 'code', datatype='text', description='Value of code',sequence_id=2)

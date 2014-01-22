@@ -490,7 +490,7 @@ class Partitions(object):
          
     def new_hdf_partition(self, clean=False, tables=None, data=None, **kwargs):
         
-        p, found =  self._find_or_new(kwargs,format='hdf')
+        p, found =  self._find_or_new(kwargs,format='hdf', data=data)
         
         if found:
             raise ConflictError("Partition {} alread exists".format(p.name))
@@ -510,9 +510,10 @@ class Partitions(object):
         return p
     
  
-    def new_csv_partition(self, pid=None, **kwargs):
-        
-        p, found =  self._find_or_new(kwargs,format='csv')
+    def new_csv_partition(self, pid=None, data=None, **kwargs):
+
+
+        p, found =  self._find_or_new(kwargs,format='csv', data=data)
         
         if found:
             raise ConflictError("Partition {} alread exists".format(p.name))

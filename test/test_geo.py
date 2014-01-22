@@ -24,6 +24,26 @@ class Test(TestBase):
     def tearDown(self):
         pass
 
+    def test_geo_schema(self):
+
+        from osgeo import ogr
+        import support
+        import os.path
+        from databundles.geo.sfschema import copy_schema
+
+        def geo_file(p):
+            return os.path.join(os.path.dirname(support.__file__),'neighborhoods',p)
+
+        url = "http://rdw.sandag.org/file_store/Business/Business_Sites.zip"
+        path = geo_file("Neighborhoods_SD.shp")
+
+
+        with self.bundle.session:
+            copy_schema(self.bundle.schema, url)
+
+
+        print self.bundle.schema.as_csv()
+
     def x_test_basic(self):
         from databundles.geo.analysisarea import get_analysis_area,  draw_edges
         from databundles.geo import Point

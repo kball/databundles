@@ -33,6 +33,86 @@ ogr_type_map = {
         Column.DATATYPE_DATETIME: ogr.OFTDateTime, 
         }
 
+
+def copy_schema(schema, path, table_name=None, fmt='shapefile'):
+
+
+    if path.startswith('http'):
+        shape_url = path
+        path = schema.bundle.filesystem.download_shapefile(shape_url)
+
+
+    driver = driver_by_name(fmt)
+
+    ds = driver.Open(path, 0) # 0 means read-only. 1 means writeable.
+
+    type_map = {v:k for k,v in ogr_type_map.items()}
+
+    if ds.GetLayerCount() > 1  and table_name:
+        raise ValueError("Can't specify table_name for a file with multiple layers")
+
+    for i in range(0, ds.GetLayerCount()):
+        layer = ds.GetLayer(i)
+
+        table_name = layer.GetName().lower() if not table_name else table_name
+
+        table = schema.add_table(table_name)
+
+        schema.add_column(table, 'ogc_fid', datatype='integer', is_primary_key=True, sequence_id=1)
+
+        dfn = layer.GetLayerDefn()
+        for i in range(0, dfn.GetFieldCount()):
+            field = dfn.GetFieldDefn(i)
+
+            schema.add_column(table,
+                            field.GetName(),
+                            datatype=type_map[field.GetType()],
+                            width = field.GetWidth() if field.GetWidth() > 0 else None,
+                            is_primary_key =  False,
+                            sequence_id=len(table.columns) + 1)
+
+
+def driver_by_name(fmt):
+
+    if fmt == 'kml':
+        drv = ogr.GetDriverByName("KML")
+    elif fmt == 'geojson':
+        drv = ogr.GetDriverByName("GeoJSON")
+    elif fmt == 'sqlite' or fmt == 'geodb' or fmt == 'db':
+        drv = ogr.GetDriverByName("SQLite")
+        options = ['SPATIALITE=YES', 'INIT_WITH_EPSG=YES', 'OGR_SQLITE_SYNCHRONOUS=OFF',
+                   'OGR_SQLITE_CACHE=1024', '-gt 50000', 'COMPRESS_GEOM=yes']
+    elif fmt == 'shapefile':
+        drv = ogr.GetDriverByName("ESRI Shapefile")
+    else:
+        raise Exception("Unknown format: {} ".format(fmt))
+
+    return drv
+
+def new_datasource(path, fmt='shapefile'):
+    import os
+    from databundles.util import rm_rf
+
+    options = []
+
+    drv = driver_by_name(fmt)
+
+    if not os.path.exists(os.path.dirname(path)):
+        os.makedirs(os.path.dirname(path))
+
+    if os.path.exists(path):
+        if os.path.isdir(path):
+            rm_rf(path)
+        else:
+            os.remove(path)
+
+    ds = drv.CreateDataSource(path, options=options)
+
+    if ds is None:
+        raise Exception("Failed to create datasource: {}".format(path))
+
+    return ds
+
 class TableShapefile(object):
 
     def __init__(self, bundle, path, table, dest_srs=4326, source_srs=None, name = None):
@@ -294,40 +374,7 @@ class TableShapefile(object):
         return srs
     
     def create_datasource(self, path, fmt):
-        import os
-        from databundles.util import rm_rf
-
-        options = []
-        
-        if fmt == 'kml':
-            drv = ogr.GetDriverByName( "KML" )
-        elif fmt == 'geojson':
-            drv = ogr.GetDriverByName( "GeoJSON" )
-        elif fmt == 'sqlite' or fmt == 'geodb' or fmt == 'db':
-            drv = ogr.GetDriverByName( "SQLite" )
-            options = ['SPATIALITE=YES', 'INIT_WITH_EPSG=YES','OGR_SQLITE_SYNCHRONOUS=OFF', 
-                       'OGR_SQLITE_CACHE=1024', '-gt 50000', 'COMPRESS_GEOM=yes']
-        elif fmt == 'shapefile':
-            drv = ogr.GetDriverByName( "ESRI Shapefile" )
-        else: 
-            raise Exception("Unknown format: {} ".format(fmt))
-            
-        if not os.path.exists(os.path.dirname(path)):
-            os.makedirs(os.path.dirname(path))
-        
-        if os.path.exists(path):
-            if os.path.isdir(path):
-                rm_rf(path)
-            else:
-                os.remove(path)
-        
-        ds = drv.CreateDataSource(path, options=options)
-         
-        
-        if ds is None:
-            raise Exception("Failed to create datasource: {}".format(path))
-
-        return ds
+        return new_datasource(path, fmt)
     
     def compress_file(self):
         import zipfile

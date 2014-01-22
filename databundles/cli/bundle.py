@@ -63,7 +63,7 @@ def bundle_command(args, rc, src):
 
 def bundle_parser(cmd):
     import argparse, multiprocessing
-    
+
     parser = cmd.add_parser('bundle', help='Manage bundle files')
     parser.set_defaults(command='bundle')
     parser.add_argument('-l','--library',  default='default',  help='Select a different name for the library')
@@ -73,16 +73,16 @@ def bundle_parser(cmd):
                         default = 1,
                         const = multiprocessing.cpu_count(),
                         help='Run the build process on multiple processors, if the  method supports it')
-    
-    # These are args that Aptana / PyDev adds to runs. 
+
+    # These are args that Aptana / PyDev adds to runs.
     parser.add_argument('--port', default=None, help="PyDev Debugger arg")
     parser.add_argument('--verbosity', default=None, help="PyDev Debugger arg")
-    
+
     sub_cmd = parser.add_subparsers(title='commands', help='command help')
 
     command_p = sub_cmd.add_parser('config', help='Operations on the bundle configuration file')
     command_p.set_defaults(subcommand='config')
-       
+
     asp = command_p.add_subparsers(title='Config subcommands', help='Subcommand for operations on a bundl file')
 
 
@@ -281,6 +281,9 @@ def bundle_prepare(args, b, rc):
     return True
 
 def bundle_build(args, b, rc):
+
+    if not b.is_prepared:
+        bundle_prepare(args, b, rc)
 
     if b.pre_build():
         b.log("---- Build ---")

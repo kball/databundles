@@ -281,10 +281,10 @@ class Test(TestBase):
             self.bundle.partitions.new_db_partition(time=10, space=10, data={'pid':'pid1'})
 
         with self.assertRaises(ConflictError):
-            self.bundle.partitions.new_db_partition(time=20, space=20, data={'pid':'pid21'})
+            self.bundle.partitions.new_csv_partition(time=20, space=20, data={'pid':'pid21'})
 
         with self.assertRaises(ConflictError):
-            self.bundle.partitions.new_db_partition(space=30, data={'pid':'pid31'})
+            self.bundle.partitions.new_hdf_partition(space=30, data={'pid':'pid31'})
 
 
         self.assertEqual(3, len(self.bundle.partitions.all))
@@ -294,12 +294,11 @@ class Test(TestBase):
         self.assertEqual(3, len(self.bundle.partitions.all))
         self.assertEquals('pid1',p.data['pid'] )
       
-        p = self.bundle.partitions.find_or_new(time=20, space=20)
+        p = self.bundle.partitions.find_or_new_csv(time=20, space=20)
         p.database.create()  
         self.assertEquals('pid2',p.data['pid'] ) 
 
-        p = self.bundle.partitions.find_or_new(space=30)
-        p.database.create()   
+        p = self.bundle.partitions.find_or_new_hdf(space=30)
         self.assertEquals('pid3',p.data['pid'] ) 
 
         p = self.bundle.partitions.find(PartitionNameQuery(time=10, space=10))
@@ -324,11 +323,9 @@ class Test(TestBase):
         print p.data 
         self.assertEquals('bar',p.data['foo'] ) 
 
-        p.database.create()
-        
-        p = self.bundle.partitions.find(PartitionNameQuery(name='source-dataset-subset-variation-30'))
+        p = self.bundle.partitions.find(PartitionNameQuery(name='source-dataset-subset-variation-30-hdf'))
         self.assertTrue(p is not None)
-        self.assertEquals('source-dataset-subset-variation-30', p.identity.sname)
+        self.assertEquals('source-dataset-subset-variation-30-hdf', p.identity.sname)
  
         #
         # Create all possible combinations of partition names

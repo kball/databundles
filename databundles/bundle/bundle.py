@@ -5,33 +5,16 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from .filesystem import  BundleFilesystem
-from .schema import Schema
-from .partitions import Partitions
+from ..filesystem import  BundleFilesystem
+from ..schema import Schema
+from ..partitions import Partitions
 
 import os.path
-from .dbexceptions import  ConfigurationError, ProcessError
-from .run import get_runconfig
+from ..dbexceptions import  ConfigurationError, ProcessError
 
-def get_identity(path):
-    '''Get an identity from a database, either a bundle or partition'''
-    from .database.sqlite import SqliteBundleDatabase #@UnresolvedImport
-    
-    raise Exception("Function deprecated")
-    
-    db = SqliteBundleDatabase(path)
-    
-    bdc = BundleDbConfig(db)
-    
-    type_ = bdc.get_value('info','type')
-    
-    if type_ == 'bundle':
-        return  bdc.dataset.identity 
-    elif type_ == 'partition':
-        return  bdc.partition.identity 
-    else:
-        raise Exception("Invalid type: {}", type)
-  
+from config import *
+
+
 class Bundle(object):
     '''Represents a bundle, including all configuration 
     and top level operations. '''
@@ -50,7 +33,7 @@ class Bundle(object):
         self._dataset_id = None # Needed in LibraryDbBundle to  disambiguate multiple datasets
         
         if not logger:
-            from .util import get_logger
+            from ..util import get_logger
             self.logger = get_logger(__name__)
         else:
             self.logger = logger 
@@ -85,7 +68,7 @@ class Bundle(object):
     @property
     def repository(self):
         '''Return a repository object '''
-        from repository import Repository #@UnresolvedImport
+        from ..repository import Repository #@UnresolvedImport
 
         if not self._repository:
             repo_name = 'default'
@@ -106,7 +89,7 @@ class Bundle(object):
                 try:
                     return (session.query(Dataset).filter(Dataset.vid == self._dataset_id).one())
                 except NoResultFound:
-                    from dbexceptions import NotFoundError
+                    from ..dbexceptions import NotFoundError
                     raise NotFoundError("Failed to find dataset for id {} in {} "
                                         .format(self._dataset_id, self.database.dsn))
         
@@ -139,15 +122,16 @@ class Bundle(object):
     def library(self):
         '''Return the library set for the bundle, or 
         local library from get_library() if one was not set. '''
-          
-        import library
-        
+
+        from ..library import new_library
+
         if self._library:
             l = self._library
         else:
-            l =  library.new_library(self.config.config.library('default'))
-            
-        l.logger = self.logger
+            l = new_library(self.config.config.library('default'))
+
+        l.logger =\
+            self.logger
         l.database.logger = self.logger
         l.bundle = self
         l.dep_cb = self._dep_cb
@@ -194,7 +178,7 @@ class Bundle(object):
         if self.exit_on_fatal:
             sys.exit(1)
         else:
-            from dbexceptions import FatalError
+            from ..dbexceptions import FatalError
             raise FatalError(message)
     
 class DbBundle(Bundle):
@@ -210,7 +194,7 @@ class DbBundle(Bundle):
         Order of operations is:
             Create db.db if it does not exist
         '''
-        from .database.sqlite import SqliteBundleDatabase #@UnresolvedImport
+        from ..database.sqlite import SqliteBundleDatabase #@UnresolvedImport
 
         super(DbBundle, self).__init__(logger=logger)
        
@@ -248,7 +232,7 @@ class DbBundle(Bundle):
     @property
     def identity(self):
         '''Return an identity object. '''
-        from .identity import Identity
+        from ..identity import Identity
 
         if not self._identity:
            self._identity = self.get_dataset(self.database.session).identity
@@ -284,15 +268,13 @@ class LibraryDbBundle(Bundle):
     @property
     def identity(self):
         '''Return an identity object. '''
-        from .identity import Identity
+        from ..identity import Identity
 
         if not self._identity:
            self._identity = self.get_dataset(self.database.session).identity
 
 
         return self._identity
-
-
 
 class BuildBundle(Bundle):
     '''A bundle class for building bundle files. Uses the bundle.yaml file for
@@ -370,7 +352,7 @@ class BuildBundle(Bundle):
 
     @property
     def database(self):
-        from .database.sqlite import BuildBundleDb #@UnresolvedImport
+        from ..database.sqlite import BuildBundleDb #@UnresolvedImport
 
         if self._database is None:
             self._database  = BuildBundleDb(self, self.db_path)
@@ -392,7 +374,7 @@ class BuildBundle(Bundle):
     @property
     def identity(self):
         '''Return an identity object. '''
-        from .identity import Identity, Name, ObjectNumber
+        from ..identity import Identity, Name, ObjectNumber
 
         if not self._identity:
             try:
@@ -407,10 +389,10 @@ class BuildBundle(Bundle):
         return self._identity
 
     def update_configuration(self):
-        from dbexceptions import DatabaseError
+        from ..dbexceptions import DatabaseError
         # Re-writes the undle.yaml file, with updates to the identity and partitions
         # sections. 
-        from dbexceptions import  DatabaseMissingError
+        from ..dbexceptions import  DatabaseMissingError
 
         if self.database.exists():
             partitions = [p.identity.sname for p in self.partitions]
@@ -513,7 +495,7 @@ class BuildBundle(Bundle):
             self.ptick_count = 0
 
     def init_log_rate(self, N=None, message='', print_rate=None):
-        from util import init_log_rate as ilr
+        from ..util import init_log_rate as ilr
         
         return ilr(self.log, N=N, message=message, print_rate = print_rate)
 
@@ -555,7 +537,7 @@ class BuildBundle(Bundle):
         self.log('---- Pre-Prepare ----')
         
         if self.config.build.get('requirements',False):
-            from util.packages import install
+            from ..util.packages import install
             import sys
             import imp
             
@@ -606,7 +588,7 @@ class BuildBundle(Bundle):
         return True
 
     def prepare(self):
-        from dbexceptions import NotFoundError
+        from ..dbexceptions import NotFoundError
         
         # with self.session: # This will create the database if it doesn't exist, but it will be empty
         if not self.database.exists():
@@ -762,8 +744,15 @@ class BuildBundle(Bundle):
         # Create stat entries for all of the partitions. 
         for p in self.partitions:
             try:
+                from ..partition.sqlite import SqlitePartition
+                from ..partition.geo import GeoPartition
                 self.log("Writting stats for: {}".format(p.identity.name))
-                p.write_stats()
+                if isinstance(p,(SqlitePartition, GeoPartition)):
+                    self.log("Writting stats for: {}".format(p.identity.name))
+                    p.write_stats()
+                else:
+                    self.log("Skipping stats for non db partition: {}".format(p.identity.name))
+
             except NotImplementedError:
                 self.log("Can't write stats (unimplemented) for partition: {}".format(p.identity.name))
             except ConfigurationError as e:
@@ -936,7 +925,7 @@ class BuildBundle(Bundle):
     
 
     def run_mp(self, method, arg_sets):
-        from run import mp_run
+        from ..run import mp_run
         from multiprocessing import Pool, cpu_count
         
         n = int(self.run_args.multi)
@@ -950,239 +939,5 @@ class BuildBundle(Bundle):
         pool.map(mp_run,[ (self.bundle_dir, method.__name__, args) 
                          for args in arg_sets])
 
-class BundleConfig(object):
-   
-    def __init__(self):
-        pass
-
-
-class BundleFileConfig(BundleConfig):
-    '''Bundle configuration from a bundle.yaml file '''
-    
-    BUNDLE_CONFIG_FILE = 'bundle.yaml'
-
-    def __init__(self, root_dir):
-        '''Load the bundle.yaml file and create a config object
-        
-        If the 'id' value is not set in the yaml file, it will be created and the
-        file will be re-written
-        '''
-
-        super(BundleFileConfig, self).__init__()
-        
-        self.root_dir = root_dir
-        self.local_file = os.path.join(self.root_dir,'bundle.yaml')
-        self.source_ref = self.local_file
-        self._run_config = get_runconfig(self.local_file)
-
-        # If there is no id field, create it immediately and
-        # write the configuration back out. 
-   
-        if not self._run_config.identity.get('id',False):
-            self.init_dataset_number()
-
-   
-        if not os.path.exists(self.local_file):
-            raise ConfigurationError("Can't find bundle config file: ")
-
-    def init_dataset_number(self):
-        from databundles.identity import Identity, DatasetNumber, NumberServer
-
-        try:
-            ns = NumberServer(**self._run_config.group('numbers'))
-            ds = ns.next()
-        except Exception as e:
-            from .util import get_logger
-            logger = get_logger(__name__)
-
-            logger.error("Failed to get number from number sever; need to use self assigned number: {}"
-                .format(e.message))
-            raise
-
-        ident = Identity.from_dict(self._run_config.identity)
-
-        ident._on = ds.rev(self._run_config.identity.revision)
-
-        self.rewrite(**dict(
-            identity=ident.ident_dict,
-            names=ident.names_dict
-        ))
-        self._run_config = get_runconfig(self.local_file)
-
-    @property
-    def config(self): #@ReservedAssignment
-        '''Return a dict/array object tree for the bundle configuration'''
-        
-        return self._run_config
-
-    @property
-    def path(self):
-        return os.path.join(self.cache, BundleFileConfig.BUNDLE_CONFIG_FILE)
-
-    def rewrite(self, **kwargs):
-        '''Re-writes the file from its own data. Reformats it, and updates
-        the modification time. Will also look for a config directory and copy the
-        contents of files there into the bundle.yaml file, adding a key derived from the name
-        of the file. '''
-
-        temp = self.local_file+".temp"
-        old = self.local_file+".old"
-        
-        config = AttrDict()
-    
-        config.update_yaml(self.local_file)
-        
-        for k,v in kwargs.items():
-            config[k] = v
-
-   
-        with open(temp, 'w') as f:
-            config.dump(f)
-    
-        if os.path.exists(temp):
-            os.rename(self.local_file, old)
-            os.rename(temp,self.local_file )
-            
-            
-    def dump(self):
-        '''Re-writes the file from its own data. Reformats it, and updates
-        the modification time'''
-        import yaml
-        
-        return yaml.dump(self._run_config, indent=4, default_flow_style=False)
-   
-   
-    def __getattr__(self, group):
-        '''Fetch a confiration group and return the contents as an 
-        attribute-accessible dict'''
-        return self._run_config.group(group)
-
-    def group(self, name):
-        '''return a dict for a group of configuration items.'''
-        
-        return self._run_config.group(name)
-
-from databundles.run import AttrDict
-class BundleDbConfigDict(AttrDict):
-
-    def __init__(self, parent):
-
-        super(BundleDbConfigDict, self).__init__()
-    
-        '''load all of the values'''
-        from databundles.orm import Config as SAConfig
-        
-        for k,v in self.items():
-            del self[k]
-
-        # Load the dataset
-        self['identity'] = {}
-        for k,v in parent.dataset.dict.items():
-            self['identity'][k] = v
-            
-        for row in parent.database.session.query(SAConfig).all():
-            if row.group not in self:
-                self[row.group] = {}
-                
-            self[row.group][row.key] = row.value
-
-class BundleDbConfig(BundleConfig):
-    ''' Retrieves configuration from the database, rather than the .yaml file. '''
-
-    database = None
-    dataset = None
-
-    def __init__(self, bundle, database):
-        '''Maintain link between bundle.yam file and Config record in database'''
-        
-        super(BundleDbConfig, self).__init__()
-        
-        if not database:
-            raise Exception("Didn't get database")
-        
-        self.bundle = bundle
-        self.database = database
-        self.source_ref = self.database.dsn
-        self.dataset = bundle.dataset # (self.database.session.query(Dataset).one())
-       
-    @property
-    def dict(self): #@ReservedAssignment
-        '''Return a dict/array object tree for the bundle configuration'''
-        from databundles.orm import Config
-        from collections import defaultdict
-        
-        d = defaultdict(dict)
-      
-        for cfg in self.database.session.query(Config).all():
-           
-            d[cfg.group][cfg.key] = cfg.value
-      
-        return d
-
-    def __getattr__(self, group):
-        '''Fetch a confiration group and return the contents as an 
-        attribute-accessible dict'''
-        
-        return self.group(group)
-
-
-    def group(self, group):
-        '''return a dict for a group of configuration items.'''
-        
-        bd = BundleDbConfigDict(self)
-      
-        group = bd.get(group)
-        
-        if not group:
-            return None
-        
-        
-        return group
-
-    def set_value(self, group, key, value):
-        from databundles.orm import Config as SAConfig
-        
-        if self.group == 'identity':
-            raise ValueError("Can't set identity group from this interface. Use the dataset")
-        
-            key = key.strip('_')
-      
-        self.database.session.query(SAConfig).filter(SAConfig.group == group,
-                                  SAConfig.key == key,
-                                  SAConfig.d_vid == self.dataset.vid).delete()
-         
- 
-        o = SAConfig(group=group, key=key,d_vid=self.dataset.vid,value = value)
-        self.database.session.add(o)
-
-    def get_value(self, group, key, default=None):
-        
-        group = self.group(group)
-        
-        if not group:
-            return None
-        
-        try:
-            return group.__getattr__(key)
-        except KeyError:
-            if default is not None:
-                return default
-            raise
-
-
-    @property
-    def partition(self):
-        '''Initialize the identity, creating a dataset record, 
-        from the bundle.yaml file'''
-        
-        from databundles.orm import Partition
-
-        return  (self.database.session.query(Partition).first())
-   
-   
-#if __name__ == '__main__':
-#    import databundles.run
-#    import sys
-#    databundles.run.run(sys.argv[1:], Bundle)  
 
     

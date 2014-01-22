@@ -233,10 +233,14 @@ class GeoPartition(SqlitePartition):
         ogr_create="ogr2ogr  -overwrite -progress -skipfailures -f SQLite {output} -gt 65536 {t_srs} -nlt  {type} -nln \"{table}\" {input}  -dsco SPATIALITE=yes"
 
         dir_ = os.path.dirname(self.database.path)
+
         if not os.path.exists(dir_):
             self.bundle.log("Make dir: "+dir_)
             os.makedirs(dir_)
-        
+
+        if os.path.exists(self.database.path):
+            os.remove(self.database.path)
+
         cmd = ogr_create.format(input = path,
                                 output = self.database.path,
                                 table = self.table.name,
@@ -248,14 +252,13 @@ class GeoPartition(SqlitePartition):
     
         output = subprocess.check_output(cmd, shell=True)
 
-        with self.bundle.session:
-            for row in self.database.connection.execute("pragma table_info('{}')".format(self.table.name)):
-                parts = row[2].lower().strip(')').split('(')
-                datatype = parts[0]
-                size = int(parts[1]) if len(parts) > 1 else None
-    
-                self.bundle.schema.add_column(self.table,row[1],datatype = datatype, size=size,
-                                               is_primary_key=True if row[1].lower()=='ogc_fid' else False, commit = False)
+        #with self.bundle.session:
+        #    for row in self.database.connection.execute("pragma table_info('{}')".format(self.table.name)):
+        #        parts = row[2].lower().strip(')').split('(')
+        #        datatype = parts[0]
+        #        size = int(parts[1]) if len(parts) > 1 else None
+        #        self.bundle.schema.add_column(self.table,row[1],datatype = datatype, size=size,
+        #                                       is_primary_key=True if row[1].lower()=='ogc_fid' else False, commit = False)
                 
         self.database.post_create()
 
