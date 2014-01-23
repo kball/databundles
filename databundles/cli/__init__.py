@@ -141,7 +141,6 @@ def _find(args, l, config, remote):
 
     return 
 
-
 def _source_list(dir_):
     lst = {}
     for root, _, files in os.walk(dir_):
@@ -157,66 +156,29 @@ def _source_list(dir_):
             lst[ident['name']] = ident
 
     return lst
-             
-    
 
-def _print_bundle_list(*args,**kwargs):
+def _print_bundle_entry(ident, show_partitions=False):
+
+    locations_length = 6
+    vid_length = 15
+    name_length = 35
+
+    d_format = "{:%ds} {:%ds} {:%ds}" % (locations_length, vid_length, name_length)
+    p_format = "{:%ds} {:%ds}     {:%ds}" % (locations_length, vid_length, name_length)
+
+    prt(d_format,str(ident.locations), ident.vid, ident.vname)
+
+    if show_partitions and ident.partitions:
+        for pi in ident.partitions.values():
+            prt(p_format, str(pi.locations), pi.vid, pi.name)
+
+def _print_bundle_list(idents, subset_names = None, **kwargs):
     '''Create a nice display of a list of source packages'''
     from collections import defaultdict
-    
-    subset_names = kwargs.get('subset_names', None)
-    
-    lists = []
-    names = set()
-    for lst in args:
-        lists.append(defaultdict(dict,lst))
-        names.update(lst.keys())
-  
-    f_lst = defaultdict(dict)
-    
-    for name in names:
-        f_lst[name] = {}
-        for lst in lists:
-            f_lst[name].update(lst[name])
 
-    def rev_flag(v, flag):
-        
-        flag_map = {'L':'library', 'R':'remote'}
-        
-        suffix = flag_map[flag]
-        
-        loc = v.get('in_'+suffix, False)
-        
-        if not loc:
-            return '  '
-        
-        if not v.get('in_source', False):
-            return flag+' '
-        
-        s_rev = int(v.get('source_version'))
-    
-        rdiff = int(v.get(suffix+'_version')) - s_rev
-        
-        if rdiff > 0:
-            vf = '+'
-        elif rdiff < 0:
-            vf = '-'
-        else: 
-            vf = '='
-        
-        return flag+vf
+    for ident in sorted(idents, key = lambda i: i.sname):
+        _print_bundle_entry(ident, **kwargs)
 
-    for k,v in sorted(f_lst.items(), key=lambda x: x[0]):
-        flags = [ 'S' if v.get('in_source', False) else ' ',
-                  'B' if v.get('source_built', False) else ' ',
-                  rev_flag(v,'L'),
-                  rev_flag(v,'R')
-                 ]
-        
-        if subset_names is None or k in subset_names: 
-            prt("{} {:35s}",''.join(flags), k, v.get('source_dir','<none'))
-
-       
 def _print_info(l,ident, list_partitions=False):
     from ..cache import RemoteMarker
     from ..bundle import LibraryDbBundle # Get the bundle from the library

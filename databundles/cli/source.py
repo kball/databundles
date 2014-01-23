@@ -9,7 +9,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 
 from ..cli import prt, err, warn
-from ..cli import  _source_list, load_bundle, _print_bundle_list
+from ..cli import  load_bundle, _print_bundle_list
 from ..source import SourceTree
 
 import os
@@ -97,17 +97,24 @@ def source_parser(cmd):
     group.add_argument('-c', '--commit',  default=False, dest='repo_command',   action='store_const', const='commit', help='Commit')
     group.add_argument('-p', '--push',  default=False, dest='repo_command',   action='store_const', const='push', help='Push to origin/master')    
     group.add_argument('-l', '--pull',  default=False, dest='repo_command',   action='store_const', const='pull', help='Pull from upstream')  
-    group.add_argument('-i', '--install',  default=False, dest='repo_command',   action='store_const', const='install', help='Install the bundle')  
-      
-             
+    group.add_argument('-i', '--install',  default=False, dest='repo_command',   action='store_const', const='install', help='Install the bundle')
+
     sp = asp.add_parser('find', help='Find source packages that meet a vareity of conditions')
     sp.set_defaults(subcommand='find')
     sp.add_argument('-d','--dir',  help='Directory to start recursing from ')
+    sp.add_argument('-P', '--plain', default=False,  action='store_true',
+                    help='Plain output; just print the bundle path, with no logging decorations')
     group = sp.add_mutually_exclusive_group()
     group.add_argument('-c', '--commit',  default=False, dest='commit',   action='store_true', help='Find bundles that need to be committed')
     group.add_argument('-p', '--push',  default=False, dest='push',   action='store_true', help='Find bundles that need to be pushed')
     group.add_argument('-i', '--init',  default=False, dest='init',   action='store_true', help='Find bundles that need to be initialized')
-               
+    group.add_argument('-a', '--all', default=False, dest='all', action='store_true',
+                       help='List all bundles, from root or sub dir')
+
+
+    sp = asp.add_parser('watch', help='Watch the source directory for changes')
+    sp.set_defaults(subcommand='watch')
+
 
 def source_info(args, st, rc):
     
@@ -152,9 +159,7 @@ def source_info(args, st, rc):
                 prt('Built     : {}', process.get('built',''))
                 prt('Build time: {}', str(round(float(process['buildtime']),2))+'s' if process.get('buildtime',False) else '')
 
-                
-   
-         
+
 def source_list(args, st, rc, names=None):
     '''List all of the source packages'''
     from collections import defaultdict
@@ -168,13 +173,7 @@ def source_list(args, st, rc, names=None):
 
     s_lst =  st.list(datasets=d)
 
-    return
-
-
-    for s in s_lst:
-        print s.locations, s.fqname
-
-    #_print_bundle_list(s_lst, l_lst, subset_names=names)
+    _print_bundle_list(d.values(), subset_names=names)
 
             
 def source_clone(args, st, rc):
@@ -191,7 +190,7 @@ def source_clone(args, st, rc):
         prt ("--- Cloning sources from: {}", repo.ident)
         for f in get_by_group(repo.ident):
             try:
-                ident = new_identity(f.data)
+                ident = Identity.from_dict(f.data)
                 d = repo.clone(f.path, ident.source_path,repo.dir) 
                 prt("Cloned {} to {}",f.path, d)
             except ConflictError as e :
@@ -262,7 +261,6 @@ def source_new(args, st, rc):
     prt("CREATED: {}",bundle_dir)
 
 
-    
 def source_build(args, st, rc):
     '''Build a single bundle, or a set of bundles in a directory. The build process
     will build all dependencies for each bundle before buildng the bundle. '''
@@ -402,7 +400,6 @@ def source_run(args, st, rc):
     from databundles.run import import_file
     from databundles.source.repository.git import GitRepository
 
-
     dir_ = args.dir
 
     if args.python:
@@ -474,9 +471,17 @@ def source_run(args, st, rc):
        
 def source_find(args, st, rc):
     from ..source.repository.git import GitRepository
+
     
     dir_ = args.dir
-    
+
+    if args.plain:
+
+        def print_func(*args):
+            print ' '.join(args)
+
+        prt=print_func
+
     if not dir_:
         dir_ = rc.sourcerepo.dir   
 
@@ -494,8 +499,10 @@ def source_find(args, st, rc):
             elif args.init:
                 if repo.needs_init():
                     prt(root)
+            elif args.all:
+                prt(root)
             else:
-                err("Must specify either --push or --commit")
+                err("Must specify either --push. --init or --commit")
                 
    
          
@@ -566,4 +573,10 @@ def source_deps(args, st, rc):
             for j, name in enumerate(level):
                 prt("{:3d} {:3d} {}",i,j,name)
             
+
+def source_watch(args, st, rc):
+
+    st.watch()
+
+
 

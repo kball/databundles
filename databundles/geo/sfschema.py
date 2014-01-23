@@ -34,7 +34,7 @@ ogr_type_map = {
         }
 
 
-def copy_schema(schema, path, table_name=None, fmt='shapefile'):
+def copy_schema(schema, path, table_name=None, fmt='shapefile', logger = None):
 
 
     if path.startswith('http'):
@@ -51,12 +51,20 @@ def copy_schema(schema, path, table_name=None, fmt='shapefile'):
     if ds.GetLayerCount() > 1  and table_name:
         raise ValueError("Can't specify table_name for a file with multiple layers")
 
+    if logger:
+        logger("Creating schema for shapefile {}".format(path))
+
     for i in range(0, ds.GetLayerCount()):
         layer = ds.GetLayer(i)
 
         table_name = layer.GetName().lower() if not table_name else table_name
 
+        schema.remove_table(table_name)
+
         table = schema.add_table(table_name)
+
+        if logger:
+            logger("Creating table in schema: {}".format(table_name))
 
         schema.add_column(table, 'ogc_fid', datatype='integer', is_primary_key=True, sequence_id=1)
 

@@ -28,7 +28,6 @@ class BundleDbConfigDict(AttrDict):
             self[row.group][row.key] = row.value
 
 
-
 class BundleConfig(object):
 
     def __init__(self):

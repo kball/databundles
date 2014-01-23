@@ -395,7 +395,10 @@ class RelationalBundleDatabaseMixin(object):
         ds.fqname = ident.fqname
         ds.cache_key = ident.cache_key
 
-        ds.creator = self.bundle.config.about.author
+        try:
+            ds.creator = self.bundle.config.about.author
+        except:
+            ds.creator = 'n/a'
 
         session.add(ds)
         session.commit()
@@ -410,7 +413,10 @@ class RelationalBundleDatabaseMixin(object):
         ds.vname = self.bundle.identity.vname
         ds.fqname = self.bundle.identity.fqname
 
-        ds.creator = self.bundle.config.about.author
+        try:
+            ds.creator = self.bundle.config.about.author
+        except:
+            ds.creator = 'n/a'
 
         self.session.merge(ds)
 

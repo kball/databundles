@@ -5,6 +5,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 from ..cli import prt, err, Progressor, _find, _print_info #@UnresolvedImport
 import os
+from ..cli import  load_bundle, _print_bundle_list
 
 
 def library_parser(cmd):
@@ -262,8 +263,8 @@ def library_list(args, l, config):
 
     if not args.term:
 
-        for ident in l.list(key='fqname'):
-            prt("{:2s} {:10s} {}", str(ident.locations), ident.vid, ident.vname)
+        _print_bundle_list(l.list(key='fqname'), show_partitions=True )
+
     else:
         library_info(args, l, config, list_all=True)    
  

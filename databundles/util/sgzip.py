@@ -1,7 +1,7 @@
 
 """
 A patched version of the standard gzip.py that handles reading from
-and uncompressing gzip streams that have nothing by a read() method, 
+and uncompressing gzip streams that have nothing but a read() method,
 such as httplib message bodies. 
 
 Functions that read and write gzipped files.

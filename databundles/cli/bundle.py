@@ -16,7 +16,23 @@ def bundle_command(args, rc, src):
     import os
     from ..run import import_file
 
-    bundle_file = os.path.abspath(args.bundle_file)
+    if not args.bundle_dir:
+        bundle_file = os.path.join(os.getcwd(),'bundle.py')
+    elif args.bundle_dir == '-':
+        # Run run for each line of input
+        import sys
+
+        for line in sys.stdin.readlines():
+            args.bundle_dir = line.strip()
+            prt('====== {}',args.bundle_dir)
+            bundle_command(args,rc, src)
+
+        return
+    elif args.bundle_dir[0] != '/':
+        bundle_file = os.path.join(os.getcwd(), args.bundle_dir, 'bundle.py')
+    else:
+        bundle_file = os.path.join(args.bundle_dir, 'bundle.py')
+
 
     if not os.path.exists(bundle_file):
         err("Bundle code file does not exist: {}".format(bundle_file) )
@@ -34,6 +50,8 @@ def bundle_command(args, rc, src):
 
     dir_ = os.path.dirname(rp)
     b = mod.Bundle(dir_)
+
+    b.set_args(args)
 
     def getf(f):
         return globals()['bundle_'+f]
@@ -67,7 +85,7 @@ def bundle_parser(cmd):
     parser = cmd.add_parser('bundle', help='Manage bundle files')
     parser.set_defaults(command='bundle')
     parser.add_argument('-l','--library',  default='default',  help='Select a different name for the library')
-    parser.add_argument('-f','--bundle-file', required=True,   help='Path to the bundle .py file')
+    parser.add_argument('-d','--bundle-dir', required=False,   help='Path to the bundle .py file')
     parser.add_argument('-t','--test',  default=False, action="store_true", help='Enable bundle-specific test behaviour')
     parser.add_argument('-m','--multi',  type = int,  nargs = '?',
                         default = 1,
@@ -241,7 +259,7 @@ def bundle_info(args, b, rc):
         if b.partitions.count < 5:
             b.log("---- Partitions ---")
             for partition in b.partitions:
-                b.log("    "+partition.name)
+                b.log("    "+partition.identity.sname)
 
 
 

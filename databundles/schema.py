@@ -165,8 +165,7 @@ class Schema(object):
         self.auto_col_numbering = False
  
         return row
-        
-    
+
     def add_column(self, table, name,  **kwargs):
         '''Add a column to the schema'''
     
@@ -182,12 +181,35 @@ class Schema(object):
 
         kwargs['sequence_id'] = int(kwargs['sequence_id'])
         self.col_sequence = max(self.col_sequence,  kwargs['sequence_id']+1)
-        
-                
+
         c =  table.add_column(name, **kwargs)
 
         return c
-        
+
+    def remove_table(self, table_name):
+        from orm import Table, Column
+        from sqlalchemy.orm.exc import NoResultFound
+
+        s = self.bundle.database.session
+
+        try:
+            table = (s.query(Table).filter(Table.name == table_name)).one()
+        except NoResultFound:
+            table = None
+
+        if not table:
+            return
+
+        s.query(Column).filter(Column.t_vid == table.vid).delete()
+        s.query(Table).filter(Table.vid == table.vid).delete()
+
+        s.commit()
+
+        if table_name in self._seen_tables:
+            del self._seen_tables[table_name]
+
+
+
     @property
     def columns(self):
         '''Return a list of tables for this bundle'''

@@ -515,8 +515,6 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
         if RelationalDatabase._create(self):
             
             RelationalBundleDatabaseMixin._create(self)
-            
-            
 
             self.post_create()
           

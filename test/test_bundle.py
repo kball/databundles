@@ -303,9 +303,15 @@ class Test(TestBase):
 
         p = self.bundle.partitions.find(PartitionNameQuery(time=10, space=10))
         self.assertEquals('pid1',p.data['pid'] )
-      
+
+        p = self.bundle.partitions.find(time=10, space=10)
+        self.assertEquals('pid1', p.data['pid'])
+
         p = self.bundle.partitions.find(PartitionNameQuery(time=20, space=20))
-        self.assertEquals('pid2',p.data['pid'] ) 
+        self.assertEquals('pid2',p.data['pid'] )
+
+        p = self.bundle.partitions.find(time=20, space=20)
+        self.assertEquals('pid2',p.data['pid'] )
 
         pnq3 = PartitionNameQuery(space=30)
 

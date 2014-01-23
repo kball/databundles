@@ -991,6 +991,7 @@ class Identity(object):
     urls = None # Url dict, from a remote library.
     url = None # Url of remote where object should be retrieved
     md5 = None #
+    data = None # Catch-all for other information
 
     def __init__(self, name, object_number):
 
@@ -1013,6 +1014,7 @@ class Identity(object):
         self._name.version = str(nv)
 
         self.locations = Locations(self)
+        self.data = {}
 
         self.is_valid()
 
@@ -1313,6 +1315,8 @@ class Identity(object):
             self.partitions = {}
 
         self.partitions[p.vid] = p
+
+
 
     @property
     def partition(self):

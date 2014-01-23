@@ -486,6 +486,22 @@ class LibraryDb(object):
 
         return dataset
 
+    def install_dataset_identity(self, identity):
+
+        from databundles.orm import Dataset
+
+        ds = Dataset(**identity.dict)
+        ds.name = identity.sname
+        ds.vname = identity.vname
+        ds.fqname = identity.fqname
+        ds.cache_key = identity.cache_key
+        ds.creator = 'N/A'
+
+        self.session.add(ds)
+
+        self.commit()
+
+
     def install_bundle(self, bundle):
         '''Copy the schema and partitions lists into the library database
 
@@ -675,12 +691,36 @@ class LibraryDb(object):
 
             if ck not in datasets:
                 dsid = d.identity
-                dsid.locations.set(LocationRef.LOCATION.LIBRARY)
                 datasets[ck] = dsid
+            else:
+                dsid = datasets[ck]
 
-            datasets[ck].add_partition(p.identity)
+            dsid.locations.set(LocationRef.LOCATION.LIBRARY)
+
+            if not (dsid.partitions and p.vid in dsid.partitions):
+                datasets[ck].add_partition(p.identity)
+                p = dsid.partitions[p.vid]
+
+
+            p.locations.set(LocationRef.LOCATION.LIBRARY)
 
         return datasets
+
+    def datasets(self, key='vid'):
+        '''List only the dataset records'''
+
+
+        from ..orm import Dataset
+
+        datasets = {}
+
+        for d in self.session.query(Dataset).filter(Dataset.vid != ROOT_CONFIG_NAME_V).all():
+
+            ck = getattr(d.identity, key)
+            datasets[ck] = d.identity
+
+        return datasets
+
 
     @property
     def resolver(self):
@@ -710,7 +750,6 @@ class LibraryDb(object):
                 return c.like(v)
             else:
                 return c == v
-
 
         s = self.session
 
@@ -916,7 +955,9 @@ class LibraryDb(object):
                  state='new',
                  type_='bundle',
                  data=None,
-                 source_url=None):
+                 source_url=None,
+                 hash=None
+                ):
         from databundles.orm import  File
 
         if os.path.exists(path):
@@ -943,10 +984,11 @@ class LibraryDb(object):
                      size=size,
                      type_=type_,
                      data=data,
-                     source_url=source_url
+                     source_url=source_url,
+                     hash = hash
                      )
 
-        # Sqlalchemy doesn't automatically rollback on exceptsions, and you
+        # Sqlalchemy doesn't automatically rollback on exceptions, and you
         # can't re-try the commit until you roll back.
         try:
             s.add(file_)
@@ -1007,6 +1049,19 @@ class LibraryDb(object):
         except NoResultFound:
             return None
 
+
+    def get_file_by_path(self, path):
+        """Return all files in the database with the given state"""
+        from databundles.orm import File
+        from sqlalchemy.orm.exc import NoResultFound
+
+        s = self.session
+
+        try:
+            return s.query(File).filter(File.path == path).one()
+
+        except NoResultFound:
+            return None
 
     def remove_file(self,path):
         pass

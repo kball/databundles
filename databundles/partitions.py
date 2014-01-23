@@ -193,10 +193,13 @@ class Partitions(object):
  
         return q.first()
 
-    def find(self, pnq, use_library=False, **kwargs):
+    def find(self, pnq=None, use_library=False, **kwargs):
         '''Return a Partition object from the database based on a PartitionId.
         The object returned is immutable; changes are not persisted'''
         import sqlalchemy.orm.exc
+
+        if pnq is None:
+            pnq = PartitionNameQuery(**kwargs)
 
         assert isinstance(pnq,PartitionNameQuery), "Expected NameQuery, got {}".format(type(pnq))
    

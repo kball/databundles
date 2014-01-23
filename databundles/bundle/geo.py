@@ -23,11 +23,14 @@ class GeoBuildBundle(BuildBundle):
 
         self.database.create()
 
-        self.schema.clean()
+        self._prepare_load_schema()
+
+        def log(x):
+            self.log(x)
 
         for table, url in self.config.build.sources.items():
             with self.session:
-                copy_schema(self.schema, table_name=table, path=url)
+                copy_schema(self.schema, table_name=table, path=url, logger=log)
 
         self.schema.write_schema()
 

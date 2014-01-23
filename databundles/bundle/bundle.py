@@ -48,7 +48,7 @@ class Bundle(object):
             multi = False
             test = False
 
-        self.run_args = null_args()
+        self.run_args = vars(null_args())
         
         
     @property
@@ -507,8 +507,9 @@ class BuildBundle(Bundle):
         '''Skips the meta stage if the :class:.`META_COMPLETE_MARKER` file already exists'''
 
         mf = self.filesystem.meta_path(self.META_COMPLETE_MARKER)
-      
-        if os.path.exists(mf):
+
+
+        if os.path.exists(mf) and not self.run_args.get('clean',None):
             self.log("Meta information already generated")
             #raise ProcessError("Bundle has already been prepared")
             return False
@@ -583,9 +584,32 @@ class BuildBundle(Bundle):
         except Exception as e:
             raise
             self.error("Error in consulting library: {}\nException: {}".format(self.library.info,e.message))
-        
 
         return True
+
+    def _prepare_load_schema(self):
+
+        sf = self.filesystem.path(self.config.build.get('schema_file', 'meta/' + self.SCHEMA_FILE))
+        if os.path.exists(sf):
+            with open(sf, 'rbU') as f:
+                self.log("Loading schema from file: {}".format(sf))
+                self.schema.clean()
+                with self.session:
+                    warnings, errors = self.schema.schema_from_file(f)
+
+                for title, s, f in (("Errors", errors, self.error), ("Warnings", warnings, self.warn)):
+                    if s:
+                        self.log("----- Schema {} ".format(title))
+                        for table_name, column_name, message in s:
+                            f("{:20s} {}".format(
+                                "{}.{}".format(table_name if table_name else '', column_name if column_name else ''),
+                                message))
+
+                if errors:
+                    self.fatal("Schema load filed. Exiting")
+        else:
+            self.log("No schema file ('{}') not loading schema".format(sf))
+
 
     def prepare(self):
         from ..dbexceptions import NotFoundError
@@ -602,29 +626,11 @@ class BuildBundle(Bundle):
         except NotFoundError as e:
             self.fatal(e.message)
 
-        if self.run_args and vars(self.run_args).get('rebuild',False):
+        if self.run_args and self.run_args.get('rebuild',False):
             with self.session:
                 self.rebuild_schema()
         else:
-            
-            sf  = self.filesystem.path(self.config.build.get('schema_file', 'meta/'+self.SCHEMA_FILE))
-            if os.path.exists(sf):
-                with open(sf, 'rbU') as f:
-                    self.log("Loading schema from file: {}".format(sf))
-                    self.schema.clean()
-                    with self.session:
-                        warnings,errors = self.schema.schema_from_file(f)
-                    
-                    for title, s,f  in (("Errors", errors, self.error), ("Warnings", warnings, self.warn)):
-                        if s:
-                            self.log("----- Schema {} ".format(title))
-                            for table_name, column_name, message in s:
-                                f("{:20s} {}".format("{}.{}".format(table_name if table_name else '', column_name if column_name else ''), message ))
-                
-                    if errors:
-                        self.fatal("Schema load filed. Exiting") 
-            else:
-                self.log("No schema file ('{}') not loading schema".format(sf))   
+            self._prepare_load_schema()
 
         return True
     
@@ -674,7 +680,7 @@ class BuildBundle(Bundle):
     @property
     def is_prepared(self):
         return ( self.database.exists() 
-                 and not vars(self.run_args).get('rebuild',False) 
+                 and not self.run_args.get('rebuild',False)
                  and  self.db_config.get_value('process','prepared', False))
    
     ### Build the final package
@@ -814,10 +820,10 @@ class BuildBundle(Bundle):
      
         import databundles.library
 
-        force = vars(self.run_args).get('force', force)
+        force = self.run_args.get('force', force)
 
         with self.session:
-            library_name = vars(self.run_args).get('library', 'default') if library_name is None else 'default'
+            library_name = self.run_args.get('library', 'default') if library_name is None else 'default'
             library_name = library_name if library_name else 'default'
     
             library = databundles.library.new_library(self.config.config.library(library_name), reset=True)
@@ -862,8 +868,8 @@ class BuildBundle(Bundle):
     ### Submit the package to the repository
     def submit(self):
     
-        self.repository.submit(root=self.run_args.name, force=self.run_args.force, 
-                               repo=self.run_args.repo)
+        self.repository.submit(root=self.run_args.get('name'), force=self.run_args.get('force'),
+                               repo=self.run_args.get('repo'))
         return True
     
     def post_submit(self):
@@ -878,7 +884,7 @@ class BuildBundle(Bundle):
     
     ### Submit the package to the repository
     def extract(self):
-        self.repository.extract(root=self.run_args.name, force=self.run_args.force)
+        self.repository.extract(root=self.run_args.get('name'), force=self.run_args.get('force'))
         return True
     
     def post_extract(self):
@@ -917,18 +923,16 @@ class BuildBundle(Bundle):
             
             shutil.copy(b.partition.database.path, newp.database.path)
 
-    def parse_args(self,argv):
+    def set_args(self,args):
 
-        self.run_args = self.args_parser.parse_args(argv)
- 
-        return self.run_args
-    
+        self.run_args = vars(args)
+
 
     def run_mp(self, method, arg_sets):
         from ..run import mp_run
         from multiprocessing import Pool, cpu_count
         
-        n = int(self.run_args.multi)
+        n = int(self.run_args.get('multi'))
 
         if n == 0:
             n = cpu_count()
