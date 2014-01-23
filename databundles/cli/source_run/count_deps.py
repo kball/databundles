@@ -3,7 +3,7 @@
 def run(args, bundle_dir, bundle, repo):
 
     if bundle.is_built:
-        return 
+        return
 
 
     deps = bundle.config.build.get('dependencies',{})
