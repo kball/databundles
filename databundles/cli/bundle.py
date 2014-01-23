@@ -134,7 +134,6 @@ def bundle_parser(cmd):
     command_p.add_argument('-s','--schema',  default=False,action="store_true",
                            help='Dump the schema as a CSV. The bundle must have been prepared')
 
-
     #
     # Clean Command
     #
@@ -164,10 +163,9 @@ def bundle_parser(cmd):
     command_p = sub_cmd.add_parser('build', help='Build the data bundle and partitions')
     command_p.set_defaults(subcommand='build')
     command_p.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')
+    command_p.add_argument('-f', '--force', default=False, action="store_true", help='Force build. ( --clean is usually preferred ) ')
     
     command_p.add_argument('-o','--opt', action='append', help='Set options for the build phase')
-    
-    
     
     #
     # Update Command
@@ -175,8 +173,7 @@ def bundle_parser(cmd):
     command_p = sub_cmd.add_parser('update', help='Build the data bundle and partitions from an earlier version')
     command_p.set_defaults(subcommand='update')
     command_p.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')
-    
-    
+
     #
     # Extract Command
     #

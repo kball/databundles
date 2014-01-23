@@ -92,7 +92,8 @@ def source_parser(cmd):
                     'run() function can have any combination of arguments of these names: bundle_dir,'+
                     ' bundle, repo')
     sp.add_argument('-m','--message', nargs='+', default='.', help='Directory to start recursing from ')
-    sp.add_argument('shell_command',nargs=argparse.REMAINDER, type=str,help='Shell command to run')  
+    sp.add_argument('shell_command',nargs=argparse.REMAINDER, type=str,help='Shell command to run')
+
     group = sp.add_mutually_exclusive_group()
     group.add_argument('-c', '--commit',  default=False, dest='repo_command',   action='store_const', const='commit', help='Commit')
     group.add_argument('-p', '--push',  default=False, dest='repo_command',   action='store_const', const='push', help='Push to origin/master')    
@@ -110,6 +111,7 @@ def source_parser(cmd):
     group.add_argument('-i', '--init',  default=False, dest='init',   action='store_true', help='Find bundles that need to be initialized')
     group.add_argument('-a', '--all', default=False, dest='all', action='store_true',
                        help='List all bundles, from root or sub dir')
+
 
 
     sp = asp.add_parser('watch', help='Watch the source directory for changes')
@@ -427,6 +429,9 @@ def source_run(args, st, rc):
 
                 if 'repo' in run_args.args:
                     a['repo'] = repo
+
+                if 'args' in run_args.args:
+                    a['args'] = args.shell_command
 
                 if 'bundle' in run_args.args:
                     rp = os.path.join(root, 'bundle.py')

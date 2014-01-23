@@ -20,8 +20,7 @@ def remote_parser(cmd):
     sp = asp.add_parser('info', help='Display the remote configuration')
     sp.set_defaults(subcommand='info')
     sp.add_argument('term',  nargs='?', type=str,help='Name or ID of the bundle or partition to print information for')
-    
-  
+
     sp = asp.add_parser('list', help='List remote files')
     sp.set_defaults(subcommand='list')
     sp.add_argument('-m','--meta', default=False,  action='store_true',  help="Force fetching metadata for remotes that don't provide it while listing, like S3")

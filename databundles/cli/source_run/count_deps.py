@@ -1,8 +1,12 @@
 '''Script for source run to print the umber of dependencies that a source bundle has'''
 
-def run(bundle_dir, bundle, repo):
+def run(args, bundle_dir, bundle, repo):
+
+    if bundle.is_built:
+        return 
+
 
     deps = bundle.config.build.get('dependencies',{})
 
     if len(deps) == 0:
-        print len(deps), bundle_dir
+        print bundle_dir

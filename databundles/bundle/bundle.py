@@ -691,7 +691,11 @@ class BuildBundle(Bundle):
         
         if not self.database.exists():
             raise ProcessError("Database does not exist yet. Was the 'prepare' step run?")
-        
+
+        if self.is_built and not self.run_args.get('force', False):
+            self.log("Bundle is already build. Skipping  ( Use --clean  or --force to force build ) ")
+            return False
+
         with self.session:
             if not self.db_config.get_value('process','prepared', False):
                 raise ProcessError("Build called before prepare completed")
@@ -784,6 +788,7 @@ class BuildBundle(Bundle):
 
     def pre_update(self):
         from time import time
+
         if not self.database.exists():
             raise ProcessError("Database does not exist yet. Was the 'prepare' step run?")
         
@@ -925,7 +930,9 @@ class BuildBundle(Bundle):
 
     def set_args(self,args):
 
-        self.run_args = vars(args)
+        from ..util import AttrDict
+
+        self.run_args = AttrDict(vars(args))
 
 
     def run_mp(self, method, arg_sets):
